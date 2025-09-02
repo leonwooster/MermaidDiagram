@@ -29,26 +29,22 @@
             currentSvg = '';
             container.innerHTML = ''; // Clear previous content
 
-            if (!code) {
+            if (!code || !code.trim()) {
                 console.log('No code provided to render.');
                 return;
             }
 
             try {
-                // Create a new element for mermaid to process
-                const mermaidDiv = document.createElement('div');
-                mermaidDiv.classList.add('mermaid');
-                mermaidDiv.innerHTML = code;
-                container.appendChild(mermaidDiv);
-
-                // Use a small timeout to ensure the DOM is updated before mermaid runs
-                await new Promise(resolve => setTimeout(resolve, 0));
-                await mermaid.run({ nodes: [mermaidDiv] });
-                currentSvg = mermaidDiv.innerHTML;
+                // The render function is safer as it doesn't rely on DOM insertion before processing.
+                const { svg } = await mermaid.render('graphDiv', code);
+                container.innerHTML = svg;
+                currentSvg = svg;
                 console.log('Mermaid rendering successful.');
             } catch (e) {
                 console.error('Mermaid rendering failed:', e);
-                container.innerHTML = `<pre>${e.message}</pre>`;
+                // Provide a more detailed error message in the UI.
+                const errorMessage = e.message ? e.message : JSON.stringify(e, null, 2);
+                container.innerHTML = `<pre style="color: red; white-space: pre-wrap;">${errorMessage}</pre>`;
             }
         }
 
