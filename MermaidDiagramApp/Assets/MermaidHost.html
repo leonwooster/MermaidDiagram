@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid Preview</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="mermaid-container" class="mermaid"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        let currentSvg = '';
+        mermaid.initialize({ startOnLoad: false });
+
+        async function renderDiagram(code) {
+            const container = document.getElementById('mermaid-container');
+            try {
+                const { svg } = await mermaid.render('graph', code);
+                currentSvg = svg;
+                container.innerHTML = svg;
+            } catch (e) {
+                currentSvg = '';
+                container.innerHTML = `<pre>${e.message}</pre>`;
+            }
+        }
+
+        function getSvg() {
+            return currentSvg;
+        }
+    </script>
+</body>
+</html>
