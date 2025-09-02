@@ -34,6 +34,8 @@ namespace MermaidDiagramApp
         private DispatcherTimer? _timer;
         private bool _isWebViewReady = false;
         private string _lastPreviewedCode = "";
+        private bool _isFullScreen = false;
+        private bool _isPanModeEnabled = false;
 
         public MainWindow()
         {
@@ -196,6 +198,101 @@ namespace MermaidDiagramApp
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
             _timer?.Stop();
+        }
+
+        private void MainWindow_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Escape && _isFullScreen)
+            {
+                ToggleFullScreen_Click(this, new RoutedEventArgs());
+            }
+        }
+
+        private void PanTool_Click(object sender, RoutedEventArgs e)
+        {
+            _isPanModeEnabled = PanTool.IsChecked;
+            UpdatePanMode();
+        }
+
+        private async void UpdatePanMode()
+        {
+            if (!_isWebViewReady || PreviewBrowser?.CoreWebView2 == null) return;
+
+            if (_isPanModeEnabled)
+            {
+                await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(@"
+                    const body = document.body;
+                    body.style.cursor = 'grab';
+
+                    let isDown = false;
+                    let startX, startY, scrollLeft, scrollTop;
+
+                    const mouseDownHandler = (e) => {
+                        isDown = true;
+                        body.style.cursor = 'grabbing';
+                        startX = e.pageX;
+                        startY = e.pageY;
+                        scrollLeft = window.scrollX;
+                        scrollTop = window.scrollY;
+                    };
+
+                    const mouseLeaveHandler = () => {
+                        isDown = false;
+                        body.style.cursor = 'grab';
+                    };
+
+                    const mouseUpHandler = () => {
+                        isDown = false;
+                        body.style.cursor = 'grab';
+                    };
+
+                    const mouseMoveHandler = (e) => {
+                        if (!isDown) return;
+                        e.preventDefault();
+                        const x = e.pageX;
+                        const y = e.pageY;
+                        const walkX = x - startX;
+                        const walkY = y - startY;
+                        window.scrollTo(scrollLeft - walkX, scrollTop - walkY);
+                    };
+
+                    window.panHandlers = { mouseDownHandler, mouseLeaveHandler, mouseUpHandler, mouseMoveHandler };
+                    document.addEventListener('mousedown', mouseDownHandler, true);
+                    document.addEventListener('mouseleave', mouseLeaveHandler, true);
+                    document.addEventListener('mouseup', mouseUpHandler, true);
+                    document.addEventListener('mousemove', mouseMoveHandler, true);
+                ");
+            }
+            else
+            {
+                await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(@"
+                    document.body.style.cursor = 'default';
+                    if (window.panHandlers) {
+                        document.removeEventListener('mousedown', window.panHandlers.mouseDownHandler, true);
+                        document.removeEventListener('mouseleave', window.panHandlers.mouseLeaveHandler, true);
+                        document.removeEventListener('mouseup', window.panHandlers.mouseUpHandler, true);
+                        document.removeEventListener('mousemove', window.panHandlers.mouseMoveHandler, true);
+                        window.panHandlers = null;
+                    }
+                ");
+            }
+        }
+
+        private void ToggleFullScreen_Click(object sender, RoutedEventArgs e)
+        {
+            _isFullScreen = !_isFullScreen;
+            if (_isFullScreen)
+            {
+                MainMenuBar.Visibility = Visibility.Collapsed;
+                EditorColumn.Width = new GridLength(0);
+                GridSplitter.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                MainMenuBar.Visibility = Visibility.Visible;
+                EditorColumn.Width = new GridLength(1, GridUnitType.Star);
+                GridSplitter.Visibility = Visibility.Visible;
+            }
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e)

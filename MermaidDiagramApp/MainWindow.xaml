@@ -15,7 +15,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid RowDefinitions="Auto, *">
+    <Grid RowDefinitions="Auto, *" KeyDown="MainWindow_KeyDown">
         <ContentDialog x:Name="PngExportDialog"
                        Title="Export PNG Options"
                        PrimaryButtonText="Export"
@@ -34,7 +34,7 @@
             </StackPanel>
         </ContentDialog>
 
-        <MenuBar>
+        <MenuBar x:Name="MainMenuBar">
             <MenuBarItem Title="File">
                 <MenuFlyoutSubItem Text="New">
                     <MenuFlyoutItem Text="Class Diagram" Click="NewClassDiagram_Click"/>
@@ -56,19 +56,33 @@
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Exit" Click="Exit_Click"/>
             </MenuBarItem>
+            <MenuBarItem Title="View">
+                <ToggleMenuFlyoutItem x:Name="PanTool" Text="Pan Tool" Click="PanTool_Click"/>
+                <MenuFlyoutItem Text="Full Screen" Click="ToggleFullScreen_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F11"/>
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+            </MenuBarItem>
         </MenuBar>
 
-        <Grid Grid.Row="1" ColumnDefinitions="*,12,*" Padding="12">
+                <Grid Grid.Row="1" Padding="12" x:Name="MainGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="EditorColumn" Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition x:Name="PreviewColumn" Width="*"/>
+            </Grid.ColumnDefinitions>
             <tcb:TextControlBox
                 x:Name="CodeEditor"
                 Grid.Column="0"
                 ShowLineNumbers="True"/>
 
-            <controls:GridSplitter Grid.Column="1" 
-                          Width="12"
-                          ResizeBehavior="BasedOnAlignment"
-                          ResizeDirection="Auto"
-                          Background="Transparent"/>
+            <controls:GridSplitter x:Name="GridSplitter"
+                                   Grid.Column="1"
+                                   Width="12"
+                                   ResizeBehavior="BasedOnAlignment"
+                                   ResizeDirection="Auto"
+                                   Background="Transparent"/>
 
             <WebView2 x:Name="PreviewBrowser" Grid.Column="2"/>
         </Grid>

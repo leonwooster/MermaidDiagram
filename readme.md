@@ -123,14 +123,6 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
 **Goal:** Improve the UML editing experience with specialized features
 
 #### User Stories:
-11. **US-011: UML Syntax Highlighting** (Story Points: 8)
-    - **As a** developer
-    - **I want** syntax highlighting optimized for UML code
-    - **So that** I can write UML diagrams more efficiently
-    - **Acceptance Criteria:**
-      - UML keywords highlighted (class, interface, extends, implements)
-      - Relationship symbols properly colored
-      - Error highlighting for invalid UML syntax
 
 12. **US-012: Visual Diagram Builder** (Story Points: 13)
     - **As a** new user
@@ -180,6 +172,24 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
     - **I want** a full-screen, distraction-free presentation mode
     - **So that** I can clearly present my diagrams during meetings.
 
+18. **US-018: Full-Screen Preview** (Story Points: 5)
+    - **As a** user
+    - **I want** to view the diagram preview in full-screen mode
+    - **So that** I can focus on the diagram without distractions.
+    - **Acceptance Criteria:**
+        - A keyboard shortcut (e.g., F11) or a UI button toggles full-screen mode.
+        - In full-screen mode, the menu bar and editor are hidden.
+        - Pressing the shortcut or 'Esc' key exits full-screen mode.
+
+19. **US-011: UML Syntax Highlighting** (Story Points: 8)
+    - **As a** developer
+    - **I want** syntax highlighting optimized for UML code
+    - **So that** I can write UML diagrams more efficiently
+    - **Acceptance Criteria:**
+      - UML keywords highlighted (class, interface, extends, implements)
+      - Relationship symbols properly colored
+      - Error highlighting for invalid UML syntax
+
 ## Sprint Planning
 
 ### Sprint 1: Foundation (Weeks 1-2)
@@ -228,10 +238,18 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
 
 **Sprint Backlog:**
 - US-007: Additional Diagram Types (5 SP)
-- US-011: UML Syntax Highlighting (8 SP)
 
 **Total Story Points:** 13
 **Sprint Deliverable:** An editor with support for common non-UML diagrams and enhanced syntax highlighting.
+
+### Sprint 6: Editor Enhancements & Presentation (Weeks 11-12)
+**Sprint Goal:** Enhance the editing experience and add a focused presentation feature.
+
+**Sprint Backlog:**
+- US-018: Full-Screen Preview (5 SP)
+
+**Total Story Points:** 13
+**Sprint Deliverable:** An editor with syntax highlighting and a full-screen preview mode for diagrams.
 
 ## Definition of Done
 - [ ] Code is written and tested
