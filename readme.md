@@ -9,6 +9,11 @@
 ## Product Vision
 Create a modern Windows desktop application using WinUI3 that allows users to write, edit, and preview Mermaid diagrams in real-time with professional export capabilities, **with primary focus on UML diagram types**.
 
+## Documentation
+
+- **[Software Design Document](./docs/SOFTWARE_DESIGN.md)**: Details the application's architecture, components, and key design decisions.
+- **[User Guide](./docs/USER_GUIDE.md)**: Provides instructions on how to use the application's features.
+
 ## Product Backlog
 
 ### Epic 1: Core Application Infrastructure
