@@ -41,6 +41,11 @@
                     <MenuFlyoutItem Text="Sequence Diagram" Click="NewSequenceDiagram_Click"/>
                     <MenuFlyoutItem Text="State Diagram" Click="NewStateDiagram_Click"/>
                     <MenuFlyoutItem Text="Activity Diagram" Click="NewActivityDiagram_Click"/>
+                    <MenuFlyoutSeparator/>
+                    <MenuFlyoutItem Text="Flowchart" Click="NewFlowchart_Click"/>
+                    <MenuFlyoutItem Text="Gantt Chart" Click="NewGanttChart_Click"/>
+                    <MenuFlyoutItem Text="Pie Chart" Click="NewPieChart_Click"/>
+                    <MenuFlyoutItem Text="Git Graph" Click="NewGitGraph_Click"/>
                 </MenuFlyoutSubItem>
                 <MenuFlyoutItem Text="Open" Click="Open_Click"/>
                 <MenuFlyoutItem Text="Save" Click="Save_Click"/>

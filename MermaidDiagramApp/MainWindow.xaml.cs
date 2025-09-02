@@ -118,7 +118,78 @@ namespace MermaidDiagramApp
 
         private void NewActivityDiagram_Click(object sender, RoutedEventArgs e)
         {
-            CodeEditor.Text = "activityDiagram\n    start\n    :Initial Action;\n    if (condition?) then (yes)\n        :Yes path;\n    else (no)\n        :No path;\n    endif\n    :Final Action;\n    stop";
+            CodeEditor.Text = """
+                activityDiagram
+                    start
+                    :Initial Action;
+                    if (condition) then (yes)
+                        :Success;
+                    else (no)
+                        :Failure;
+                    endif
+                    :Another Action;
+                    stop
+                """;
+            _ = UpdatePreview();
+        }
+
+        private void NewFlowchart_Click(object sender, RoutedEventArgs e)
+        {
+            CodeEditor.Text = """
+                graph TD
+                    A[Start] --> B{Is it?};
+                    B -->|Yes| C[OK];
+                    C --> D[End];
+                    B -->|No| E[Not OK];
+                    E --> D[End];
+                """;
+            _ = UpdatePreview();
+        }
+
+        private void NewGanttChart_Click(object sender, RoutedEventArgs e)
+        {
+            CodeEditor.Text = """
+                gantt
+                    title A Gantt Diagram
+                    dateFormat  YYYY-MM-DD
+                    section Section
+                    A task           :a1, 2024-01-01, 30d
+                    Another task     :after a1  , 20d
+                    section Another
+                    Task in sec      :2024-01-12  , 12d
+                    another task      : 24d
+                """;
+            _ = UpdatePreview();
+        }
+
+        private void NewPieChart_Click(object sender, RoutedEventArgs e)
+        {
+            CodeEditor.Text = """
+                pie
+                    title Key elements in Product X
+                    "Calcium" : 42.96
+                    "Potassium" : 50.05
+                    "Magnesium" : 10.01
+                    "Iron" :  5
+                """;
+            _ = UpdatePreview();
+        }
+
+        private void NewGitGraph_Click(object sender, RoutedEventArgs e)
+        {
+            CodeEditor.Text = """
+                gitGraph
+                   commit
+                   commit
+                   branch develop
+                   checkout develop
+                   commit
+                   commit
+                   checkout main
+                   merge develop
+                   commit
+                   commit
+                """;
             _ = UpdatePreview();
         }
 

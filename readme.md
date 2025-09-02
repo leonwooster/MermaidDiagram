@@ -2,7 +2,7 @@
 
 ## Project Overview
 **Product Name:** WinUI3 Mermaid Diagram Editor  
-**Duration:** 4 Sprints (8 weeks)  
+**Duration:** 5 Sprints (10 weeks)  
 **Sprint Length:** 2 weeks each  
 **Team Size:** 1-2 developers  
 
@@ -222,6 +222,16 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
 
 **Total Story Points:** 16
 **Sprint Deliverable:** Production-ready UML-focused Mermaid editor
+
+### Sprint 5: Extended Diagram Support & Editor Polish (Weeks 9-10)
+**Sprint Goal:** Broaden diagram support beyond UML and improve the code editing experience.
+
+**Sprint Backlog:**
+- US-007: Additional Diagram Types (5 SP)
+- US-011: UML Syntax Highlighting (8 SP)
+
+**Total Story Points:** 13
+**Sprint Deliverable:** An editor with support for common non-UML diagrams and enhanced syntax highlighting.
 
 ## Definition of Done
 - [ ] Code is written and tested
