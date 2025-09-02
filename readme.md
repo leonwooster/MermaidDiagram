@@ -132,6 +132,54 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
       - Relationship symbols properly colored
       - Error highlighting for invalid UML syntax
 
+12. **US-012: Visual Diagram Builder** (Story Points: 13)
+    - **As a** new user
+    - **I want** a visual interface to build diagrams without writing code
+    - **So that** I can create diagrams easily without needing to learn Mermaid syntax first.
+    - **Acceptance Criteria:**
+        - A new 'Builder' panel is available in the UI.
+        - Users can add, edit, and connect nodes/elements using buttons and forms.
+        - The editor automatically generates the corresponding Mermaid syntax in real-time.
+        - The feature supports at least one diagram type, like flowcharts, initially.
+
+### Epic 5: Application Maintenance & DevOps
+**Goal:** Improve the long-term maintainability and reliability of the application.
+
+#### User Stories:
+13. **US-013: Mermaid.js Version Checker** (Story Points: 3)
+    - **As a** developer
+    - **I want** the application to automatically check for new versions of Mermaid.js
+    - **So that** I can keep the rendering engine up-to-date and leverage the latest features and fixes.
+    - **Acceptance Criteria:**
+        - On startup, the app queries a CDN for the latest Mermaid.js version.
+        - The latest version is compared against the bundled version.
+        - If a newer version is available, an `InfoBar` is displayed to the user.
+        - The check does not block the UI or startup process.
+
+### Epic 6: Advanced & Professional Features
+**Goal:** Enhance the application with professional-grade features for power users.
+
+#### User Stories:
+14. **US-014: Cloud Sync & Collaboration** (Story Points: 13)
+    - **As a** user
+    - **I want** to save my diagrams to a cloud service (e.g., OneDrive)
+    - **So that** I can access them from multiple devices and collaborate with my team.
+
+15. **US-015: Custom Theme & Style Editor** (Story Points: 8)
+    - **As a** user
+    - **I want** a UI to customize diagram colors and styles
+    - **So that** I can match my company's branding or my personal preferences.
+
+16. **US-016: Code Snippets Library** (Story Points: 5)
+    - **As a** developer
+    - **I want** a library of reusable Mermaid code snippets
+    - **So that** I can build complex diagrams more quickly.
+
+17. **US-017: Presentation Mode** (Story Points: 3)
+    - **As a** user
+    - **I want** a full-screen, distraction-free presentation mode
+    - **So that** I can clearly present my diagrams during meetings.
+
 ## Sprint Planning
 
 ### Sprint 1: Foundation (Weeks 1-2)
