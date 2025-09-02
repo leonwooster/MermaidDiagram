@@ -24,13 +24,30 @@
         mermaid.initialize({ startOnLoad: false });
 
         async function renderDiagram(code) {
+            console.log('renderDiagram called with code:', code);
             const container = document.getElementById('mermaid-container');
+            currentSvg = '';
+            container.innerHTML = ''; // Clear previous content
+
+            if (!code) {
+                console.log('No code provided to render.');
+                return;
+            }
+
             try {
-                const { svg } = await mermaid.render('graph', code);
-                currentSvg = svg;
-                container.innerHTML = svg;
+                // Create a new element for mermaid to process
+                const mermaidDiv = document.createElement('div');
+                mermaidDiv.classList.add('mermaid');
+                mermaidDiv.innerHTML = code;
+                container.appendChild(mermaidDiv);
+
+                // Use a small timeout to ensure the DOM is updated before mermaid runs
+                await new Promise(resolve => setTimeout(resolve, 0));
+                await mermaid.run({ nodes: [mermaidDiv] });
+                currentSvg = mermaidDiv.innerHTML;
+                console.log('Mermaid rendering successful.');
             } catch (e) {
-                currentSvg = '';
+                console.error('Mermaid rendering failed:', e);
                 container.innerHTML = `<pre>${e.message}</pre>`;
             }
         }

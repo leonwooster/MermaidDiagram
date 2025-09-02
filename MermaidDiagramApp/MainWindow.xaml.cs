@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -31,28 +32,68 @@ namespace MermaidDiagramApp
     public sealed partial class MainWindow : Window
     {
         private DispatcherTimer? _timer;
+        private bool _isWebViewReady = false;
+        private string _lastPreviewedCode = "";
 
         public MainWindow()
         {
-            InitializeComponent();
+            this.InitializeComponent();
             InitializeWebView();
+            this.Closed += MainWindow_Closed;
         }
 
         private async void InitializeWebView()
         {
             await PreviewBrowser.EnsureCoreWebView2Async();
-            PreviewBrowser.CoreWebView2.Navigate("ms-appx-web:///Assets/MermaidHost.html");
+            PreviewBrowser.NavigationCompleted += PreviewBrowser_NavigationCompleted;
+            try
+            {
+                var packagePath = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
+                string htmlPath = Path.Combine(packagePath, "Assets", "MermaidHost.html");
+                string htmlContent = await File.ReadAllTextAsync(htmlPath);
+                PreviewBrowser.CoreWebView2.NavigateToString(htmlContent);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to load MermaidHost.html: {ex.Message}");
+            }
+        }
 
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-            _timer.Tick += Timer_Tick;
-            _timer.Start();
+        private void PreviewBrowser_NavigationCompleted(WebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs args)
+        {
+            System.Diagnostics.Debug.WriteLine($"Navigation completed. IsSuccess: {args.IsSuccess}, WebErrorStatus: {args.WebErrorStatus}");
+            if (args.IsSuccess)
+            {
+                _isWebViewReady = true;
+                _ = UpdatePreview(); // Initial render
+
+                // Start timer only after the page is loaded
+                _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+                _timer.Tick += Timer_Tick;
+                _timer.Start();
+            }
         }
 
         private async void Timer_Tick(object? sender, object e)
         {
-            if (PreviewBrowser?.CoreWebView2 == null) return;
+            var currentCode = CodeEditor.Text;
+            if (currentCode != _lastPreviewedCode)
+            {
+                await UpdatePreview();
+            }
+        }
+
+        private async Task UpdatePreview()
+        {
+            if (!_isWebViewReady || PreviewBrowser?.CoreWebView2 == null)
+            {
+                System.Diagnostics.Debug.WriteLine("Preview not ready or CoreWebView2 is null.");
+                return;
+            }
 
             var code = CodeEditor.Text;
+            _lastPreviewedCode = code; // Cache the code that is being sent to the preview
+            System.Diagnostics.Debug.WriteLine($"Updating preview with code: {code}");
             var escapedCode = System.Text.Json.JsonSerializer.Serialize(code);
             await PreviewBrowser.CoreWebView2.ExecuteScriptAsync($"renderDiagram({escapedCode})");
         }
@@ -60,16 +101,24 @@ namespace MermaidDiagramApp
         private void NewClassDiagram_Click(object sender, RoutedEventArgs e)
         {
             CodeEditor.Text = "classDiagram\n    class Animal {\n        +String name\n        +int age\n        +void eat()\n    }";
+            _ = UpdatePreview();
         }
 
         private void NewSequenceDiagram_Click(object sender, RoutedEventArgs e)
         {
             CodeEditor.Text = "sequenceDiagram\n    participant Alice\n    participant Bob\n    Alice->>Bob: Hello Bob, how are you?\n    Bob-->>Alice: I am good, thanks!";
+            _ = UpdatePreview();
         }
 
         private void NewStateDiagram_Click(object sender, RoutedEventArgs e)
         {
             CodeEditor.Text = "stateDiagram-v2\n    [*] --> Still\n    Still --> [*]\n    Still --> Moving\n    Moving --> Still\n    Moving --> Crash\n    Crash --> [*]";
+            _ = UpdatePreview();
+        }
+
+        private void MainWindow_Closed(object sender, WindowEventArgs args)
+        {
+            _timer?.Stop();
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e)
@@ -91,6 +140,7 @@ namespace MermaidDiagramApp
             if (file != null)
             {
                 CodeEditor.Text = await FileIO.ReadTextAsync(file);
+                await UpdatePreview();
             }
         }
 
