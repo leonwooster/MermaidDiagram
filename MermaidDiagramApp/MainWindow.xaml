@@ -16,6 +16,23 @@
     </Window.SystemBackdrop>
 
     <Grid RowDefinitions="Auto, *">
+        <ContentDialog x:Name="PngExportDialog"
+                       Title="Export PNG Options"
+                       PrimaryButtonText="Export"
+                       CloseButtonText="Cancel"
+                       DefaultButton="Primary"
+                       MinWidth="320">
+            <StackPanel Spacing="12">
+                <TextBlock Text="Set the export scale. A higher value increases the image resolution." TextWrapping="Wrap"/>
+                <NumberBox x:Name="ScaleNumberBox"
+                           Header="Scale"
+                           Value="2"
+                           Minimum="0.5"
+                           Maximum="10"
+                           SpinButtonPlacementMode="Compact"
+                           SmallChange="0.5"/>
+            </StackPanel>
+        </ContentDialog>
 
         <MenuBar>
             <MenuBarItem Title="File">
@@ -23,6 +40,7 @@
                     <MenuFlyoutItem Text="Class Diagram" Click="NewClassDiagram_Click"/>
                     <MenuFlyoutItem Text="Sequence Diagram" Click="NewSequenceDiagram_Click"/>
                     <MenuFlyoutItem Text="State Diagram" Click="NewStateDiagram_Click"/>
+                    <MenuFlyoutItem Text="Activity Diagram" Click="NewActivityDiagram_Click"/>
                 </MenuFlyoutSubItem>
                 <MenuFlyoutItem Text="Open" Click="Open_Click"/>
                 <MenuFlyoutItem Text="Save" Click="Save_Click"/>

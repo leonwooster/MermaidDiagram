@@ -116,6 +116,12 @@ namespace MermaidDiagramApp
             _ = UpdatePreview();
         }
 
+        private void NewActivityDiagram_Click(object sender, RoutedEventArgs e)
+        {
+            CodeEditor.Text = "activityDiagram\n    start\n    :Initial Action;\n    if (condition?) then (yes)\n        :Yes path;\n    else (no)\n        :No path;\n    endif\n    :Final Action;\n    stop";
+            _ = UpdatePreview();
+        }
+
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
             _timer?.Stop();
@@ -129,9 +135,7 @@ namespace MermaidDiagramApp
         private async void Open_Click(object sender, RoutedEventArgs e)
         {
             var openPicker = new FileOpenPicker();
-            var window = this;
-            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-            WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hWnd);
+            WinRT_InterOp.InitializeWithWindow(openPicker, this);
 
             openPicker.FileTypeFilter.Add(".mmd");
             openPicker.FileTypeFilter.Add(".md");
@@ -147,9 +151,7 @@ namespace MermaidDiagramApp
         private async void Save_Click(object sender, RoutedEventArgs e)
         {
             var savePicker = new FileSavePicker();
-            var window = this;
-            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
+            WinRT_InterOp.InitializeWithWindow(savePicker, this);
 
             savePicker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
             savePicker.FileTypeChoices.Add("Mermaid Diagram", new List<string>() { ".mmd" });
@@ -172,9 +174,7 @@ namespace MermaidDiagramApp
             if (string.IsNullOrEmpty(unescapedSvg)) return;
 
             var savePicker = new FileSavePicker();
-            var window = this;
-            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
+            WinRT_InterOp.InitializeWithWindow(savePicker, this);
 
             savePicker.SuggestedStartLocation = PickerLocationId.PicturesLibrary;
             savePicker.FileTypeChoices.Add("SVG Image", new List<string>() { ".svg" });
@@ -196,10 +196,15 @@ namespace MermaidDiagramApp
 
             if (string.IsNullOrEmpty(svgString)) return;
 
+            PngExportDialog.XamlRoot = this.Content.XamlRoot;
+            var result = await PngExportDialog.ShowAsync();
+
+            if (result != ContentDialogResult.Primary) return;
+
+            var scale = (float)ScaleNumberBox.Value;
+
             var savePicker = new FileSavePicker();
-            var window = this;
-            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
+            WinRT_InterOp.InitializeWithWindow(savePicker, this);
 
             savePicker.SuggestedStartLocation = PickerLocationId.PicturesLibrary;
             savePicker.FileTypeChoices.Add("PNG Image", new List<string>() { ".png" });
@@ -209,11 +214,38 @@ namespace MermaidDiagramApp
             if (file != null)
             {
                 using var svg = new SKSvg();
-                svg.Load(svgString);
+                using var svgStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(svgString));
+                if (svg.Load(svgStream) is { } picture)
+                {
+                    var dimensions = new SKSizeI((int)(picture.CullRect.Width * scale), (int)(picture.CullRect.Height * scale));
+                    using var bitmap = new SKBitmap(new SKImageInfo(dimensions.Width, dimensions.Height));
+                    using var canvas = new SKCanvas(bitmap);
+                    canvas.Clear(SKColors.White);
+                    var matrix = SKMatrix.CreateScale(scale, scale);
+                    canvas.DrawPicture(picture, ref matrix);
+                    canvas.Flush();
 
-                using var stream = await file.OpenStreamForWriteAsync();
-                svg.Save(stream, SKColors.White, SKEncodedImageFormat.Png, 100);
+                    using var fileStream = await file.OpenStreamForWriteAsync();
+                    using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+                    data.SaveTo(fileStream);
+                }
             }
+        }
+    }
+
+    [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IInitializeWithWindow
+    {
+        void Initialize([In] IntPtr hwnd);
+    }
+
+    public static class WinRT_InterOp
+    {
+        public static void InitializeWithWindow(object target, object window)
+        {
+            var window_hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            var initializeWithWindow = target.As<IInitializeWithWindow>();
+            initializeWithWindow.Initialize(window_hwnd);
         }
     }
 }
