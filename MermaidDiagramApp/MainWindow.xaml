@@ -7,7 +7,11 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:tcb="using:TextControlBoxNS"
-    xmlns:controls="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    xmlns:ctk="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:converters="using:MermaidDiagramApp.Converters"
+    xmlns:models="using:MermaidDiagramApp.Models"
+    xmlns:viewmodels="using:MermaidDiagramApp.ViewModels"
     mc:Ignorable="d"
     Title="MermaidDiagramApp">
 
@@ -15,7 +19,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid RowDefinitions="Auto, *" KeyDown="MainWindow_KeyDown">
+    <Grid RowDefinitions="Auto, Auto, *" KeyDown="MainWindow_KeyDown">
         <ContentDialog x:Name="PngExportDialog"
                        Title="Export PNG Options"
                        PrimaryButtonText="Export"
@@ -34,7 +38,19 @@
             </StackPanel>
         </ContentDialog>
 
-        <MenuBar x:Name="MainMenuBar">
+        <ContentDialog x:Name="RestartDialog"
+                       Title="Update Complete"
+                       Content="Mermaid.js has been updated. Please restart the application for the changes to take effect."
+                       CloseButtonText="OK"
+                       DefaultButton="Close">
+        </ContentDialog>
+
+        <InfoBar x:Name="UpdateInfoBar" Grid.Row="0" IsOpen="False" Severity="Informational" Margin="12,12,12,0">
+            <InfoBar.ActionButton>
+                <Button Content="Update" Click="UpdateMermaid_Click"/>
+            </InfoBar.ActionButton>
+        </InfoBar>
+        <MenuBar x:Name="MainMenuBar" Grid.Row="1">
             <MenuBarItem Title="File">
                 <MenuFlyoutSubItem Text="New">
                     <MenuFlyoutItem Text="Class Diagram" Click="NewClassDiagram_Click"/>
@@ -57,34 +73,119 @@
                 <MenuFlyoutItem Text="Exit" Click="Exit_Click"/>
             </MenuBarItem>
             <MenuBarItem Title="View">
+                <ToggleMenuFlyoutItem x:Name="BuilderTool" Text="Diagram Builder" Click="BuilderTool_Click"/>
                 <ToggleMenuFlyoutItem x:Name="PanTool" Text="Pan Tool" Click="PanTool_Click"/>
-                <MenuFlyoutItem Text="Full Screen" Click="ToggleFullScreen_Click">
+                <MenuFlyoutItem Text="Full Screen Preview" Click="ToggleFullScreen_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="F11"/>
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Presentation Mode" Click="PresentationMode_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F5"/>
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+            </MenuBarItem>
+            <MenuBarItem Title="Settings">
             </MenuBarItem>
         </MenuBar>
 
-                <Grid Grid.Row="1" Padding="12" x:Name="MainGrid">
+                <Grid Grid.Row="2" Padding="12" x:Name="MainGrid">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="BuilderColumn" Width="Auto" MinWidth="0" MaxWidth="500"/>
+                <ColumnDefinition x:Name="BuilderSplitterColumn" Width="Auto"/>
                 <ColumnDefinition x:Name="EditorColumn" Width="*"/>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition x:Name="EditorPreviewSplitterColumn" Width="Auto"/>
                 <ColumnDefinition x:Name="PreviewColumn" Width="*"/>
             </Grid.ColumnDefinitions>
-            <tcb:TextControlBox
-                x:Name="CodeEditor"
-                Grid.Column="0"
-                ShowLineNumbers="True"/>
 
-            <controls:GridSplitter x:Name="GridSplitter"
+            <Border x:Name="BuilderPanel" Grid.Column="0" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12">
+                <Grid RowDefinitions="Auto, Auto, *, Auto, Auto, *, Auto">
+                    <TextBlock Grid.Row="0" Text="Diagram Builder" Style="{ThemeResource TitleTextBlockStyle}" Margin="0,0,0,12"/>
+
+                    <TextBlock Grid.Row="1" Text="Nodes" Style="{ThemeResource SubtitleTextBlockStyle}"/>
+                    <ListView Grid.Row="2" ItemsSource="{Binding Nodes}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:FlowchartNode">
+                                <TextBlock Text="{Binding Text}"/>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <StackPanel Grid.Row="3" Spacing="8" Margin="0,12,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Add Node" Command="{Binding AddNodeCommand}"/>
+                            <Button Content="Remove Node" Command="{Binding RemoveNodeCommand}"/>
+                        </StackPanel>
+                        
+                        <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto, Auto" RowSpacing="8" ColumnSpacing="8" 
+                              Visibility="{Binding SelectedNode, Converter={StaticResource NullToVisibilityConverter}}">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="ID" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding SelectedNode.Id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Text" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SelectedNode.Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Shape" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{x:Bind models:FlowchartNode.GetShapeNames()}" 
+                                      SelectedItem="{Binding SelectedNode.Shape, Mode=TwoWay, Converter={StaticResource EnumToStringConverter}}"/>
+                        </Grid>
+                    </StackPanel>
+                    
+                    <TextBlock Grid.Row="4" Text="Edges" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,24,0,0"/>
+                    <ListView Grid.Row="5" ItemsSource="{Binding Edges}" SelectedItem="{Binding SelectedEdge, Mode=TwoWay}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:FlowchartEdge">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <StackPanel Grid.Row="6" Spacing="8" Margin="0,12,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Add Edge" Command="{Binding AddEdgeCommand}"/>
+                            <Button Content="Remove Edge" Command="{Binding RemoveEdgeCommand}"/>
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto, Auto, Auto" RowSpacing="8" ColumnSpacing="8"
+                              Visibility="{Binding SelectedEdge, Converter={StaticResource NullToVisibilityConverter}}">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="From" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding Nodes}" SelectedValue="{Binding SelectedEdge.StartNodeId, Mode=TwoWay}" SelectedValuePath="Id" DisplayMemberPath="Id"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="To" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Nodes}" SelectedValue="{Binding SelectedEdge.EndNodeId, Mode=TwoWay}" SelectedValuePath="Id" DisplayMemberPath="Id"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Text" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEdge.Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Arrow" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{x:Bind models:FlowchartEdge.GetArrowTypeNames()}" 
+                                      SelectedItem="{Binding SelectedEdge.ArrowType, Mode=TwoWay, Converter={StaticResource EnumToStringConverter}}"/>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <ctk:GridSplitter x:Name="BuilderSplitter"
                                    Grid.Column="1"
                                    Width="12"
                                    ResizeBehavior="BasedOnAlignment"
                                    ResizeDirection="Auto"
                                    Background="Transparent"/>
+            
+            <tcb:TextControlBox
+                x:Name="CodeEditor"
+                Grid.Column="2"
+                ShowLineNumbers="True"/>
 
-            <WebView2 x:Name="PreviewBrowser" Grid.Column="2"/>
+            <ctk:GridSplitter x:Name="EditorPreviewSplitter"
+                                   Grid.Column="3"
+                                   Width="12"
+                                   ResizeBehavior="BasedOnAlignment"
+                                   ResizeDirection="Auto"
+                                   Background="Transparent"/>
+
+            <WebView2 x:Name="PreviewBrowser" Grid.Column="4"/>
         </Grid>
     </Grid>
 </Window>

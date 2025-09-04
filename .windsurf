@@ -75,6 +75,11 @@ rules:
     severity: suggestion
     recommendation: "If you find yourself writing the same block of code in multiple places, consider refactoring it into a reusable function or class."
 
+  - id: SWE-005
+    description: "Never implement a sprint without the consent of the user."
+    severity: warning
+    recommendation: "Ask the user before implementing a new sprint."
+
 agent_behavior:
   proactive_refactoring: true
   enforce_rules:

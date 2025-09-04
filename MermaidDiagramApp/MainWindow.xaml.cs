@@ -15,11 +15,18 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.Web.WebView2.Core;
+using System.Net.Http;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using TextControlBoxNS;
+using MermaidDiagramApp.ViewModels;
+using Microsoft.UI.Windowing;
+using Microsoft.UI;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -35,29 +42,108 @@ namespace MermaidDiagramApp
         private bool _isWebViewReady = false;
         private string _lastPreviewedCode = "";
         private bool _isFullScreen = false;
+        private bool _isPresentationMode = false;
         private bool _isPanModeEnabled = false;
+        private bool _isBuilderVisible = false;
+
+        public DiagramBuilderViewModel BuilderViewModel { get; }
 
         public MainWindow()
         {
             this.InitializeComponent();
+
+            BuilderViewModel = new DiagramBuilderViewModel();
+            BuilderPanel.DataContext = BuilderViewModel;
+            BuilderViewModel.PropertyChanged += DiagramBuilderViewModel_PropertyChanged;
+
+            CodeEditor.EnableSyntaxHighlighting = true;
+            CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
             InitializeWebView();
             this.Closed += MainWindow_Closed;
+            _ = CheckForMermaidUpdatesAsync();
+            UpdateBuilderVisibility(); // Ensure builder is hidden on startup
+        }
+
+        private async Task CheckForMermaidUpdatesAsync()
+        {
+            try
+            {
+                var localFolder = ApplicationData.Current.LocalFolder.Path;
+                var versionFilePath = Path.Combine(localFolder, "mermaid-version.txt");
+
+                if (!File.Exists(versionFilePath))
+                {
+                    return; // File not copied yet, skip check
+                }
+
+                var currentVersionStr = await File.ReadAllTextAsync(versionFilePath);
+                string latestVersionStr;
+
+                using (var client = new HttpClient())
+                {
+                    var response = await client.GetStringAsync("https://registry.npmjs.org/mermaid");
+                    using (var jsonDoc = JsonDocument.Parse(response))
+                    {
+                        latestVersionStr = jsonDoc.RootElement.GetProperty("dist-tags").GetProperty("latest").GetString() ?? string.Empty;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(latestVersionStr))
+                {
+                    var currentVersion = new Version(currentVersionStr.Trim());
+                    var latestVersion = new Version(latestVersionStr.Trim());
+
+                    if (latestVersion > currentVersion)
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            UpdateInfoBar.Message = $"A new version of Mermaid.js ({latestVersionStr}) is available. You are using an older version.";
+                            UpdateInfoBar.IsOpen = true;
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to check for Mermaid.js updates: {ex.Message}");
+            }
         }
 
         private async void InitializeWebView()
         {
+            await CopyAssetsToLocalFolder();
             await PreviewBrowser.EnsureCoreWebView2Async();
             PreviewBrowser.NavigationCompleted += PreviewBrowser_NavigationCompleted;
+
             try
             {
-                var packagePath = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
-                string htmlPath = Path.Combine(packagePath, "Assets", "MermaidHost.html");
-                string htmlContent = await File.ReadAllTextAsync(htmlPath);
-                PreviewBrowser.CoreWebView2.NavigateToString(htmlContent);
+                var localFolderPath = ApplicationData.Current.LocalFolder.Path;
+                PreviewBrowser.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "mermaid.local", localFolderPath, CoreWebView2HostResourceAccessKind.Allow);
+                PreviewBrowser.CoreWebView2.Navigate("https://mermaid.local/MermaidHost.html");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Failed to load MermaidHost.html: {ex.Message}");
+            }
+        }
+
+        private async Task CopyAssetsToLocalFolder()
+        {
+            var localFolder = ApplicationData.Current.LocalFolder;
+            var packagePath = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
+
+            string[] assetsToCopy = { "MermaidHost.html", "mermaid.min.js", "mermaid-version.txt" };
+
+            foreach (var assetName in assetsToCopy)
+            {
+                var sourcePath = Path.Combine(packagePath, "Assets", assetName);
+                var destPath = Path.Combine(localFolder.Path, assetName);
+
+                if (!File.Exists(destPath))
+                {
+                    await Task.Run(() => File.Copy(sourcePath, destPath));
+                }
             }
         }
 
@@ -81,6 +167,7 @@ namespace MermaidDiagramApp
             var currentCode = CodeEditor.Text;
             if (currentCode != _lastPreviewedCode)
             {
+                BuilderViewModel.ParseMermaidCode(currentCode);
                 await UpdatePreview();
             }
         }
@@ -202,9 +289,16 @@ namespace MermaidDiagramApp
 
         private void MainWindow_KeyDown(object sender, KeyRoutedEventArgs e)
         {
-            if (e.Key == Windows.System.VirtualKey.Escape && _isFullScreen)
+            if (e.Key == Windows.System.VirtualKey.Escape)
             {
-                ToggleFullScreen_Click(this, new RoutedEventArgs());
+                if (_isFullScreen)
+                {
+                    ToggleFullScreen_Click(this, new RoutedEventArgs());
+                }
+                if (_isPresentationMode)
+                {
+                    PresentationMode_Click(this, new RoutedEventArgs());
+                }
             }
         }
 
@@ -278,6 +372,37 @@ namespace MermaidDiagramApp
             }
         }
 
+        private AppWindow GetAppWindowForCurrentWindow()
+        {
+            IntPtr hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WindowId myWndId = Win32Interop.GetWindowIdFromWindow(hWnd);
+            return AppWindow.GetFromWindowId(myWndId);
+        }
+
+        private void PresentationMode_Click(object sender, RoutedEventArgs e)
+        {
+            var appWindow = GetAppWindowForCurrentWindow();
+
+            if (_isPresentationMode)
+            {
+                appWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+                MainMenuBar.Visibility = Visibility.Visible;
+                EditorColumn.Width = new GridLength(1, GridUnitType.Star);
+                EditorPreviewSplitter.Visibility = Visibility.Visible;
+                UpdateBuilderVisibility(); // Restore builder visibility based on its state
+            }
+            else
+            {
+                appWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+                MainMenuBar.Visibility = Visibility.Collapsed;
+                EditorColumn.Width = new GridLength(0);
+                EditorPreviewSplitter.Visibility = Visibility.Collapsed;
+                BuilderColumn.Width = new GridLength(0);
+                BuilderSplitter.Visibility = Visibility.Collapsed;
+            }
+            _isPresentationMode = !_isPresentationMode;
+        }
+
         private void ToggleFullScreen_Click(object sender, RoutedEventArgs e)
         {
             _isFullScreen = !_isFullScreen;
@@ -285,13 +410,38 @@ namespace MermaidDiagramApp
             {
                 MainMenuBar.Visibility = Visibility.Collapsed;
                 EditorColumn.Width = new GridLength(0);
-                GridSplitter.Visibility = Visibility.Collapsed;
+                EditorPreviewSplitter.Visibility = Visibility.Collapsed;
+                BuilderColumn.Width = new GridLength(0);
+                BuilderSplitter.Visibility = Visibility.Collapsed;
             }
             else
             {
                 MainMenuBar.Visibility = Visibility.Visible;
                 EditorColumn.Width = new GridLength(1, GridUnitType.Star);
-                GridSplitter.Visibility = Visibility.Visible;
+                EditorPreviewSplitter.Visibility = Visibility.Visible;
+                UpdateBuilderVisibility(); // Restore builder visibility based on its state
+            }
+        }
+
+        private void BuilderTool_Click(object sender, RoutedEventArgs e)
+        {
+            _isBuilderVisible = BuilderTool.IsChecked;
+            UpdateBuilderVisibility();
+        }
+
+        private void UpdateBuilderVisibility()
+        {
+            if (_isBuilderVisible)
+            {
+                BuilderColumn.Width = new GridLength(300, GridUnitType.Pixel); // Or use GridLength.Auto
+                BuilderSplitter.Visibility = Visibility.Visible;
+                BuilderPanel.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                BuilderColumn.Width = new GridLength(0);
+                BuilderSplitter.Visibility = Visibility.Collapsed;
+                BuilderPanel.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -399,6 +549,74 @@ namespace MermaidDiagramApp
                 }
             }
         }
+
+        private void DiagramBuilderViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(DiagramBuilderViewModel.GeneratedMermaidCode))
+            {
+                if (CodeEditor.Text != BuilderViewModel.GeneratedMermaidCode)
+                {
+                    CodeEditor.Text = BuilderViewModel.GeneratedMermaidCode;
+                }
+            }
+        }
+
+        private async void UpdateMermaid_Click(object sender, RoutedEventArgs e)
+        {
+            if (UpdateInfoBar.ActionButton is Button updateButton)
+            {
+                updateButton.IsEnabled = false;
+            }
+            UpdateInfoBar.Message = "Updating Mermaid.js...";
+            UpdateInfoBar.Severity = InfoBarSeverity.Informational;
+
+            try
+            {
+                string latestVersionStr;
+                using (var client = new HttpClient())
+                {
+                    var response = await client.GetStringAsync("https://registry.npmjs.org/mermaid");
+                    using (var jsonDoc = JsonDocument.Parse(response))
+                    {
+                        latestVersionStr = jsonDoc.RootElement.GetProperty("dist-tags").GetProperty("latest").GetString() ?? string.Empty;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(latestVersionStr))
+                {
+                    UpdateInfoBar.Message = "Could not determine the latest version.";
+                    UpdateInfoBar.Severity = InfoBarSeverity.Error;
+                    return;
+                }
+
+                var downloadUrl = $"https://cdn.jsdelivr.net/npm/mermaid@" + latestVersionStr + "/dist/mermaid.min.js";
+                using (var client = new HttpClient())
+                {
+                    var newMermaidJsContent = await client.GetStringAsync(downloadUrl);
+
+                    var localFolder = ApplicationData.Current.LocalFolder.Path;
+                    var localFilePath = Path.Combine(localFolder, "mermaid.min.js");
+                    await File.WriteAllTextAsync(localFilePath, newMermaidJsContent);
+
+                    var versionFilePath = Path.Combine(localFolder, "mermaid-version.txt");
+                    await File.WriteAllTextAsync(versionFilePath, latestVersionStr);
+                }
+
+                UpdateInfoBar.IsOpen = false;
+                RestartDialog.XamlRoot = this.Content.XamlRoot;
+                await RestartDialog.ShowAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to update Mermaid.js: {ex.Message}");
+                UpdateInfoBar.Message = $"Update failed: {ex.Message}";
+                UpdateInfoBar.Severity = InfoBarSeverity.Error;
+                if (UpdateInfoBar.ActionButton is Button button)
+                {
+                    button.IsEnabled = true;
+                }
+            }
+        }
     }
 
     [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -415,5 +633,6 @@ namespace MermaidDiagramApp
             var initializeWithWindow = target.As<IInitializeWithWindow>();
             initializeWithWindow.Initialize(window_hwnd);
         }
+
     }
 }

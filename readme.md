@@ -248,8 +248,45 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
 **Sprint Backlog:**
 - US-018: Full-Screen Preview (5 SP)
 
+**Total Story Points:** 5
+**Sprint Deliverable:** An editor with a full-screen preview mode for diagrams.
+
+### Sprint 7: Maintenance & Reliability (Weeks 13-14)
+**Sprint Goal:** Improve the application's long-term maintainability.
+
+**Sprint Backlog:**
+- US-013: Mermaid.js Version Checker (3 SP)
+
+**Total Story Points:** 3
+**Sprint Deliverable:** An application that can notify the user about available Mermaid.js updates.
+
+### Sprint 8: Advanced Editing Features (Weeks 15-16)
+**Sprint Goal:** Introduce advanced, user-friendly diagram creation tools.
+
+**Sprint Backlog:**
+- US-012: Visual Diagram Builder (13 SP)
+
 **Total Story Points:** 13
-**Sprint Deliverable:** An editor with syntax highlighting and a full-screen preview mode for diagrams.
+**Sprint Deliverable:** A visual builder to facilitate diagram creation for new users.
+
+### Sprint 9: Advanced Highlighting & Presentation (Weeks 17-18)
+**Sprint Goal:** Enhance the editing and presentation experience with advanced features.
+
+**Sprint Backlog:**
+- US-017: Presentation Mode (3 SP)
+
+**Total Story Points:** 3
+**Sprint Deliverable:** An editor with a dedicated presentation mode.
+
+### Sprint 10: Professional Features (Weeks 19-20)
+**Sprint Goal:** Enhance the application with professional-grade features for power users.
+
+**Sprint Backlog:**
+- US-015: Custom Theme & Style Editor (8 SP)
+- US-016: Code Snippets Library (5 SP)
+
+**Total Story Points:** 13
+**Sprint Deliverable:** An editor with theme customization and a library of reusable code snippets.
 
 ## Definition of Done
 - [ ] Code is written and tested
@@ -270,3 +307,5 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
 - Export functionality works for PNG/SVG formats
 - User can create, edit, save, and load diagram files
 - Real-time preview with < 1 second update time
+
+## Future Considerations / Backlog
