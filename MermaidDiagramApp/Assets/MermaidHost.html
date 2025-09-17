@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid Preview</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="mermaid-container" class="mermaid"></div>
+
+    <script src="/mermaid.min.js"></script>
+    <script>
+        let currentSvg = '';
+        mermaid.initialize({ startOnLoad: false });
+
+        async function renderDiagram(code) {
+            console.log('renderDiagram called with code:', code);
+            const container = document.getElementById('mermaid-container');
+            currentSvg = '';
+            container.innerHTML = ''; // Clear previous content
+
+            if (!code || !code.trim()) {
+                console.log('No code provided to render.');
+                return;
+            }
+
+            try {
+                // The render function is safer as it doesn't rely on DOM insertion before processing.
+                const { svg } = await mermaid.render('graphDiv', code);
+                container.innerHTML = svg;
+                currentSvg = svg;
+                console.log('Mermaid rendering successful.');
+            } catch (e) {
+                console.error('Mermaid rendering failed:', e);
+                // Provide a more detailed error message in the UI.
+                const errorMessage = e.message ? e.message : JSON.stringify(e, null, 2);
+                container.innerHTML = `<pre style="color: red; white-space: pre-wrap;">${errorMessage}</pre>`;
+            }
+        }
+
+        function getSvg() {
+            return currentSvg;
+        }
+    </script>
+</body>
+</html>

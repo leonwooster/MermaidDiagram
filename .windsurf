@@ -1,0 +1,88 @@
+# Windsurf Configuration for WinUI 3 Projects
+# This file defines best practices and rules for the Cascade AI agent.
+
+version: 1.0
+
+project:
+  name: MermaidDiagramApp
+  type: WinUI3
+  framework: DotNet
+
+rules:
+  - id: WINUI-001
+    description: "Prefer x:Bind over Binding for better performance."
+    severity: suggestion
+    patterns:
+      - "Binding Path="
+    recommendation: "Consider using compiled bindings with {x:Bind} for improved performance in XAML."
+
+  - id: WINUI-002
+    description: "Use ThemeResource for colors and brushes to support theming."
+    severity: warning
+    patterns:
+      - "Color=\"#.*\""
+      - "Background=\"#.*\""
+      - "Foreground=\"#.*\""
+    exclude:
+      - "SkiaSharp" # Exclude cases where specific colors are needed, like image rendering.
+    recommendation: "Use {ThemeResource} for brushes and colors to ensure your app adapts to light, dark, and high-contrast themes."
+
+  - id: WINUI-003
+    description: "Avoid async void for methods other than event handlers."
+    severity: warning
+    patterns:
+      - "public async void (?!.*_Click|.*_Changed|.*_Completed|.*_Loaded)"
+    recommendation: "Methods that are not event handlers should return a Task, not void, to be properly awaited and to allow for error handling."
+
+  - id: WINUI-004
+    description: "Properly initialize COM components like FilePickers in unpackaged apps."
+    severity: critical
+    check:
+      file: "*.xaml.cs"
+      contains:
+        - "new FileOpenPicker()"
+        - "new FileSavePicker()"
+      must_also_contain:
+        - "InitializeWithWindow"
+    recommendation: "Ensure that any FileOpenPicker or FileSavePicker is initialized with the main window handle using the IInitializeWithWindow interop helper."
+
+  - id: WINUI-005
+    description: "Separate concerns using the MVVM pattern."
+    severity: suggestion
+    recommendation: "For complex views, consider adopting the Model-View-ViewModel (MVVM) pattern to improve testability and maintainability. This involves separating UI (View), data (Model), and logic (ViewModel)."
+
+  - id: SWE-001
+    description: "Use clear and descriptive naming for variables and functions."
+    severity: suggestion
+    recommendation: "Choose names that clearly reflect the purpose of a variable or the action of a function. Avoid single-letter names except for loop counters (e.g., i, j, k)."
+
+  - id: SWE-002
+    description: "Add comments to explain complex or non-obvious code."
+    severity: suggestion
+    recommendation: "If the logic is complex, add a brief comment to explain the 'why,' not just the 'what.' Well-named code often needs fewer comments."
+
+  - id: SWE-003
+    description: "Implement robust error handling for I/O and other fallible operations."
+    severity: warning
+    patterns:
+      - "File.ReadAllTextAsync"
+      - "File.WriteTextAsync"
+      - "ExecuteScriptAsync"
+    recommendation: "Wrap calls to file system, network, or other external APIs in try-catch blocks to handle potential exceptions gracefully."
+
+  - id: SWE-004
+    description: "Avoid code duplication (Don't Repeat Yourself - DRY)."
+    severity: suggestion
+    recommendation: "If you find yourself writing the same block of code in multiple places, consider refactoring it into a reusable function or class."
+
+  - id: SWE-005
+    description: "Never implement a sprint without the consent of the user."
+    severity: warning
+    recommendation: "Ask the user before implementing a new sprint."
+
+agent_behavior:
+  proactive_refactoring: true
+  enforce_rules:
+    - WINUI-002
+    - WINUI-003
+    - WINUI-004

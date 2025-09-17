@@ -2,12 +2,17 @@
 
 ## Project Overview
 **Product Name:** WinUI3 Mermaid Diagram Editor  
-**Duration:** 4 Sprints (8 weeks)  
+**Duration:** 5 Sprints (10 weeks)  
 **Sprint Length:** 2 weeks each  
 **Team Size:** 1-2 developers  
 
 ## Product Vision
 Create a modern Windows desktop application using WinUI3 that allows users to write, edit, and preview Mermaid diagrams in real-time with professional export capabilities, **with primary focus on UML diagram types**.
+
+## Documentation
+
+- **[Software Design Document](./docs/SOFTWARE_DESIGN.md)**: Details the application's architecture, components, and key design decisions.
+- **[User Guide](./docs/USER_GUIDE.md)**: Provides instructions on how to use the application's features.
 
 ## Product Backlog
 
@@ -118,7 +123,65 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
 **Goal:** Improve the UML editing experience with specialized features
 
 #### User Stories:
-11. **US-011: UML Syntax Highlighting** (Story Points: 8)
+
+12. **US-012: Visual Diagram Builder** (Story Points: 13)
+    - **As a** new user
+    - **I want** a visual interface to build diagrams without writing code
+    - **So that** I can create diagrams easily without needing to learn Mermaid syntax first.
+    - **Acceptance Criteria:**
+        - A new 'Builder' panel is available in the UI.
+        - Users can add, edit, and connect nodes/elements using buttons and forms.
+        - The editor automatically generates the corresponding Mermaid syntax in real-time.
+        - The feature supports at least one diagram type, like flowcharts, initially.
+
+### Epic 5: Application Maintenance & DevOps
+**Goal:** Improve the long-term maintainability and reliability of the application.
+
+#### User Stories:
+13. **US-013: Mermaid.js Version Checker** (Story Points: 3)
+    - **As a** developer
+    - **I want** the application to automatically check for new versions of Mermaid.js
+    - **So that** I can keep the rendering engine up-to-date and leverage the latest features and fixes.
+    - **Acceptance Criteria:**
+        - On startup, the app queries a CDN for the latest Mermaid.js version.
+        - The latest version is compared against the bundled version.
+        - If a newer version is available, an `InfoBar` is displayed to the user.
+        - The check does not block the UI or startup process.
+
+### Epic 6: Advanced & Professional Features
+**Goal:** Enhance the application with professional-grade features for power users.
+
+#### User Stories:
+14. **US-014: Cloud Sync & Collaboration** (Story Points: 13)
+    - **As a** user
+    - **I want** to save my diagrams to a cloud service (e.g., OneDrive)
+    - **So that** I can access them from multiple devices and collaborate with my team.
+
+15. **US-015: Custom Theme & Style Editor** (Story Points: 8)
+    - **As a** user
+    - **I want** a UI to customize diagram colors and styles
+    - **So that** I can match my company's branding or my personal preferences.
+
+16. **US-016: Code Snippets Library** (Story Points: 5)
+    - **As a** developer
+    - **I want** a library of reusable Mermaid code snippets
+    - **So that** I can build complex diagrams more quickly.
+
+17. **US-017: Presentation Mode** (Story Points: 3)
+    - **As a** user
+    - **I want** a full-screen, distraction-free presentation mode
+    - **So that** I can clearly present my diagrams during meetings.
+
+18. **US-018: Full-Screen Preview** (Story Points: 5)
+    - **As a** user
+    - **I want** to view the diagram preview in full-screen mode
+    - **So that** I can focus on the diagram without distractions.
+    - **Acceptance Criteria:**
+        - A keyboard shortcut (e.g., F11) or a UI button toggles full-screen mode.
+        - In full-screen mode, the menu bar and editor are hidden.
+        - Pressing the shortcut or 'Esc' key exits full-screen mode.
+
+19. **US-011: UML Syntax Highlighting** (Story Points: 8)
     - **As a** developer
     - **I want** syntax highlighting optimized for UML code
     - **So that** I can write UML diagrams more efficiently
@@ -170,6 +233,61 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
 **Total Story Points:** 16
 **Sprint Deliverable:** Production-ready UML-focused Mermaid editor
 
+### Sprint 5: Extended Diagram Support & Editor Polish (Weeks 9-10)
+**Sprint Goal:** Broaden diagram support beyond UML and improve the code editing experience.
+
+**Sprint Backlog:**
+- US-007: Additional Diagram Types (5 SP)
+
+**Total Story Points:** 13
+**Sprint Deliverable:** An editor with support for common non-UML diagrams and enhanced syntax highlighting.
+
+### Sprint 6: Editor Enhancements & Presentation (Weeks 11-12)
+**Sprint Goal:** Enhance the editing experience and add a focused presentation feature.
+
+**Sprint Backlog:**
+- US-018: Full-Screen Preview (5 SP)
+
+**Total Story Points:** 5
+**Sprint Deliverable:** An editor with a full-screen preview mode for diagrams.
+
+### Sprint 7: Maintenance & Reliability (Weeks 13-14)
+**Sprint Goal:** Improve the application's long-term maintainability.
+
+**Sprint Backlog:**
+- US-013: Mermaid.js Version Checker (3 SP)
+
+**Total Story Points:** 3
+**Sprint Deliverable:** An application that can notify the user about available Mermaid.js updates.
+
+### Sprint 8: Advanced Editing Features (Weeks 15-16)
+**Sprint Goal:** Introduce advanced, user-friendly diagram creation tools.
+
+**Sprint Backlog:**
+- US-012: Visual Diagram Builder (13 SP)
+
+**Total Story Points:** 13
+**Sprint Deliverable:** A visual builder to facilitate diagram creation for new users.
+
+### Sprint 9: Advanced Highlighting & Presentation (Weeks 17-18)
+**Sprint Goal:** Enhance the editing and presentation experience with advanced features.
+
+**Sprint Backlog:**
+- US-017: Presentation Mode (3 SP)
+
+**Total Story Points:** 3
+**Sprint Deliverable:** An editor with a dedicated presentation mode.
+
+### Sprint 10: Professional Features (Weeks 19-20)
+**Sprint Goal:** Enhance the application with professional-grade features for power users.
+
+**Sprint Backlog:**
+- US-015: Custom Theme & Style Editor (8 SP)
+- US-016: Code Snippets Library (5 SP)
+
+**Total Story Points:** 13
+**Sprint Deliverable:** An editor with theme customization and a library of reusable code snippets.
+
 ## Definition of Done
 - [ ] Code is written and tested
 - [ ] Feature works as described in acceptance criteria
@@ -189,3 +307,5 @@ Create a modern Windows desktop application using WinUI3 that allows users to wr
 - Export functionality works for PNG/SVG formats
 - User can create, edit, save, and load diagram files
 - Real-time preview with < 1 second update time
+
+## Future Considerations / Backlog
