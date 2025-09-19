@@ -467,6 +467,37 @@ namespace MermaidDiagramApp
             }
         }
 
+        private string AddBackgroundToSvg(string svgContent)
+        {
+            try
+            {
+                // Simple approach: just insert a background rectangle right after the opening <svg> tag
+                var svgTagEndIndex = svgContent.IndexOf('>');
+                if (svgTagEndIndex > 0)
+                {
+                    // Extract width and height if available, otherwise use large default values
+                    var widthMatch = Regex.Match(svgContent, @"width=""([^""]+)""");
+                    var heightMatch = Regex.Match(svgContent, @"height=""([^""]+)""");
+                    
+                    string width = widthMatch.Success ? widthMatch.Groups[1].Value.Replace("px", "") : "1200";
+                    string height = heightMatch.Success ? heightMatch.Groups[1].Value.Replace("px", "") : "800";
+                    
+                    // Create a background rectangle
+                    var backgroundRect = $"<rect x=\"0\" y=\"0\" width=\"{width}\" height=\"{height}\" fill=\"#222222\"/>";
+                    
+                    // Insert the background right after the opening <svg> tag
+                    return svgContent.Insert(svgTagEndIndex + 1, backgroundRect);
+                }
+                
+                return svgContent; // Return original if we can't parse it
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to add background to SVG: {ex.Message}");
+                return svgContent; // Return original on error
+            }
+        }
+
         private void PresentationMode_Click(object sender, RoutedEventArgs e)
         {
             var appWindow = GetAppWindowForCurrentWindow();
@@ -595,6 +626,9 @@ namespace MermaidDiagramApp
 
             if (string.IsNullOrEmpty(unescapedSvg)) return;
 
+            // Add dark background to SVG to make white lines visible
+            var modifiedSvg = AddBackgroundToSvg(unescapedSvg);
+
             var savePicker = new FileSavePicker();
             WinRT_InterOp.InitializeWithWindow(savePicker, this);
 
@@ -605,7 +639,7 @@ namespace MermaidDiagramApp
             var file = await savePicker.PickSaveFileAsync();
             if (file != null)
             {
-                await FileIO.WriteTextAsync(file, unescapedSvg);
+                await FileIO.WriteTextAsync(file, modifiedSvg);
             }
         }
 
