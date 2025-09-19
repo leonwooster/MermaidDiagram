@@ -604,7 +604,7 @@ namespace MermaidDiagramApp
                     var dimensions = new SKSizeI((int)(picture.CullRect.Width * scale), (int)(picture.CullRect.Height * scale));
                     using var bitmap = new SKBitmap(new SKImageInfo(dimensions.Width, dimensions.Height));
                     using var canvas = new SKCanvas(bitmap);
-                    canvas.Clear(SKColors.White);
+                    canvas.Clear(SKColor.Parse("#222222")); // Dark background to match theme
                     var matrix = SKMatrix.CreateScale(scale, scale);
                     canvas.DrawPicture(picture, ref matrix);
                     canvas.Flush();
