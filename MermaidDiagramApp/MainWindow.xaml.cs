@@ -25,8 +25,11 @@ using Windows.Foundation;
 using Windows.Foundation.Collections;
 using TextControlBoxNS;
 using MermaidDiagramApp.ViewModels;
+using MermaidDiagramApp.Services;
+using MermaidDiagramApp.Models;
 using Microsoft.UI.Windowing;
 using Microsoft.UI;
+using Microsoft.Windows.AppLifecycle;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -45,6 +48,8 @@ namespace MermaidDiagramApp
         private bool _isPresentationMode = false;
         private bool _isPanModeEnabled = false;
         private bool _isBuilderVisible = false;
+        private MermaidLinter _linter;
+        private Version? _mermaidVersion;
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -56,12 +61,19 @@ namespace MermaidDiagramApp
             BuilderPanel.DataContext = BuilderViewModel;
             BuilderViewModel.PropertyChanged += DiagramBuilderViewModel_PropertyChanged;
 
+            _linter = new MermaidLinter();
+
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
-            InitializeWebView();
+            (this.Content as FrameworkElement).Loaded += MainWindow_Loaded;
             this.Closed += MainWindow_Closed;
             _ = CheckForMermaidUpdatesAsync();
             UpdateBuilderVisibility(); // Ensure builder is hidden on startup
+        }
+
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            await InitializeWebViewAsync();
         }
 
         private async Task CheckForMermaidUpdatesAsync()
@@ -109,7 +121,7 @@ namespace MermaidDiagramApp
             }
         }
 
-        private async void InitializeWebView()
+        private async Task InitializeWebViewAsync()
         {
             await CopyAssetsToLocalFolder();
             await PreviewBrowser.EnsureCoreWebView2Async();
@@ -120,7 +132,9 @@ namespace MermaidDiagramApp
                 var localFolderPath = ApplicationData.Current.LocalFolder.Path;
                 PreviewBrowser.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "mermaid.local", localFolderPath, CoreWebView2HostResourceAccessKind.Allow);
-                PreviewBrowser.CoreWebView2.Navigate("https://mermaid.local/MermaidHost.html");
+                // Add a cache-busting query string to ensure the latest version of the host file is always loaded.
+                var navigationUrl = $"https://mermaid.local/MermaidHost.html?t={DateTime.Now.Ticks}";
+                PreviewBrowser.CoreWebView2.Navigate(navigationUrl);
             }
             catch (Exception ex)
             {
@@ -140,10 +154,8 @@ namespace MermaidDiagramApp
                 var sourcePath = Path.Combine(packagePath, "Assets", assetName);
                 var destPath = Path.Combine(localFolder.Path, assetName);
 
-                if (!File.Exists(destPath))
-                {
-                    await Task.Run(() => File.Copy(sourcePath, destPath));
-                }
+                // Always overwrite the destination file to ensure the latest version is used during development.
+                await Task.Run(() => File.Copy(sourcePath, destPath, true));
             }
         }
 
@@ -152,6 +164,17 @@ namespace MermaidDiagramApp
             System.Diagnostics.Debug.WriteLine($"Navigation completed. IsSuccess: {args.IsSuccess}, WebErrorStatus: {args.WebErrorStatus}");
             if (args.IsSuccess)
             {
+                // Get the Mermaid.js version once the page is loaded
+                _ = Task.Run(async () =>
+                {
+                    var versionJson = await PreviewBrowser.CoreWebView2.ExecuteScriptAsync("mermaid.version()");
+                    var versionString = JsonSerializer.Deserialize<string>(versionJson);
+                    if (Version.TryParse(versionString, out var version))
+                    {
+                        _mermaidVersion = version;
+                    }
+                });
+
                 _isWebViewReady = true;
                 _ = UpdatePreview(); // Initial render
 
@@ -167,8 +190,35 @@ namespace MermaidDiagramApp
             var currentCode = CodeEditor.Text;
             if (currentCode != _lastPreviewedCode)
             {
-                BuilderViewModel.ParseMermaidCode(currentCode);
+                CheckForSyntaxIssues(currentCode);
+
+                // BuilderViewModel.ParseMermaidCode(currentCode); // Commented out to disable buggy visual builder logic
                 await UpdatePreview();
+            }
+        }
+
+        private void CheckForSyntaxIssues(string code)
+        {
+            if (_mermaidVersion == null) return;
+
+            var issues = _linter.Lint(code, _mermaidVersion);
+            if (issues.Any())
+            {
+                var issue = issues.First(); // For now, just handle the first issue
+                LinterInfoBar.Message = issue.Description;
+
+                var fixButton = new Button { Content = "Fix it" };
+                fixButton.Click += (s, args) =>
+                {
+                    CodeEditor.Text = issue.ProposeFix(CodeEditor.Text);
+                    LinterInfoBar.IsOpen = false;
+                };
+                LinterInfoBar.ActionButton = fixButton;
+                LinterInfoBar.IsOpen = true;
+            }
+            else
+            {
+                LinterInfoBar.IsOpen = false;
             }
         }
 
@@ -450,6 +500,22 @@ namespace MermaidDiagramApp
             Application.Current.Exit();
         }
 
+        private async void About_Click(object sender, RoutedEventArgs e)
+        {
+            var package = Windows.ApplicationModel.Package.Current;
+            var version = package.Id.Version;
+            var versionString = $"Version: {version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
+
+            var installDate = package.InstalledDate;
+            var installDateString = $"Installed: {installDate.ToLocalTime():yyyy-MM-dd HH:mm:ss}";
+
+            VersionTextBlock.Text = versionString;
+            InstallDateTextBlock.Text = installDateString;
+
+            AboutDialog.XamlRoot = this.Content.XamlRoot;
+            await AboutDialog.ShowAsync();
+        }
+
         private async void Open_Click(object sender, RoutedEventArgs e)
         {
             var openPicker = new FileOpenPicker();
@@ -552,6 +618,8 @@ namespace MermaidDiagramApp
 
         private void DiagramBuilderViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            // Commented out to disable buggy visual builder logic that overwrites user's code.
+            /*
             if (e.PropertyName == nameof(DiagramBuilderViewModel.GeneratedMermaidCode))
             {
                 if (CodeEditor.Text != BuilderViewModel.GeneratedMermaidCode)
@@ -559,6 +627,7 @@ namespace MermaidDiagramApp
                     CodeEditor.Text = BuilderViewModel.GeneratedMermaidCode;
                 }
             }
+            */
         }
 
         private async void UpdateMermaid_Click(object sender, RoutedEventArgs e)
@@ -604,7 +673,13 @@ namespace MermaidDiagramApp
 
                 UpdateInfoBar.IsOpen = false;
                 RestartDialog.XamlRoot = this.Content.XamlRoot;
-                await RestartDialog.ShowAsync();
+                var result = await RestartDialog.ShowAsync();
+
+                if (result == ContentDialogResult.Primary)
+                {
+                    // Restart the application
+                    AppInstance.Restart("");
+                }
             }
             catch (Exception ex)
             {
@@ -617,22 +692,22 @@ namespace MermaidDiagramApp
                 }
             }
         }
-    }
 
-    [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IInitializeWithWindow
-    {
-        void Initialize([In] IntPtr hwnd);
-    }
-
-    public static class WinRT_InterOp
-    {
-        public static void InitializeWithWindow(object target, object window)
+        [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        public interface IInitializeWithWindow
         {
-            var window_hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-            var initializeWithWindow = target.As<IInitializeWithWindow>();
-            initializeWithWindow.Initialize(window_hwnd);
+            void Initialize([In] IntPtr hwnd);
         }
 
+        public static class WinRT_InterOp
+        {
+            public static void InitializeWithWindow(object target, object window)
+            {
+                var window_hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+                var initializeWithWindow = target.As<IInitializeWithWindow>();
+                initializeWithWindow.Initialize(window_hwnd);
+            }
+
+        }
     }
 }

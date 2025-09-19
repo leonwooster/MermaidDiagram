@@ -21,7 +21,11 @@
     <script src="/mermaid.min.js"></script>
     <script>
         let currentSvg = '';
-        mermaid.initialize({ startOnLoad: false });
+        mermaid.initialize({
+            startOnLoad: false,
+            securityLevel: 'loose', // Required for Font Awesome icons
+            theme: 'dark' // Set default theme
+        });
 
         async function renderDiagram(code) {
             console.log('renderDiagram called with code:', code);
