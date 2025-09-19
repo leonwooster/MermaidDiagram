@@ -150,14 +150,27 @@ namespace MermaidDiagramApp
             var localFolder = ApplicationData.Current.LocalFolder;
             var packagePath = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
 
-            string[] assetsToCopy = { "MermaidHost.html", "mermaid.min.js", "mermaid-version.txt" };
+            string[] assetsToCopy = { "MermaidHost.html", "mermaid.min.js", "mermaid-version.txt", "fontawesome.css", "fa-solid-900.woff2" };
 
             foreach (var assetName in assetsToCopy)
             {
                 var sourcePath = Path.Combine(packagePath, "Assets", assetName);
                 var destPath = Path.Combine(localFolder.Path, assetName);
 
-                // Always overwrite the destination file to ensure the latest version is used during development.
+                try
+                {
+                    // Force delete the destination file first to prevent loading a cached/corrupted version.
+                    if (File.Exists(destPath))
+                    {
+                        File.Delete(destPath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to delete existing asset {assetName}: {ex.Message}");
+                }
+
+                // Now, copy the fresh version from the package.
                 await Task.Run(() => File.Copy(sourcePath, destPath, true));
             }
         }
@@ -647,11 +660,6 @@ namespace MermaidDiagramApp
         {
             if (PreviewBrowser?.CoreWebView2 == null) return;
 
-            var svgJson = await PreviewBrowser.CoreWebView2.ExecuteScriptAsync("getSvg()");
-            var svgString = System.Text.Json.JsonSerializer.Deserialize<string>(svgJson);
-
-            if (string.IsNullOrEmpty(svgString)) return;
-
             PngExportDialog.XamlRoot = this.Content.XamlRoot;
             var result = await PngExportDialog.ShowAsync();
 
@@ -669,6 +677,51 @@ namespace MermaidDiagramApp
             var file = await savePicker.PickSaveFileAsync();
             if (file != null)
             {
+                try
+                {
+                    // Use WebView2's built-in screenshot capability to capture exactly what's displayed
+                    using var stream = new MemoryStream();
+                    await PreviewBrowser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream.AsRandomAccessStream());
+                    stream.Position = 0; // Reset stream position after writing
+
+                    // If scaling is needed, we'll process the image
+                    if (Math.Abs(scale - 1.0f) > 0.01f) // If scale is not 1.0
+                    {
+                        // Load the screenshot into SkiaSharp for scaling
+                        using var originalBitmap = SKBitmap.Decode(stream);
+                        var newWidth = (int)(originalBitmap.Width * scale);
+                        var newHeight = (int)(originalBitmap.Height * scale);
+
+                        using var scaledBitmap = originalBitmap.Resize(new SKImageInfo(newWidth, newHeight), SKFilterQuality.High);
+                        using var fileStream = await file.OpenStreamForWriteAsync();
+                        using var data = scaledBitmap.Encode(SKEncodedImageFormat.Png, 100);
+                        data.SaveTo(fileStream);
+                    }
+                    else
+                    {
+                        // No scaling needed, save directly
+                        using var fileStream = await file.OpenStreamForWriteAsync();
+                        await stream.CopyToAsync(fileStream);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to capture WebView2 screenshot: {ex.Message}");
+                    // Fallback to original SVG method if screenshot fails
+                    await ExportPngFallback(file, scale);
+                }
+            }
+        }
+
+        private async Task ExportPngFallback(StorageFile file, float scale)
+        {
+            try
+            {
+                var svgJson = await PreviewBrowser.CoreWebView2.ExecuteScriptAsync("getSvg()");
+                var svgString = System.Text.Json.JsonSerializer.Deserialize<string>(svgJson);
+
+                if (string.IsNullOrEmpty(svgString)) return;
+
                 using var svg = new SKSvg();
                 using var svgStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(svgString));
                 if (svg.Load(svgStream) is { } picture)
@@ -676,7 +729,7 @@ namespace MermaidDiagramApp
                     var dimensions = new SKSizeI((int)(picture.CullRect.Width * scale), (int)(picture.CullRect.Height * scale));
                     using var bitmap = new SKBitmap(new SKImageInfo(dimensions.Width, dimensions.Height));
                     using var canvas = new SKCanvas(bitmap);
-                    canvas.Clear(SKColor.Parse("#222222")); // Dark background to match theme
+                    canvas.Clear(SKColor.Parse("#222222"));
                     var matrix = SKMatrix.CreateScale(scale, scale);
                     canvas.DrawPicture(picture, ref matrix);
                     canvas.Flush();
@@ -685,6 +738,10 @@ namespace MermaidDiagramApp
                     using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
                     data.SaveTo(fileStream);
                 }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Fallback PNG export also failed: {ex.Message}");
             }
         }
 
