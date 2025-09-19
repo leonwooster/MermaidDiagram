@@ -69,6 +69,9 @@ namespace MermaidDiagramApp
             this.Closed += MainWindow_Closed;
             _ = CheckForMermaidUpdatesAsync();
             UpdateBuilderVisibility(); // Ensure builder is hidden on startup
+            
+            // Restore window state on startup
+            _ = RestoreWindowStateAsync();
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -335,6 +338,10 @@ namespace MermaidDiagramApp
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
             _timer?.Stop();
+            
+            // Save window state before closing
+            var appWindow = GetAppWindowForCurrentWindow();
+            WindowStateManager.SaveWindowState(appWindow);
         }
 
         private void MainWindow_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -427,6 +434,37 @@ namespace MermaidDiagramApp
             IntPtr hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             WindowId myWndId = Win32Interop.GetWindowIdFromWindow(hWnd);
             return AppWindow.GetFromWindowId(myWndId);
+        }
+
+        private async Task RestoreWindowStateAsync()
+        {
+            try
+            {
+                var windowState = await WindowStateManager.LoadWindowStateAsync();
+                if (windowState != null)
+                {
+                    var appWindow = GetAppWindowForCurrentWindow();
+                    
+                    // Restore position and size
+                    appWindow.MoveAndResize(new Windows.Graphics.RectInt32
+                    {
+                        X = windowState.X,
+                        Y = windowState.Y,
+                        Width = windowState.Width,
+                        Height = windowState.Height
+                    });
+                    
+                    // Restore maximized state
+                    if (windowState.IsMaximized && appWindow.Presenter is OverlappedPresenter presenter)
+                    {
+                        presenter.Maximize();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to restore window state: {ex.Message}");
+            }
         }
 
         private void PresentationMode_Click(object sender, RoutedEventArgs e)
