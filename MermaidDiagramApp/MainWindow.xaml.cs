@@ -148,30 +148,44 @@ namespace MermaidDiagramApp
         private async Task CopyAssetsToLocalFolder()
         {
             var localFolder = ApplicationData.Current.LocalFolder;
-            var packagePath = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
+            var assetsSourcePath = Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "Assets");
 
-            string[] assetsToCopy = { "MermaidHost.html", "mermaid.min.js", "mermaid-version.txt", "fontawesome.css", "fa-solid-900.woff2" };
-
-            foreach (var assetName in assetsToCopy)
+            await Task.Run(() =>
             {
-                var sourcePath = Path.Combine(packagePath, "Assets", assetName);
-                var destPath = Path.Combine(localFolder.Path, assetName);
+                CopyDirectory(assetsSourcePath, localFolder.Path);
+            });
+        }
 
+        private void CopyDirectory(string sourceDir, string destinationDir)
+        {
+            // Create the destination directory if it doesn't exist
+            if (!Directory.Exists(destinationDir))
+            {
+                Directory.CreateDirectory(destinationDir);
+            }
+
+            // Get the files in the source directory and copy them to the new location
+            foreach (string file in Directory.GetFiles(sourceDir))
+            {
+                string destFile = Path.Combine(destinationDir, Path.GetFileName(file));
                 try
                 {
-                    // Force delete the destination file first to prevent loading a cached/corrupted version.
-                    if (File.Exists(destPath))
+                    if (File.Exists(destFile))
                     {
-                        File.Delete(destPath);
+                        File.Delete(destFile);
                     }
+                    File.Copy(file, destFile, true);
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to delete existing asset {assetName}: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Failed to copy asset {file}: {ex.Message}");
                 }
+            }
 
-                // Now, copy the fresh version from the package.
-                await Task.Run(() => File.Copy(sourcePath, destPath, true));
+            // Recursively copy subdirectories
+            foreach (string subDir in Directory.GetDirectories(sourceDir))
+            {
+                CopyDirectory(subDir, Path.Combine(destinationDir, Path.GetFileName(subDir)));
             }
         }
 
