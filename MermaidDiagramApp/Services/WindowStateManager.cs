@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using Windows.Storage;
+using MermaidDiagramApp.Services.Logging;
 
 namespace MermaidDiagramApp.Services
 {
@@ -18,6 +19,8 @@ namespace MermaidDiagramApp.Services
     public static class WindowStateManager
     {
         private const string SettingsFileName = "window-state.json";
+
+        private static readonly ILogger Logger = LoggingService.Instance.CreateLogger("WindowStateManager");
 
         public static async void SaveWindowState(AppWindow appWindow)
         {
@@ -40,7 +43,7 @@ namespace MermaidDiagramApp.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to save window state: {ex.Message}");
+                Logger.LogError($"Failed to save window state: {ex.Message}", ex);
             }
         }
 
@@ -55,7 +58,7 @@ namespace MermaidDiagramApp.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to load window state: {ex.Message}");
+                Logger.LogError($"Failed to load window state: {ex.Message}", ex);
                 return null;
             }
         }

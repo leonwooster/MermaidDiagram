@@ -24,9 +24,11 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Windows.System;
 using TextControlBoxNS;
 using MermaidDiagramApp.ViewModels;
 using MermaidDiagramApp.Services;
+using MermaidDiagramApp.Services.Logging;
 using MermaidDiagramApp.Models;
 using Microsoft.UI.Windowing;
 using Microsoft.UI;
@@ -44,13 +46,14 @@ namespace MermaidDiagramApp
     {
         private DispatcherTimer? _timer;
         private bool _isWebViewReady = false;
-        private string _lastPreviewedCode = "";
+        private string? _lastPreviewedCode = "";
         private bool _isFullScreen = false;
         private bool _isPresentationMode = false;
         private bool _isPanModeEnabled = false;
         private bool _isBuilderVisible = false;
         private MermaidLinter _linter;
         private Version? _mermaidVersion;
+        private readonly ILogger _logger = LoggingService.Instance.GetLogger<MainWindow>();
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -98,24 +101,24 @@ namespace MermaidDiagramApp
                     var currentVersionStr = (await FileIO.ReadTextAsync(versionFile)).Trim();
                     if (!string.IsNullOrEmpty(currentVersionStr))
                     {
-                        System.Diagnostics.Debug.WriteLine($"Current Mermaid.js version from file: {currentVersionStr}");
+                        _logger.LogInformation($"Current Mermaid.js version from file: {currentVersionStr}");
                         await CheckForNewerVersionAsync(currentVersionStr);
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine("Version file is empty, checking for updates with default version");
+                        _logger.LogWarning("Version file is empty, checking for updates with default version");
                         await CheckForNewerVersionAsync("10.9.0");
                     }
                 }
                 catch (FileNotFoundException)
                 {
-                    System.Diagnostics.Debug.WriteLine("Mermaid version file not found. Checking with default version.");
+                    _logger.LogInformation("Mermaid version file not found. Checking with default version.");
                     await CheckForNewerVersionAsync("10.9.0");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to check for Mermaid.js updates: {ex.Message}");
+                _logger.LogError($"Failed to check for Mermaid.js updates: {ex.Message}", ex);
                 // Still try to check with default version even if folder creation fails
                 await CheckForNewerVersionAsync("10.9.0");
             }
@@ -149,7 +152,7 @@ namespace MermaidDiagramApp
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error in CheckForNewerVersionAsync: {ex.Message}");
+                _logger.LogError($"Error in CheckForNewerVersionAsync: {ex.Message}", ex);
             }
         }
 
@@ -157,7 +160,7 @@ namespace MermaidDiagramApp
         {
             if (string.IsNullOrEmpty(currentVersionStr))
             {
-                System.Diagnostics.Debug.WriteLine("Current version string is null or empty, using default version");
+                _logger.LogWarning("Current version string is null or empty, using default version");
                 currentVersionStr = "10.9.0";
             }
 
@@ -171,7 +174,7 @@ namespace MermaidDiagramApp
                     
                     if (string.IsNullOrEmpty(response))
                     {
-                        System.Diagnostics.Debug.WriteLine("Received empty response from npm registry");
+                        _logger.LogWarning("Received empty response from npm registry");
                         return;
                     }
 
@@ -180,18 +183,18 @@ namespace MermaidDiagramApp
                         if (!jsonDoc.RootElement.TryGetProperty("dist-tags", out var distTags) ||
                             !distTags.TryGetProperty("latest", out var latestVersion))
                         {
-                            System.Diagnostics.Debug.WriteLine("Could not find latest version in npm registry response");
+                            _logger.LogWarning("Could not find latest version in npm registry response");
                             return;
                         }
                         
                         latestVersionStr = latestVersion.GetString() ?? string.Empty;
-                        System.Diagnostics.Debug.WriteLine($"Latest Mermaid.js version from npm: {latestVersionStr}, Current version: {currentVersionStr}");
+                        _logger.LogInformation($"Latest Mermaid.js version from npm: {latestVersionStr}, Current version: {currentVersionStr}");
                     }
                 }
 
                 if (string.IsNullOrEmpty(latestVersionStr))
                 {
-                    System.Diagnostics.Debug.WriteLine("Latest version string is null or empty");
+                    _logger.LogWarning("Latest version string is null or empty");
                     return;
                 }
 
@@ -201,7 +204,7 @@ namespace MermaidDiagramApp
 
                 if (string.IsNullOrEmpty(cleanCurrentVersion) || string.IsNullOrEmpty(cleanLatestVersion))
                 {
-                    System.Diagnostics.Debug.WriteLine($"Invalid version strings after cleaning - Current: '{cleanCurrentVersion}', Latest: '{cleanLatestVersion}'");
+                    _logger.LogWarning($"Invalid version strings after cleaning - Current: '{cleanCurrentVersion}', Latest: '{cleanLatestVersion}'");
                     return;
                 }
 
@@ -214,7 +217,7 @@ namespace MermaidDiagramApp
                     var currentVersion = new Version(cleanCurrentVersion);
                     var latestVersion = new Version(cleanLatestVersion);
                     
-                    System.Diagnostics.Debug.WriteLine($"Comparing versions - Current: {currentVersion}, Latest: {latestVersion}");
+                    _logger.LogDebug($"Comparing versions - Current: {currentVersion}, Latest: {latestVersion}");
                     
                     // Determine if update is needed and update UI accordingly
                     var shouldUpdate = currentVersion < latestVersion;
@@ -222,7 +225,7 @@ namespace MermaidDiagramApp
                         ? $"A new version of Mermaid.js ({latestVersion}) is available. You are using version {currentVersion}."
                         : "You are using the latest version of Mermaid.js.";
 
-                    System.Diagnostics.Debug.WriteLine($"Update available: {shouldUpdate}. {message}");
+                    _logger.LogInformation($"Update available: {shouldUpdate}. {message}");
 
                     // Use the dispatcher to update the UI on the UI thread
                     DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
@@ -231,7 +234,7 @@ namespace MermaidDiagramApp
                         {
                             if (UpdateInfoBar == null)
                             {
-                                System.Diagnostics.Debug.WriteLine("Error: UpdateInfoBar is null");
+                                _logger.LogError("Error: UpdateInfoBar is null");
                                 return;
                             }
 
@@ -239,7 +242,7 @@ namespace MermaidDiagramApp
                             {
                                 if (shouldUpdate)
                                 {
-                                    System.Diagnostics.Debug.WriteLine("Showing update notification in UI");
+                                    _logger.LogInformation("Showing update notification in UI");
                                     button.Visibility = Visibility.Visible;
                                     button.IsEnabled = true;
                                     UpdateInfoBar.Message = message;
@@ -248,25 +251,25 @@ namespace MermaidDiagramApp
                                 }
                                 else
                                 {
-                                    System.Diagnostics.Debug.WriteLine("No update available, hiding notification");
+                                    _logger.LogInformation("No update available, hiding notification");
                                     button.Visibility = Visibility.Collapsed;
                                     UpdateInfoBar.IsOpen = false;
                                 }
                             }
                             else
                             {
-                                System.Diagnostics.Debug.WriteLine("Warning: Update button not found in UpdateInfoBar");
+                                _logger.LogWarning("Warning: Update button not found in UpdateInfoBar");
                             }
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"Error updating UI: {ex.Message}");
+                            _logger.LogError($"Error updating UI: {ex.Message}", ex);
                         }                        
                     });
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error comparing versions: {ex.Message}");
+                    _logger.LogError($"Error comparing versions: {ex.Message}", ex);
                     // If there's an error, assume we're on the latest version to be safe
                     DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
                     {
@@ -280,7 +283,7 @@ namespace MermaidDiagramApp
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error checking for newer Mermaid.js version: {ex.Message}");
+                _logger.LogError($"Error checking for newer Mermaid.js version: {ex.Message}", ex);
                 // Don't re-throw here to prevent app crashes
                 DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
                 {
@@ -300,7 +303,7 @@ namespace MermaidDiagramApp
                 _isWebViewReady = false;
 
                 var assetsPath = Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "Assets");
-                System.Diagnostics.Debug.WriteLine($"Initializing WebView with assets from: {assetsPath}");
+                _logger.LogInformation($"Initializing WebView with assets from: {assetsPath}");
 
                 // Ensure WebView2 is initialized
                 var webView2Environment = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync();
@@ -322,7 +325,7 @@ namespace MermaidDiagramApp
                 }
                 catch (Exception clearEx)
                 {
-                    System.Diagnostics.Debug.WriteLine($"No existing host mapping to clear: {clearEx.Message}");
+                    _logger.LogDebug($"No existing host mapping to clear: {clearEx.Message}");
                 }
 
                 coreWebView2.SetVirtualHostNameToFolderMapping(
@@ -330,7 +333,7 @@ namespace MermaidDiagramApp
                     assetsPath,
                     Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
 
-                System.Diagnostics.Debug.WriteLine($"Virtual host 'https://{virtualHost}/' mapped to {assetsPath}");
+                _logger.LogInformation($"Virtual host 'https://{virtualHost}/' mapped to {assetsPath}");
 
                 // Prepare timer reference for use inside handlers
                 DispatcherTimer? checkTimer = null;
@@ -339,11 +342,11 @@ namespace MermaidDiagramApp
                 coreWebView2.WebMessageReceived += (s, e) =>
                 {
                     var message = e.TryGetWebMessageAsString();
-                    System.Diagnostics.Debug.WriteLine($"[WebView2 Message] {message}");
+                    _logger.LogDebug($"[WebView2 Message] {message}");
 
                     if (string.Equals(message, "MermaidReady", StringComparison.Ordinal))
                     {
-                        System.Diagnostics.Debug.WriteLine("Received MermaidReady message from WebView");
+                        _logger.LogInformation("Received MermaidReady message from WebView");
                         _isWebViewReady = true;
 
                         // Stop any ongoing readiness polling
@@ -359,7 +362,7 @@ namespace MermaidDiagramApp
                             }
                             catch (Exception updateEx)
                             {
-                                System.Diagnostics.Debug.WriteLine($"Error updating preview after MermaidReady: {updateEx}");
+                                _logger.LogError($"Error updating preview after MermaidReady: {updateEx.Message}", updateEx);
                             }
                         });
                     }
@@ -370,14 +373,14 @@ namespace MermaidDiagramApp
                 {
                     if (!e.IsSuccess)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Navigation failed: {e.WebErrorStatus}");
+                        _logger.LogWarning($"Navigation failed: {e.WebErrorStatus}");
                     }
                 };
 
                 // Navigate to the packaged Mermaid host page through the virtual host
                 var hostPageUri = new Uri($"https://{virtualHost}/MermaidHost.html");
                 coreWebView2.Navigate(hostPageUri.ToString());
-                System.Diagnostics.Debug.WriteLine($"Navigating WebView to {hostPageUri}");
+                _logger.LogInformation($"Navigating WebView to {hostPageUri}");
 
                 // Set up a timer to check if Mermaid is loaded
                 checkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
@@ -388,7 +391,7 @@ namespace MermaidDiagramApp
                     if (checkCount > 15) // 15 second timeout
                     {
                         checkTimer.Stop();
-                        System.Diagnostics.Debug.WriteLine("Mermaid initialization timed out");
+                        _logger.LogWarning("Mermaid initialization timed out");
                         return;
                     }
 
@@ -398,18 +401,18 @@ namespace MermaidDiagramApp
                         if (isReady == "true")
                         {
                             checkTimer.Stop();
-                            System.Diagnostics.Debug.WriteLine("Mermaid.js is ready!");
+                            _logger.LogInformation("Mermaid.js is ready!");
                             _isWebViewReady = true;
                             await UpdatePreview(); // Initial render
                         }
                         else
                         {
-                            System.Diagnostics.Debug.WriteLine("Mermaid not ready yet, retrying...");
+                            _logger.LogDebug("Mermaid not ready yet, retrying...");
                         }
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Error checking Mermaid status: {ex.Message}");
+                        _logger.LogError($"Error checking Mermaid status: {ex.Message}", ex);
                     }
                 };
 
@@ -417,7 +420,7 @@ namespace MermaidDiagramApp
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error initializing WebView: {ex}");
+                _logger.LogError($"Error initializing WebView: {ex.Message}", ex);
                 // Show error in the UI
                 var errorMessage = $"Error initializing diagram preview: {ex.Message}";
                 PreviewBrowser.NavigateToString($"<div style='color:red; padding:20px;'>{errorMessage}</div>");
@@ -449,7 +452,7 @@ namespace MermaidDiagramApp
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to copy asset {file}: {ex.Message}");
+                        _logger.LogError($"Failed to copy asset {file}: {ex.Message}", ex);
                     }
                 }
             });
@@ -470,7 +473,7 @@ namespace MermaidDiagramApp
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to copy mermaid files: {ex.Message}");
+                        _logger.LogError($"Failed to copy mermaid files: {ex.Message}", ex);
                     }
                 }
             }
@@ -511,7 +514,7 @@ namespace MermaidDiagramApp
 
         private void PreviewBrowser_NavigationCompleted(WebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs args)
         {
-            System.Diagnostics.Debug.WriteLine($"Navigation completed. IsSuccess: {args.IsSuccess}, WebErrorStatus: {args.WebErrorStatus}");
+            _logger.LogDebug($"Navigation completed. IsSuccess: {args.IsSuccess}, WebErrorStatus: {args.WebErrorStatus}");
             if (args.IsSuccess)
             {
                 // Get the Mermaid.js version once the page is loaded
@@ -578,7 +581,7 @@ namespace MermaidDiagramApp
             {
                 if (PreviewBrowser?.CoreWebView2 == null)
                 {
-                    System.Diagnostics.Debug.WriteLine("WebView not initialized yet");
+                    _logger.LogDebug("WebView not initialized yet");
                     return;
                 }
 
@@ -589,7 +592,7 @@ namespace MermaidDiagramApp
                 }
 
                 _lastPreviewedCode = code;
-                System.Diagnostics.Debug.WriteLine($"Updating preview with code: {code}");
+                _logger.LogDebug($"Updating preview with code length: {code.Length}");
                 
                 // Escape the code for JavaScript
                 var escapedCode = System.Text.Json.JsonSerializer.Serialize(code);
@@ -598,17 +601,17 @@ namespace MermaidDiagramApp
                 var isReady = await PreviewBrowser.ExecuteScriptAsync("window.mermaid !== undefined");
                 if (isReady != "true")
                 {
-                    System.Diagnostics.Debug.WriteLine("Mermaid is not ready yet");
+                    _logger.LogDebug("Mermaid is not ready yet");
                     return;
                 }
                 
                 // Render the diagram
                 var result = await PreviewBrowser.ExecuteScriptAsync($"renderDiagram({escapedCode})");
-                System.Diagnostics.Debug.WriteLine($"Render result: {result}");
+                _logger.LogDebug($"Render result: {result}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error in UpdatePreview: {ex}");
+                _logger.LogError($"Error in UpdatePreview: {ex.Message}", ex);
             }
         }
 
@@ -835,7 +838,7 @@ namespace MermaidDiagramApp
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to restore window state: {ex.Message}");
+                _logger.LogError($"Failed to restore window state: {ex.Message}", ex);
             }
         }
 
@@ -865,7 +868,7 @@ namespace MermaidDiagramApp
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to add background to SVG: {ex.Message}");
+                _logger.LogError($"Failed to add background to SVG: {ex.Message}", ex);
                 return svgContent; // Return original on error
             }
         }
@@ -982,7 +985,7 @@ namespace MermaidDiagramApp
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error reading version file: {ex.Message}");
+                    _logger.LogError($"Error reading version file: {ex.Message}", ex);
                 }
 
                 // If we couldn't read the version, use the default
@@ -995,17 +998,16 @@ namespace MermaidDiagramApp
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Error writing default version: {ex.Message}");
+                        _logger.LogError($"Error writing default version: {ex.Message}", ex);
                     }
                 }
 
                 mermaidVersionString = $"Mermaid.js Version: {versionContent.Trim()}";
-                System.Diagnostics.Debug.WriteLine($"Mermaid version: {versionContent.Trim()}");
+                _logger.LogInformation($"Mermaid version: {versionContent.Trim()}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error details - Type: {ex.GetType().Name}, Message: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                _logger.LogError($"Error determining Mermaid.js version: {ex.Message}", ex);
                 mermaidVersionString = "Mermaid.js Version: Error checking version";
             }
 
@@ -1015,6 +1017,72 @@ namespace MermaidDiagramApp
 
             AboutDialog.XamlRoot = this.Content.XamlRoot;
             await AboutDialog.ShowAsync();
+        }
+
+        private async void OpenLogFile_Click(object sender, RoutedEventArgs e)
+        {
+            var provider = LoggingService.Instance.LogFileProvider;
+            if (provider == null)
+            {
+                _logger.LogWarning("Log file provider is not available.");
+                await ShowMessageAsync("Logs unavailable", "Logging has not been initialised yet. Please try again after restarting the application.");
+                return;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(provider.LogsDirectory);
+
+                if (!File.Exists(provider.CurrentLogFilePath))
+                {
+                    using (File.Create(provider.CurrentLogFilePath))
+                    {
+                        // create empty file so launcher has a target
+                    }
+                }
+
+                var storageFile = await StorageFile.GetFileFromPathAsync(provider.CurrentLogFilePath);
+                var launched = await Launcher.LaunchFileAsync(storageFile);
+                if (!launched)
+                {
+                    _logger.LogWarning("Windows failed to open the log file automatically.");
+                    await ShowMessageAsync("Open Log File", "Windows could not open the log file automatically. It is located in the Logs folder inside the app's LocalState.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to open log file: {ex.Message}", ex);
+                await ShowMessageAsync("Open Log File Failed", $"Could not open the log file.\n\n{ex.Message}");
+            }
+        }
+
+        private async void OpenLogFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var provider = LoggingService.Instance.LogFileProvider;
+            if (provider == null)
+            {
+                _logger.LogWarning("Log file provider is not available.");
+                await ShowMessageAsync("Logs unavailable", "Logging has not been initialised yet. Please try again after restarting the application.");
+                return;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(provider.LogsDirectory);
+
+                var storageFolder = await StorageFolder.GetFolderFromPathAsync(provider.LogsDirectory);
+                var launched = await Launcher.LaunchFolderAsync(storageFolder);
+                if (!launched)
+                {
+                    _logger.LogWarning("Windows failed to open the log folder automatically.");
+                    await ShowMessageAsync("Open Log Folder", "Windows could not open the log folder automatically. Please browse to the folder manually.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to open log folder: {ex.Message}", ex);
+                await ShowMessageAsync("Open Log Folder Failed", $"Could not open the log folder.\n\n{ex.Message}");
+            }
         }
 
         private async void Open_Click(object sender, RoutedEventArgs e)
@@ -1125,7 +1193,7 @@ namespace MermaidDiagramApp
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to capture WebView2 screenshot: {ex.Message}");
+                    _logger.LogError($"Failed to capture WebView2 screenshot: {ex.Message}", ex);
                     // Fallback to original SVG method if screenshot fails
                     await ExportPngFallback(file, scale);
                 }
@@ -1160,8 +1228,25 @@ namespace MermaidDiagramApp
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Fallback PNG export also failed: {ex.Message}");
+                _logger.LogError($"Fallback PNG export also failed: {ex.Message}", ex);
             }
+        }
+
+        private async Task ShowMessageAsync(string title, string message)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = title,
+                Content = message,
+                CloseButtonText = "OK"
+            };
+
+            if (this.Content is FrameworkElement rootElement)
+            {
+                dialog.XamlRoot = rootElement.XamlRoot;
+            }
+
+            await dialog.ShowAsync();
         }
 
         private void DiagramBuilderViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

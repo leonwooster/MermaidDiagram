@@ -57,3 +57,22 @@ You can export your diagram as an image in either SVG or PNG format.
 2.  A file dialog will appear.
 3.  Choose a location, enter a file name, and click `Save`.
 4.  The currently rendered diagram will be saved as a `.png` file.
+
+## 6. Diagnostics and Logs
+
+The app records diagnostic information to rotating log files so you can troubleshoot rendering or update issues.
+
+* **Accessing logs in-app**  
+  Open the `Help` menu and choose `Diagnostics`. From there you can open either the current log file or the entire log folder. The app will launch your default editor or file explorer.
+
+* **Log file location**  
+  Log files are stored under the app's local data directory inside a `Logs` folder. On Windows this is typically:  
+  `%LocalAppData%\Packages\<AppPackageId>\LocalState\Logs`
+
+* **Rolling behaviour**  
+  Each log file is capped in size; older files are archived automatically, ensuring recent activity is always available without consuming excessive disk space.
+
+* **When to review logs**  
+  - Mermaid preview stays stuck on “Loading Mermaid.js…”  
+  - Updates fail or Mermaid assets are not copied  
+  - Export commands return an unexpected error dialog

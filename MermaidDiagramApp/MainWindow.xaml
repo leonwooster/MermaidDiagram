@@ -105,6 +105,10 @@
             </MenuBarItem>
             <MenuBarItem Title="Help">
                 <MenuFlyoutItem Text="About" Click="About_Click"/>
+                <MenuFlyoutSubItem Text="Diagnostics">
+                    <MenuFlyoutItem Text="Open Log File" Click="OpenLogFile_Click"/>
+                    <MenuFlyoutItem Text="Open Log Folder" Click="OpenLogFolder_Click"/>
+                </MenuFlyoutSubItem>
             </MenuBarItem>
         </MenuBar>
 
