@@ -45,6 +45,18 @@
                        DefaultButton="Close">
         </ContentDialog>
 
+        <ContentDialog x:Name="AboutDialog"
+                       Title="About Mermaid Diagram"
+                       CloseButtonText="OK"
+                       DefaultButton="Close">
+            <StackPanel Spacing="12">
+                <TextBlock x:Name="AppVersionText" Text="Application Version: "/>
+                <TextBlock x:Name="MermaidVersionText" Text="Mermaid.js Version: "/>
+                <TextBlock Text="A Mermaid diagram editor for Windows" Margin="0,10,0,0"/>
+                <TextBlock Text="Copyright © 2025"/>
+            </StackPanel>
+        </ContentDialog>
+
         <InfoBar x:Name="UpdateInfoBar" Grid.Row="0" IsOpen="False" Severity="Informational" Margin="12,12,12,0">
             <InfoBar.ActionButton>
                 <Button Content="Update" Click="UpdateMermaid_Click"/>
@@ -87,6 +99,7 @@
                 </MenuFlyoutItem>
             </MenuBarItem>
             <MenuBarItem Title="Settings">
+                <MenuFlyoutItem Text="About" Click="About_Click"/>
             </MenuBarItem>
         </MenuBar>
 

@@ -617,6 +617,48 @@ namespace MermaidDiagramApp
                 }
             }
         }
+
+        private async void About_Click(object sender, RoutedEventArgs e)
+        {
+            // Get application version from Package.appxmanifest
+            var packageVersion = Windows.ApplicationModel.Package.Current.Id.Version;
+            var appVersion = $"{packageVersion.Major}.{packageVersion.Minor}.{packageVersion.Build}.{packageVersion.Revision}";
+            
+            // Get Mermaid.js version from local file
+            string mermaidVersion = "Unknown";
+            try
+            {
+                var localFolder = ApplicationData.Current.LocalFolder.Path;
+                var versionFilePath = Path.Combine(localFolder, "mermaid-version.txt");
+                
+                if (File.Exists(versionFilePath))
+                {
+                    mermaidVersion = await File.ReadAllTextAsync(versionFilePath);
+                }
+                else
+                {
+                    // Fallback to the version in Assets if not copied yet
+                    var packagePath = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
+                    var assetVersionPath = Path.Combine(packagePath, "Assets", "mermaid-version.txt");
+                    if (File.Exists(assetVersionPath))
+                    {
+                        mermaidVersion = await File.ReadAllTextAsync(assetVersionPath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to read Mermaid.js version: {ex.Message}");
+            }
+            
+            // Update the text blocks in the dialog
+            AppVersionText.Text = $"Application Version: {appVersion}";
+            MermaidVersionText.Text = $"Mermaid.js Version: {mermaidVersion?.Trim() ?? "Unknown"}";
+            
+            // Show the dialog
+            AboutDialog.XamlRoot = this.Content.XamlRoot;
+            await AboutDialog.ShowAsync();
+        }
     }
 
     [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
