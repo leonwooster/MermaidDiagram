@@ -171,3 +171,82 @@ classDiagram
 - Should integrate seamlessly with current file operations and preview
 - Consider extensibility for custom user-defined patterns
 - May require WebView2 integration for enhanced preview capabilities
+
+---
+
+## Epic: Stick Figure Pose Builder
+
+### Overview
+Introduce a customizable stick-figure creation workflow that lets users compose human poses inside the Mermaid editor. The feature should expose granular controls for limbs, posture, head orientation, rotation, and provide a dedicated menu entry to launch the experience.
+
+### User Stories
+
+#### Story 1: Stick Figure Menu Entry
+**As a** diagram author  
+**I want** a "Stick Figure" item in the Templates menu  
+**So that** I can quickly open the pose builder workspace
+
+**Acceptance Criteria:**
+- [ ] Add "Stick Figure" option to the Templates (or dedicated) menu without implementation yet
+- [ ] Launches placeholder dialog or page once implemented
+- [ ] Integrates with future stick figure pose builder
+
+**Estimated Effort:** 3 story points
+
+#### Story 2: Limb Control Panel
+**As a** designer  
+**I want** to adjust stick figure arm and leg angles  
+**So that** I can depict different gestures and stances
+
+**Acceptance Criteria:**
+- [ ] Sliders or numeric inputs for shoulder, elbow, hip, and knee angles
+- [ ] Visual feedback in Mermaid preview
+- [ ] Preset poses (e.g., neutral, walking, running)
+
+**Estimated Effort:** 8 story points
+
+#### Story 3: Posture & Balance Controls
+**As a** user  
+**I want** to set the torso lean and overall posture  
+**So that** I can represent different movement dynamics
+
+**Acceptance Criteria:**
+- [ ] Controls for torso tilt (forward/backward, left/right)
+- [ ] Adjustable center-of-mass / base stance width
+- [ ] Real-time validation to avoid impossible poses
+
+**Estimated Effort:** 8 story points
+
+#### Story 4: Head Orientation
+**As a** user  
+**I want** to specify the head direction (front/back/left/right)  
+**So that** the figure conveys attention and motion direction
+
+**Acceptance Criteria:**
+- [ ] Dropdown or toggle for head orientation presets
+- [ ] Optional fine-grained yaw, pitch, roll controls
+- [ ] Head orientation reflected in generated Mermaid markup
+
+**Estimated Effort:** 5 story points
+
+#### Story 5: Figure Rotation & Placement
+**As a** diagram author  
+**I want** to rotate and position the entire figure  
+**So that** I can align it within complex diagrams
+
+**Acceptance Criteria:**
+- [ ] Global rotation control (0°–360°)
+- [ ] Position offsets (X/Y) relative to diagram origin
+- [ ] Snapping options for alignment with other diagram elements
+
+**Estimated Effort:** 5 story points
+
+### Technical Considerations
+- Extend existing Mermaid template generation to support stick figure primitives (e.g., `graph TD` or custom `flowchart` shapes).
+- Evaluate whether a custom Mermaid plugin or SVG overlay is required for fine-grained limb articulation.
+- Persist pose configurations alongside diagrams for later editing.
+- Ensure future UI dialog matches WinUI3 design guidelines and responds to theme changes.
+
+### Priority: Low-Medium (Backlog)
+### Target Sprint: Future
+### Dependencies: Stable template infrastructure, enhanced preview pipeline
