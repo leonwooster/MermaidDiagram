@@ -1,0 +1,123 @@
+<!DOCTYPE html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid Preview</title>
+    <link rel="stylesheet" href="css/all.css">
+    <style>
+        body {
+            background-color: #222; /* Ensure a dark background */
+            font-family: sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>   
+    <div id="mermaid-container"></div>
+    <script src="mermaid.min.js"></script>
+    <script>
+        let currentSvg = '';
+        mermaid.initialize({
+            startOnLoad: false,
+            securityLevel: 'loose', // Required for Font Awesome icons
+            theme: 'dark' // Set default theme
+        });
+
+        async function renderDiagram(code) {
+            console.log('renderDiagram called with code:', code);
+            const container = document.getElementById('mermaid-container');
+            currentSvg = '';
+            container.innerHTML = ''; // Clear previous content
+
+            if (!code || !code.trim()) {
+                console.log('No code provided to render.');
+                return;
+            }
+
+            try {
+                // The render function is safer as it doesn't rely on DOM insertion before processing.
+                const { svg } = await mermaid.render('graphDiv', code);
+                container.innerHTML = svg;
+                currentSvg = svg;
+                console.log('Mermaid rendering successful.');
+            } catch (e) {
+                console.error('Mermaid rendering failed:', e);
+                // Provide a more detailed error message in the UI.
+                const errorMessage = e.message ? e.message : JSON.stringify(e, null, 2);
+                container.innerHTML = `<pre style="color: red; white-space: pre-wrap;">${errorMessage}</pre>`;
+            }
+        }
+
+        function getSvg() {
+            return currentSvg;
+        }
+
+        const diagram = `
+%%{init: {
+  'theme': 'dark',
+  'securityLevel': 'loose',
+  'flowchart': {'curve': 'basis'}
+}}%%
+graph LR
+    %% --- Node Definitions with Correct v10+ Icon Syntax ---
+    A["fa:fa-pencil-alt Planning and Design"]
+    B["fa:fa-code Code and Build"]
+    C["fa:fa-check-circle Test and Quality Assurance"]
+    D["fa:fa-play-circle Deploy and Run"]
+
+    subgraph SECURITY TESTING
+        direction TB
+        E["fa:fa-globe Dynamic Application<br/>Security Testing"]
+        F["fa:fa-chart-line Interactive Application<br/>Security Testing"]
+        G["fa:fa-search Static Application<br/>Security Testing"]
+        H["fa:fa-cube Software Composition<br/>Analysis"]
+    end
+
+    %% --- Links ---
+    A --> B
+    B --> C
+    B --> G
+    B --> H
+    C --> D
+    D --> E
+    C --> F
+
+    %% --- Styling ---
+    classDef planning fill:#2d6a8b,stroke:#fff,stroke-width:2px,color:#fff,border-radius:20px
+    classDef code fill:#3b3f77,stroke:#fff,stroke-width:2px,color:#fff,border-radius:10px
+    classDef test fill:#77523b,stroke:#fff,stroke-width:2px,color:#fff,border-radius:10px
+    classDef deploy fill:#2d8b4c,stroke:#fff,stroke-width:2px,color:#fff,border-radius:10px
+    classDef dast fill:#8b2d3f,stroke:#fff,stroke-width:2px,color:#fff,border-radius:10px
+    classDef iast fill:#2d8b8b,stroke:#fff,stroke-width:2px,color:#fff,border-radius:10px
+    classDef sast fill:#f0f0f0,stroke:#333,stroke-width:2px,color:#333,border-radius:10px
+    classDef sca fill:#4a8b2d,stroke:#fff,stroke-width:2px,color:#fff,border-radius:10px
+    
+    %% --- Apply Styles ---
+    class A planning
+    class B code
+    class C test
+    class D deploy
+    class E dast
+    class F iast
+    class G sast
+    class H sca
+
+    %% --- Link and Subgraph Styles ---
+    linkStyle default stroke:#fff,stroke-width:2px
+    style SECURITY TESTING fill:transparent,stroke:#9400D3,stroke-width:4px
+`;
+
+        //when document is loaded
+        document.addEventListener('DOMContentLoaded', async function() {
+            //renderDiagram is a asyn function is there a need to use await?            
+            await renderDiagram(diagram);            
+        });                
+    </script>
+
+
+
+</body></html>

@@ -19,7 +19,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid RowDefinitions="Auto, Auto, *" KeyDown="MainWindow_KeyDown">
+    <Grid RowDefinitions="Auto, Auto, Auto, *" KeyDown="MainWindow_KeyDown">
         <ContentDialog x:Name="PngExportDialog"
                        Title="Export PNG Options"
                        PrimaryButtonText="Export"
@@ -40,9 +40,20 @@
 
         <ContentDialog x:Name="RestartDialog"
                        Title="Update Complete"
-                       Content="Mermaid.js has been updated. Please restart the application for the changes to take effect."
+                       Content="Mermaid.js has been updated. Do you want to restart the application now for the changes to take effect?"
+                       PrimaryButtonText="Restart Now"
+                       CloseButtonText="Later"
+                       DefaultButton="Primary">
+        </ContentDialog>
+
+        <ContentDialog x:Name="AboutDialog"
+                       Title="About Mermaid Diagram App"
                        CloseButtonText="OK"
                        DefaultButton="Close">
+            <StackPanel Spacing="12">
+                <TextBlock x:Name="VersionTextBlock"/>
+                <TextBlock x:Name="InstallDateTextBlock"/>
+            </StackPanel>
         </ContentDialog>
 
         <ContentDialog x:Name="AboutDialog"
@@ -62,7 +73,12 @@
                 <Button Content="Update" Click="UpdateMermaid_Click"/>
             </InfoBar.ActionButton>
         </InfoBar>
-        <MenuBar x:Name="MainMenuBar" Grid.Row="1">
+
+        <InfoBar x:Name="LinterInfoBar" Grid.Row="1" IsOpen="False" Severity="Warning" Margin="12,0,12,0">
+            <!-- Action button is set dynamically from code-behind -->
+        </InfoBar>
+
+        <MenuBar x:Name="MainMenuBar" Grid.Row="2">
             <MenuBarItem Title="File">
                 <MenuFlyoutSubItem Text="New">
                     <MenuFlyoutItem Text="Class Diagram" Click="NewClassDiagram_Click"/>
@@ -101,9 +117,12 @@
             <MenuBarItem Title="Settings">
                 <MenuFlyoutItem Text="About" Click="About_Click"/>
             </MenuBarItem>
+            <MenuBarItem Title="Help">
+                <MenuFlyoutItem Text="About" Click="About_Click"/>
+            </MenuBarItem>
         </MenuBar>
 
-                <Grid Grid.Row="2" Padding="12" x:Name="MainGrid">
+        <Grid Grid.Row="3" Padding="12" x:Name="MainGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="BuilderColumn" Width="Auto" MinWidth="0" MaxWidth="500"/>
                 <ColumnDefinition x:Name="BuilderSplitterColumn" Width="Auto"/>

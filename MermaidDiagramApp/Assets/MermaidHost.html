@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mermaid Preview</title>
+    <link rel="stylesheet" href="css/all.css">
     <style>
         body {
+            background-color: #222; /* Ensure a dark background */
             font-family: sans-serif;
             margin: 0;
             display: flex;
@@ -17,11 +19,14 @@
 </head>
 <body>
     <div id="mermaid-container" class="mermaid"></div>
-
     <script src="/mermaid.min.js"></script>
     <script>
         let currentSvg = '';
-        mermaid.initialize({ startOnLoad: false });
+        mermaid.initialize({
+            startOnLoad: false,
+            securityLevel: 'loose', // Required for Font Awesome icons
+            theme: 'dark' // Set default theme
+        });
 
         async function renderDiagram(code) {
             console.log('renderDiagram called with code:', code);

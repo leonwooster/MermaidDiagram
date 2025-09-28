@@ -25,8 +25,11 @@ using Windows.Foundation;
 using Windows.Foundation.Collections;
 using TextControlBoxNS;
 using MermaidDiagramApp.ViewModels;
+using MermaidDiagramApp.Services;
+using MermaidDiagramApp.Models;
 using Microsoft.UI.Windowing;
 using Microsoft.UI;
+using Microsoft.Windows.AppLifecycle;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -45,6 +48,8 @@ namespace MermaidDiagramApp
         private bool _isPresentationMode = false;
         private bool _isPanModeEnabled = false;
         private bool _isBuilderVisible = false;
+        private MermaidLinter _linter;
+        private Version? _mermaidVersion;
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -56,12 +61,22 @@ namespace MermaidDiagramApp
             BuilderPanel.DataContext = BuilderViewModel;
             BuilderViewModel.PropertyChanged += DiagramBuilderViewModel_PropertyChanged;
 
+            _linter = new MermaidLinter();
+
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
-            InitializeWebView();
+            (this.Content as FrameworkElement).Loaded += MainWindow_Loaded;
             this.Closed += MainWindow_Closed;
             _ = CheckForMermaidUpdatesAsync();
             UpdateBuilderVisibility(); // Ensure builder is hidden on startup
+            
+            // Restore window state on startup
+            _ = RestoreWindowStateAsync();
+        }
+
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            await InitializeWebViewAsync();
         }
 
         private async Task CheckForMermaidUpdatesAsync()
@@ -109,7 +124,7 @@ namespace MermaidDiagramApp
             }
         }
 
-        private async void InitializeWebView()
+        private async Task InitializeWebViewAsync()
         {
             await CopyAssetsToLocalFolder();
             await PreviewBrowser.EnsureCoreWebView2Async();
@@ -120,7 +135,9 @@ namespace MermaidDiagramApp
                 var localFolderPath = ApplicationData.Current.LocalFolder.Path;
                 PreviewBrowser.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "mermaid.local", localFolderPath, CoreWebView2HostResourceAccessKind.Allow);
-                PreviewBrowser.CoreWebView2.Navigate("https://mermaid.local/MermaidHost.html");
+                // Add a cache-busting query string to ensure the latest version of the host file is always loaded.
+                var navigationUrl = $"https://mermaid.local/MermaidHost.html?t={DateTime.Now.Ticks}";
+                PreviewBrowser.CoreWebView2.Navigate(navigationUrl);
             }
             catch (Exception ex)
             {
@@ -131,19 +148,44 @@ namespace MermaidDiagramApp
         private async Task CopyAssetsToLocalFolder()
         {
             var localFolder = ApplicationData.Current.LocalFolder;
-            var packagePath = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
+            var assetsSourcePath = Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "Assets");
 
-            string[] assetsToCopy = { "MermaidHost.html", "mermaid.min.js", "mermaid-version.txt" };
-
-            foreach (var assetName in assetsToCopy)
+            await Task.Run(() =>
             {
-                var sourcePath = Path.Combine(packagePath, "Assets", assetName);
-                var destPath = Path.Combine(localFolder.Path, assetName);
+                CopyDirectory(assetsSourcePath, localFolder.Path);
+            });
+        }
 
-                if (!File.Exists(destPath))
+        private void CopyDirectory(string sourceDir, string destinationDir)
+        {
+            // Create the destination directory if it doesn't exist
+            if (!Directory.Exists(destinationDir))
+            {
+                Directory.CreateDirectory(destinationDir);
+            }
+
+            // Get the files in the source directory and copy them to the new location
+            foreach (string file in Directory.GetFiles(sourceDir))
+            {
+                string destFile = Path.Combine(destinationDir, Path.GetFileName(file));
+                try
                 {
-                    await Task.Run(() => File.Copy(sourcePath, destPath));
+                    if (File.Exists(destFile))
+                    {
+                        File.Delete(destFile);
+                    }
+                    File.Copy(file, destFile, true);
                 }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to copy asset {file}: {ex.Message}");
+                }
+            }
+
+            // Recursively copy subdirectories
+            foreach (string subDir in Directory.GetDirectories(sourceDir))
+            {
+                CopyDirectory(subDir, Path.Combine(destinationDir, Path.GetFileName(subDir)));
             }
         }
 
@@ -152,6 +194,17 @@ namespace MermaidDiagramApp
             System.Diagnostics.Debug.WriteLine($"Navigation completed. IsSuccess: {args.IsSuccess}, WebErrorStatus: {args.WebErrorStatus}");
             if (args.IsSuccess)
             {
+                // Get the Mermaid.js version once the page is loaded
+                _ = Task.Run(async () =>
+                {
+                    var versionJson = await PreviewBrowser.CoreWebView2.ExecuteScriptAsync("mermaid.version()");
+                    var versionString = JsonSerializer.Deserialize<string>(versionJson);
+                    if (Version.TryParse(versionString, out var version))
+                    {
+                        _mermaidVersion = version;
+                    }
+                });
+
                 _isWebViewReady = true;
                 _ = UpdatePreview(); // Initial render
 
@@ -167,8 +220,35 @@ namespace MermaidDiagramApp
             var currentCode = CodeEditor.Text;
             if (currentCode != _lastPreviewedCode)
             {
-                BuilderViewModel.ParseMermaidCode(currentCode);
+                CheckForSyntaxIssues(currentCode);
+
+                // BuilderViewModel.ParseMermaidCode(currentCode); // Commented out to disable buggy visual builder logic
                 await UpdatePreview();
+            }
+        }
+
+        private void CheckForSyntaxIssues(string code)
+        {
+            if (_mermaidVersion == null) return;
+
+            var issues = _linter.Lint(code, _mermaidVersion);
+            if (issues.Any())
+            {
+                var issue = issues.First(); // For now, just handle the first issue
+                LinterInfoBar.Message = issue.Description;
+
+                var fixButton = new Button { Content = "Fix it" };
+                fixButton.Click += (s, args) =>
+                {
+                    CodeEditor.Text = issue.ProposeFix(CodeEditor.Text);
+                    LinterInfoBar.IsOpen = false;
+                };
+                LinterInfoBar.ActionButton = fixButton;
+                LinterInfoBar.IsOpen = true;
+            }
+            else
+            {
+                LinterInfoBar.IsOpen = false;
             }
         }
 
@@ -285,6 +365,10 @@ namespace MermaidDiagramApp
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
             _timer?.Stop();
+            
+            // Save window state before closing
+            var appWindow = GetAppWindowForCurrentWindow();
+            WindowStateManager.SaveWindowState(appWindow);
         }
 
         private void MainWindow_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -379,6 +463,68 @@ namespace MermaidDiagramApp
             return AppWindow.GetFromWindowId(myWndId);
         }
 
+        private async Task RestoreWindowStateAsync()
+        {
+            try
+            {
+                var windowState = await WindowStateManager.LoadWindowStateAsync();
+                if (windowState != null)
+                {
+                    var appWindow = GetAppWindowForCurrentWindow();
+                    
+                    // Restore position and size
+                    appWindow.MoveAndResize(new Windows.Graphics.RectInt32
+                    {
+                        X = windowState.X,
+                        Y = windowState.Y,
+                        Width = windowState.Width,
+                        Height = windowState.Height
+                    });
+                    
+                    // Restore maximized state
+                    if (windowState.IsMaximized && appWindow.Presenter is OverlappedPresenter presenter)
+                    {
+                        presenter.Maximize();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to restore window state: {ex.Message}");
+            }
+        }
+
+        private string AddBackgroundToSvg(string svgContent)
+        {
+            try
+            {
+                // Simple approach: just insert a background rectangle right after the opening <svg> tag
+                var svgTagEndIndex = svgContent.IndexOf('>');
+                if (svgTagEndIndex > 0)
+                {
+                    // Extract width and height if available, otherwise use large default values
+                    var widthMatch = Regex.Match(svgContent, @"width=""([^""]+)""");
+                    var heightMatch = Regex.Match(svgContent, @"height=""([^""]+)""");
+                    
+                    string width = widthMatch.Success ? widthMatch.Groups[1].Value.Replace("px", "") : "1200";
+                    string height = heightMatch.Success ? heightMatch.Groups[1].Value.Replace("px", "") : "800";
+                    
+                    // Create a background rectangle
+                    var backgroundRect = $"<rect x=\"0\" y=\"0\" width=\"{width}\" height=\"{height}\" fill=\"#222222\"/>";
+                    
+                    // Insert the background right after the opening <svg> tag
+                    return svgContent.Insert(svgTagEndIndex + 1, backgroundRect);
+                }
+                
+                return svgContent; // Return original if we can't parse it
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to add background to SVG: {ex.Message}");
+                return svgContent; // Return original on error
+            }
+        }
+
         private void PresentationMode_Click(object sender, RoutedEventArgs e)
         {
             var appWindow = GetAppWindowForCurrentWindow();
@@ -450,6 +596,22 @@ namespace MermaidDiagramApp
             Application.Current.Exit();
         }
 
+        private async void About_Click(object sender, RoutedEventArgs e)
+        {
+            var package = Windows.ApplicationModel.Package.Current;
+            var version = package.Id.Version;
+            var versionString = $"Version: {version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
+
+            var installDate = package.InstalledDate;
+            var installDateString = $"Installed: {installDate.ToLocalTime():yyyy-MM-dd HH:mm:ss}";
+
+            VersionTextBlock.Text = versionString;
+            InstallDateTextBlock.Text = installDateString;
+
+            AboutDialog.XamlRoot = this.Content.XamlRoot;
+            await AboutDialog.ShowAsync();
+        }
+
         private async void Open_Click(object sender, RoutedEventArgs e)
         {
             var openPicker = new FileOpenPicker();
@@ -491,6 +653,9 @@ namespace MermaidDiagramApp
 
             if (string.IsNullOrEmpty(unescapedSvg)) return;
 
+            // Add dark background to SVG to make white lines visible
+            var modifiedSvg = AddBackgroundToSvg(unescapedSvg);
+
             var savePicker = new FileSavePicker();
             WinRT_InterOp.InitializeWithWindow(savePicker, this);
 
@@ -501,18 +666,13 @@ namespace MermaidDiagramApp
             var file = await savePicker.PickSaveFileAsync();
             if (file != null)
             {
-                await FileIO.WriteTextAsync(file, unescapedSvg);
+                await FileIO.WriteTextAsync(file, modifiedSvg);
             }
         }
 
         private async void ExportPng_Click(object sender, RoutedEventArgs e)
         {
             if (PreviewBrowser?.CoreWebView2 == null) return;
-
-            var svgJson = await PreviewBrowser.CoreWebView2.ExecuteScriptAsync("getSvg()");
-            var svgString = System.Text.Json.JsonSerializer.Deserialize<string>(svgJson);
-
-            if (string.IsNullOrEmpty(svgString)) return;
 
             PngExportDialog.XamlRoot = this.Content.XamlRoot;
             var result = await PngExportDialog.ShowAsync();
@@ -531,6 +691,51 @@ namespace MermaidDiagramApp
             var file = await savePicker.PickSaveFileAsync();
             if (file != null)
             {
+                try
+                {
+                    // Use WebView2's built-in screenshot capability to capture exactly what's displayed
+                    using var stream = new MemoryStream();
+                    await PreviewBrowser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream.AsRandomAccessStream());
+                    stream.Position = 0; // Reset stream position after writing
+
+                    // If scaling is needed, we'll process the image
+                    if (Math.Abs(scale - 1.0f) > 0.01f) // If scale is not 1.0
+                    {
+                        // Load the screenshot into SkiaSharp for scaling
+                        using var originalBitmap = SKBitmap.Decode(stream);
+                        var newWidth = (int)(originalBitmap.Width * scale);
+                        var newHeight = (int)(originalBitmap.Height * scale);
+
+                        using var scaledBitmap = originalBitmap.Resize(new SKImageInfo(newWidth, newHeight), SKFilterQuality.High);
+                        using var fileStream = await file.OpenStreamForWriteAsync();
+                        using var data = scaledBitmap.Encode(SKEncodedImageFormat.Png, 100);
+                        data.SaveTo(fileStream);
+                    }
+                    else
+                    {
+                        // No scaling needed, save directly
+                        using var fileStream = await file.OpenStreamForWriteAsync();
+                        await stream.CopyToAsync(fileStream);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to capture WebView2 screenshot: {ex.Message}");
+                    // Fallback to original SVG method if screenshot fails
+                    await ExportPngFallback(file, scale);
+                }
+            }
+        }
+
+        private async Task ExportPngFallback(StorageFile file, float scale)
+        {
+            try
+            {
+                var svgJson = await PreviewBrowser.CoreWebView2.ExecuteScriptAsync("getSvg()");
+                var svgString = System.Text.Json.JsonSerializer.Deserialize<string>(svgJson);
+
+                if (string.IsNullOrEmpty(svgString)) return;
+
                 using var svg = new SKSvg();
                 using var svgStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(svgString));
                 if (svg.Load(svgStream) is { } picture)
@@ -538,7 +743,7 @@ namespace MermaidDiagramApp
                     var dimensions = new SKSizeI((int)(picture.CullRect.Width * scale), (int)(picture.CullRect.Height * scale));
                     using var bitmap = new SKBitmap(new SKImageInfo(dimensions.Width, dimensions.Height));
                     using var canvas = new SKCanvas(bitmap);
-                    canvas.Clear(SKColors.White);
+                    canvas.Clear(SKColor.Parse("#222222"));
                     var matrix = SKMatrix.CreateScale(scale, scale);
                     canvas.DrawPicture(picture, ref matrix);
                     canvas.Flush();
@@ -548,10 +753,16 @@ namespace MermaidDiagramApp
                     data.SaveTo(fileStream);
                 }
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Fallback PNG export also failed: {ex.Message}");
+            }
         }
 
         private void DiagramBuilderViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            // Commented out to disable buggy visual builder logic that overwrites user's code.
+            /*
             if (e.PropertyName == nameof(DiagramBuilderViewModel.GeneratedMermaidCode))
             {
                 if (CodeEditor.Text != BuilderViewModel.GeneratedMermaidCode)
@@ -559,6 +770,7 @@ namespace MermaidDiagramApp
                     CodeEditor.Text = BuilderViewModel.GeneratedMermaidCode;
                 }
             }
+            */
         }
 
         private async void UpdateMermaid_Click(object sender, RoutedEventArgs e)
@@ -604,7 +816,13 @@ namespace MermaidDiagramApp
 
                 UpdateInfoBar.IsOpen = false;
                 RestartDialog.XamlRoot = this.Content.XamlRoot;
-                await RestartDialog.ShowAsync();
+                var result = await RestartDialog.ShowAsync();
+
+                if (result == ContentDialogResult.Primary)
+                {
+                    // Restart the application
+                    AppInstance.Restart("");
+                }
             }
             catch (Exception ex)
             {
@@ -617,64 +835,23 @@ namespace MermaidDiagramApp
                 }
             }
         }
+    
 
-        private async void About_Click(object sender, RoutedEventArgs e)
+        [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        public interface IInitializeWithWindow
         {
-            // Get application version from Package.appxmanifest
-            var packageVersion = Windows.ApplicationModel.Package.Current.Id.Version;
-            var appVersion = $"{packageVersion.Major}.{packageVersion.Minor}.{packageVersion.Build}.{packageVersion.Revision}";
-            
-            // Get Mermaid.js version from local file
-            string mermaidVersion = "Unknown";
-            try
-            {
-                var localFolder = ApplicationData.Current.LocalFolder.Path;
-                var versionFilePath = Path.Combine(localFolder, "mermaid-version.txt");
-                
-                if (File.Exists(versionFilePath))
-                {
-                    mermaidVersion = await File.ReadAllTextAsync(versionFilePath);
-                }
-                else
-                {
-                    // Fallback to the version in Assets if not copied yet
-                    var packagePath = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
-                    var assetVersionPath = Path.Combine(packagePath, "Assets", "mermaid-version.txt");
-                    if (File.Exists(assetVersionPath))
-                    {
-                        mermaidVersion = await File.ReadAllTextAsync(assetVersionPath);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to read Mermaid.js version: {ex.Message}");
-            }
-            
-            // Update the text blocks in the dialog
-            AppVersionText.Text = $"Application Version: {appVersion}";
-            MermaidVersionText.Text = $"Mermaid.js Version: {mermaidVersion?.Trim() ?? "Unknown"}";
-            
-            // Show the dialog
-            AboutDialog.XamlRoot = this.Content.XamlRoot;
-            await AboutDialog.ShowAsync();
-        }
-    }
-
-    [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IInitializeWithWindow
-    {
-        void Initialize([In] IntPtr hwnd);
-    }
-
-    public static class WinRT_InterOp
-    {
-        public static void InitializeWithWindow(object target, object window)
-        {
-            var window_hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-            var initializeWithWindow = target.As<IInitializeWithWindow>();
-            initializeWithWindow.Initialize(window_hwnd);
+            void Initialize([In] IntPtr hwnd);
         }
 
+        public static class WinRT_InterOp
+        {
+            public static void InitializeWithWindow(object target, object window)
+            {
+                var window_hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+                var initializeWithWindow = target.As<IInitializeWithWindow>();
+                initializeWithWindow.Initialize(window_hwnd);
+            }
+
+        }
     }
 }
