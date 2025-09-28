@@ -4,58 +4,193 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mermaid Preview</title>
-    <link rel="stylesheet" href="css/all.css">
     <style>
         body {
-            background-color: #222; /* Ensure a dark background */
+            background-color: #222;
             font-family: sans-serif;
             margin: 0;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+        #mermaid-container {
+            width: 100%;
+            max-width: 100%;
+            overflow: auto;
+            text-align: center;
+        }
+        #debug-info {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 100px;
+            overflow: auto;
+            display: none;
+        }
+        .error {
+            color: #ff6b6b;
+            white-space: pre-wrap;
+            padding: 20px;
+            max-width: 100%;
+            overflow: auto;
         }
     </style>
 </head>
 <body>
-    <div id="mermaid-container" class="mermaid"></div>
-    <script src="/mermaid.min.js"></script>
+    <div id="mermaid-container" class="mermaid">
+        <div id="loading-placeholder">Loading Mermaid.js...</div>
+    </div>
+    <div id="debug-info"></div>
+    
+    <!-- Load Mermaid.js from CDN with fallback -->
     <script>
-        let currentSvg = '';
-        mermaid.initialize({
-            startOnLoad: false,
-            securityLevel: 'loose', // Required for Font Awesome icons
-            theme: 'dark' // Set default theme
+        window.log = function() {
+            const args = Array.from(arguments);
+            console.log(...args);
+            
+            // Send logs back to the host app
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage(args.map(arg => 
+                    typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+                ).join(' '));
+            }
+            
+            // Show in debug panel
+            const debugInfo = document.getElementById('debug-info');
+            if (debugInfo) {
+                const line = document.createElement('div');
+                line.textContent = args.join(' ');
+                debugInfo.appendChild(line);
+                debugInfo.scrollTop = debugInfo.scrollHeight;
+            }
+        };
+        
+        // Toggle debug panel with Ctrl+Shift+D
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                const debugInfo = document.getElementById('debug-info');
+                if (debugInfo) {
+                    debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
+                }
+            }
         });
+        
+        log('Starting Mermaid initialization...');
+        
+        // Load Mermaid.js with fallback
+        function loadMermaid() {
+            return new Promise((resolve, reject) => {
+                // Try loading from local virtual host first
+                const localScript = document.createElement('script');
+                localScript.src = 'mermaid.min.js';
+               
+                localScript.onload = () => {
+                    log('Mermaid.js loaded from local virtual host');
+                    resolve();
+                };
+               
+                localScript.onerror = () => {
+                    log('Failed to load Mermaid.js from local virtual host, trying CDN...');
 
-        async function renderDiagram(code) {
-            console.log('renderDiagram called with code:', code);
+                    const cdnScript = document.createElement('script');
+                    cdnScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js';
+                    cdnScript.onload = () => {
+                        log('Mermaid.js loaded from CDN');
+                        resolve();
+                    };
+                    cdnScript.onerror = () => {
+                        const error = 'Failed to load Mermaid.js from both local mapping and CDN';
+                        log(error);
+                        reject(new Error(error));
+                    };
+                    document.head.appendChild(cdnScript);
+                };
+
+                document.head.appendChild(localScript);
+            });
+        }
+        
+        // Initialize the application
+        async function init() {
+            try {
+                await loadMermaid();
+                
+                if (typeof mermaid === 'undefined') {
+                    throw new Error('Mermaid is not defined after loading');
+                }
+                
+                log('Mermaid version:', mermaid.version);
+                
+                window.mermaid.initialize({
+                    startOnLoad: false,
+                    securityLevel: 'loose',
+                    theme: 'dark',
+                    logLevel: 1 // Debug level logging
+                });
+                
+                log('Mermaid initialized successfully');
+
+                // Notify host that we're ready
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage('MermaidReady');
+                }
+
+                // Show default prompt in the container
+                const container = document.getElementById('mermaid-container');
+                if (container) {
+                    container.innerHTML = '<div style="color:#888;">Enter Mermaid code to see the diagram</div>';
+                }
+            } catch (error) {
+                const errorMsg = `Failed to initialize Mermaid: ${error.message || error}`;
+                log(errorMsg);
+                document.getElementById('mermaid-container').innerHTML = 
+                    `<div class="error">${errorMsg}\n\n${error.stack || ''}</div>`;
+            }
+        }
+        
+        // Global functions that can be called from C#
+        window.renderDiagram = async function(code) {
             const container = document.getElementById('mermaid-container');
-            currentSvg = '';
-            container.innerHTML = ''; // Clear previous content
-
+            window.currentSvg = '';
+            
             if (!code || !code.trim()) {
-                console.log('No code provided to render.');
+                log('No code provided to render');
+                container.innerHTML = '<div style="color:#888;">Enter Mermaid code to see the diagram</div>';
                 return;
             }
-
+            
+            log('Rendering diagram...');
+            container.innerHTML = '<div>Rendering diagram...</div>';
+            
             try {
-                // The render function is safer as it doesn't rely on DOM insertion before processing.
-                const { svg } = await mermaid.render('graphDiv', code);
+                const { svg } = await mermaid.render('mermaid-diagram', code);
                 container.innerHTML = svg;
-                currentSvg = svg;
-                console.log('Mermaid rendering successful.');
-            } catch (e) {
-                console.error('Mermaid rendering failed:', e);
-                // Provide a more detailed error message in the UI.
-                const errorMessage = e.message ? e.message : JSON.stringify(e, null, 2);
-                container.innerHTML = `<pre style="color: red; white-space: pre-wrap;">${errorMessage}</pre>`;
+                window.currentSvg = svg;
+                log('Diagram rendered successfully');
+            } catch (error) {
+                const errorMsg = `Rendering failed: ${error.message || error}`;
+                log(errorMsg);
+                container.innerHTML = 
+                    `<div class="error">${errorMsg}\n\n${error.stack || ''}</div>`;
             }
-        }
-
-        function getSvg() {
-            return currentSvg;
-        }
+        };
+        
+        window.getSvg = function() {
+            return window.currentSvg || '';
+        };
+        
+        // Start initialization
+        init();
     </script>
 </body>
 </html>

@@ -53,18 +53,7 @@
             <StackPanel Spacing="12">
                 <TextBlock x:Name="VersionTextBlock"/>
                 <TextBlock x:Name="InstallDateTextBlock"/>
-            </StackPanel>
-        </ContentDialog>
-
-        <ContentDialog x:Name="AboutDialog"
-                       Title="About Mermaid Diagram"
-                       CloseButtonText="OK"
-                       DefaultButton="Close">
-            <StackPanel Spacing="12">
-                <TextBlock x:Name="AppVersionText" Text="Application Version: "/>
-                <TextBlock x:Name="MermaidVersionText" Text="Mermaid.js Version: "/>
-                <TextBlock Text="A Mermaid diagram editor for Windows" Margin="0,10,0,0"/>
-                <TextBlock Text="Copyright © 2025"/>
+                <TextBlock x:Name="MermaidVersionTextBlock"/>
             </StackPanel>
         </ContentDialog>
 
@@ -113,9 +102,6 @@
                         <KeyboardAccelerator Key="F5"/>
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-            </MenuBarItem>
-            <MenuBarItem Title="Settings">
-                <MenuFlyoutItem Text="About" Click="About_Click"/>
             </MenuBarItem>
             <MenuBarItem Title="Help">
                 <MenuFlyoutItem Text="About" Click="About_Click"/>

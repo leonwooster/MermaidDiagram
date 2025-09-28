@@ -18,6 +18,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.Web.WebView2.Core;
 using System.Net.Http;
 using System.Text.Json;
+using Microsoft.UI.Dispatching;
 using System.Text.RegularExpressions;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
@@ -65,7 +66,10 @@ namespace MermaidDiagramApp
 
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
-            (this.Content as FrameworkElement).Loaded += MainWindow_Loaded;
+            if (this.Content is FrameworkElement content)
+            {
+                content.Loaded += MainWindow_Loaded;
+            }
             this.Closed += MainWindow_Closed;
             _ = CheckForMermaidUpdatesAsync();
             UpdateBuilderVisibility(); // Ensure builder is hidden on startup
@@ -81,79 +85,395 @@ namespace MermaidDiagramApp
 
         private async Task CheckForMermaidUpdatesAsync()
         {
+            var localFolder = ApplicationData.Current.LocalFolder;
             try
             {
-                var localFolder = ApplicationData.Current.LocalFolder.Path;
-                var versionFilePath = Path.Combine(localFolder, "mermaid-version.txt");
-
-                if (!File.Exists(versionFilePath))
+                // Ensure the Mermaid folder exists
+                var mermaidFolder = await localFolder.CreateFolderAsync("Mermaid", CreationCollisionOption.OpenIfExists);
+                
+                // Try to read the version file
+                try
                 {
-                    return; // File not copied yet, skip check
-                }
-
-                var currentVersionStr = await File.ReadAllTextAsync(versionFilePath);
-                string latestVersionStr;
-
-                using (var client = new HttpClient())
-                {
-                    var response = await client.GetStringAsync("https://registry.npmjs.org/mermaid");
-                    using (var jsonDoc = JsonDocument.Parse(response))
+                    var versionFile = await mermaidFolder.GetFileAsync("mermaid-version.txt");
+                    var currentVersionStr = (await FileIO.ReadTextAsync(versionFile)).Trim();
+                    if (!string.IsNullOrEmpty(currentVersionStr))
                     {
-                        latestVersionStr = jsonDoc.RootElement.GetProperty("dist-tags").GetProperty("latest").GetString() ?? string.Empty;
+                        System.Diagnostics.Debug.WriteLine($"Current Mermaid.js version from file: {currentVersionStr}");
+                        await CheckForNewerVersionAsync(currentVersionStr);
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("Version file is empty, checking for updates with default version");
+                        await CheckForNewerVersionAsync("10.9.0");
                     }
                 }
-
-                if (!string.IsNullOrEmpty(latestVersionStr))
+                catch (FileNotFoundException)
                 {
-                    var currentVersion = new Version(currentVersionStr.Trim());
-                    var latestVersion = new Version(latestVersionStr.Trim());
-
-                    if (latestVersion > currentVersion)
-                    {
-                        DispatcherQueue.TryEnqueue(() =>
-                        {
-                            UpdateInfoBar.Message = $"A new version of Mermaid.js ({latestVersionStr}) is available. You are using an older version.";
-                            UpdateInfoBar.IsOpen = true;
-                        });
-                    }
+                    System.Diagnostics.Debug.WriteLine("Mermaid version file not found. Checking with default version.");
+                    await CheckForNewerVersionAsync("10.9.0");
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Failed to check for Mermaid.js updates: {ex.Message}");
+                // Still try to check with default version even if folder creation fails
+                await CheckForNewerVersionAsync("10.9.0");
+            }
+        }
+
+        private async Task CheckForNewerVersionAsync(string currentVersionStr)
+        {
+            try
+            {
+                // Ensure the Mermaid folder exists
+                var localFolder = ApplicationData.Current.LocalFolder;
+                var mermaidFolder = await localFolder.CreateFolderAsync("Mermaid", CreationCollisionOption.OpenIfExists);
+                
+                // Check if we have a valid version string
+                if (string.IsNullOrEmpty(currentVersionStr))
+                {
+                    // Try to read the version file again
+                    try
+                    {
+                        var versionFile = await mermaidFolder.GetFileAsync("mermaid-version.txt");
+                        currentVersionStr = (await FileIO.ReadTextAsync(versionFile)).Trim();
+                    }
+                    catch
+                    {
+                        // If we still can't get the version, use the default
+                        currentVersionStr = "10.9.0";
+                    }
+                }
+                
+                await CheckForNewerVersionInternalAsync(currentVersionStr);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in CheckForNewerVersionAsync: {ex.Message}");
+            }
+        }
+
+        private async Task CheckForNewerVersionInternalAsync(string currentVersionStr)
+        {
+            if (string.IsNullOrEmpty(currentVersionStr))
+            {
+                System.Diagnostics.Debug.WriteLine("Current version string is null or empty, using default version");
+                currentVersionStr = "10.9.0";
+            }
+
+            try
+            {
+                string latestVersionStr;
+                using (var client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromSeconds(10); // Add a timeout to prevent hanging
+                    var response = await client.GetStringAsync("https://registry.npmjs.org/mermaid");
+                    
+                    if (string.IsNullOrEmpty(response))
+                    {
+                        System.Diagnostics.Debug.WriteLine("Received empty response from npm registry");
+                        return;
+                    }
+
+                    using (var jsonDoc = JsonDocument.Parse(response))
+                    {
+                        if (!jsonDoc.RootElement.TryGetProperty("dist-tags", out var distTags) ||
+                            !distTags.TryGetProperty("latest", out var latestVersion))
+                        {
+                            System.Diagnostics.Debug.WriteLine("Could not find latest version in npm registry response");
+                            return;
+                        }
+                        
+                        latestVersionStr = latestVersion.GetString() ?? string.Empty;
+                        System.Diagnostics.Debug.WriteLine($"Latest Mermaid.js version from npm: {latestVersionStr}, Current version: {currentVersionStr}");
+                    }
+                }
+
+                if (string.IsNullOrEmpty(latestVersionStr))
+                {
+                    System.Diagnostics.Debug.WriteLine("Latest version string is null or empty");
+                    return;
+                }
+
+                // Clean up version strings (remove any non-numeric or dot characters)
+                var cleanCurrentVersion = new string(currentVersionStr.Where(c => char.IsDigit(c) || c == '.').ToArray());
+                var cleanLatestVersion = new string(latestVersionStr.Trim().Where(c => char.IsDigit(c) || c == '.').ToArray());
+
+                if (string.IsNullOrEmpty(cleanCurrentVersion) || string.IsNullOrEmpty(cleanLatestVersion))
+                {
+                    System.Diagnostics.Debug.WriteLine($"Invalid version strings after cleaning - Current: '{cleanCurrentVersion}', Latest: '{cleanLatestVersion}'");
+                    return;
+                }
+
+                try
+                {
+                    // Ensure version strings have at least two parts (major.minor)
+                    if (cleanCurrentVersion.Count(c => c == '.') < 1) cleanCurrentVersion += ".0";
+                    if (cleanLatestVersion.Count(c => c == '.') < 1) cleanLatestVersion += ".0";
+
+                    var currentVersion = new Version(cleanCurrentVersion);
+                    var latestVersion = new Version(cleanLatestVersion);
+                    
+                    System.Diagnostics.Debug.WriteLine($"Comparing versions - Current: {currentVersion}, Latest: {latestVersion}");
+                    
+                    // Determine if update is needed and update UI accordingly
+                    var shouldUpdate = currentVersion < latestVersion;
+                    var message = shouldUpdate 
+                        ? $"A new version of Mermaid.js ({latestVersion}) is available. You are using version {currentVersion}."
+                        : "You are using the latest version of Mermaid.js.";
+
+                    System.Diagnostics.Debug.WriteLine($"Update available: {shouldUpdate}. {message}");
+
+                    // Use the dispatcher to update the UI on the UI thread
+                    DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+                    {
+                        try
+                        {
+                            if (UpdateInfoBar == null)
+                            {
+                                System.Diagnostics.Debug.WriteLine("Error: UpdateInfoBar is null");
+                                return;
+                            }
+
+                            if (UpdateInfoBar.ActionButton is Button button)
+                            {
+                                if (shouldUpdate)
+                                {
+                                    System.Diagnostics.Debug.WriteLine("Showing update notification in UI");
+                                    button.Visibility = Visibility.Visible;
+                                    button.IsEnabled = true;
+                                    UpdateInfoBar.Message = message;
+                                    UpdateInfoBar.Severity = InfoBarSeverity.Informational;
+                                    UpdateInfoBar.IsOpen = true;
+                                }
+                                else
+                                {
+                                    System.Diagnostics.Debug.WriteLine("No update available, hiding notification");
+                                    button.Visibility = Visibility.Collapsed;
+                                    UpdateInfoBar.IsOpen = false;
+                                }
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine("Warning: Update button not found in UpdateInfoBar");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error updating UI: {ex.Message}");
+                        }                        
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error comparing versions: {ex.Message}");
+                    // If there's an error, assume we're on the latest version to be safe
+                    DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+                    {
+                        if (UpdateInfoBar.ActionButton is Button button)
+                        {
+                            button.Visibility = Visibility.Collapsed;
+                            UpdateInfoBar.IsOpen = false;
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error checking for newer Mermaid.js version: {ex.Message}");
+                // Don't re-throw here to prevent app crashes
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+                {
+                    if (UpdateInfoBar.ActionButton is Button button)
+                    {
+                        button.Visibility = Visibility.Collapsed;
+                        UpdateInfoBar.IsOpen = false;
+                    }
+                });
             }
         }
 
         private async Task InitializeWebViewAsync()
         {
-            await CopyAssetsToLocalFolder();
-            await PreviewBrowser.EnsureCoreWebView2Async();
-            PreviewBrowser.NavigationCompleted += PreviewBrowser_NavigationCompleted;
-
             try
             {
-                var localFolderPath = ApplicationData.Current.LocalFolder.Path;
-                PreviewBrowser.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                    "mermaid.local", localFolderPath, CoreWebView2HostResourceAccessKind.Allow);
-                // Add a cache-busting query string to ensure the latest version of the host file is always loaded.
-                var navigationUrl = $"https://mermaid.local/MermaidHost.html?t={DateTime.Now.Ticks}";
-                PreviewBrowser.CoreWebView2.Navigate(navigationUrl);
+                _isWebViewReady = false;
+
+                var assetsPath = Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "Assets");
+                System.Diagnostics.Debug.WriteLine($"Initializing WebView with assets from: {assetsPath}");
+
+                // Ensure WebView2 is initialized
+                var webView2Environment = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync();
+                await PreviewBrowser.EnsureCoreWebView2Async(webView2Environment);
+
+                var coreWebView2 = PreviewBrowser.CoreWebView2;
+
+                // Enable WebView2 developer tools for debugging
+                coreWebView2.Settings.AreDevToolsEnabled = true;
+                coreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                coreWebView2.Settings.IsWebMessageEnabled = true;
+
+                // Map the packaged Assets folder into a virtual host so scripts/css can be loaded
+                const string virtualHost = "appassets";
+
+                try
+                {
+                    coreWebView2.ClearVirtualHostNameToFolderMapping(virtualHost);
+                }
+                catch (Exception clearEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"No existing host mapping to clear: {clearEx.Message}");
+                }
+
+                coreWebView2.SetVirtualHostNameToFolderMapping(
+                    virtualHost,
+                    assetsPath,
+                    Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+
+                System.Diagnostics.Debug.WriteLine($"Virtual host 'https://{virtualHost}/' mapped to {assetsPath}");
+
+                // Prepare timer reference for use inside handlers
+                DispatcherTimer? checkTimer = null;
+
+                // Set up console/message handling
+                coreWebView2.WebMessageReceived += (s, e) =>
+                {
+                    var message = e.TryGetWebMessageAsString();
+                    System.Diagnostics.Debug.WriteLine($"[WebView2 Message] {message}");
+
+                    if (string.Equals(message, "MermaidReady", StringComparison.Ordinal))
+                    {
+                        System.Diagnostics.Debug.WriteLine("Received MermaidReady message from WebView");
+                        _isWebViewReady = true;
+
+                        // Stop any ongoing readiness polling
+                        checkTimer?.Stop();
+
+                        // Force the next preview update on the UI thread
+                        DispatcherQueue.TryEnqueue(async () =>
+                        {
+                            try
+                            {
+                                _lastPreviewedCode = null; // ensure UpdatePreview runs even if code unchanged
+                                await UpdatePreview();
+                            }
+                            catch (Exception updateEx)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Error updating preview after MermaidReady: {updateEx}");
+                            }
+                        });
+                    }
+                };
+
+                // Handle navigation errors
+                PreviewBrowser.NavigationCompleted += (s, e) =>
+                {
+                    if (!e.IsSuccess)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Navigation failed: {e.WebErrorStatus}");
+                    }
+                };
+
+                // Navigate to the packaged Mermaid host page through the virtual host
+                var hostPageUri = new Uri($"https://{virtualHost}/MermaidHost.html");
+                coreWebView2.Navigate(hostPageUri.ToString());
+                System.Diagnostics.Debug.WriteLine($"Navigating WebView to {hostPageUri}");
+
+                // Set up a timer to check if Mermaid is loaded
+                checkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
+                int checkCount = 0;
+                checkTimer.Tick += async (s, e) =>
+                {
+                    checkCount++;
+                    if (checkCount > 15) // 15 second timeout
+                    {
+                        checkTimer.Stop();
+                        System.Diagnostics.Debug.WriteLine("Mermaid initialization timed out");
+                        return;
+                    }
+
+                    try
+                    {
+                        var isReady = await PreviewBrowser.ExecuteScriptAsync("window.mermaid !== undefined");
+                        if (isReady == "true")
+                        {
+                            checkTimer.Stop();
+                            System.Diagnostics.Debug.WriteLine("Mermaid.js is ready!");
+                            _isWebViewReady = true;
+                            await UpdatePreview(); // Initial render
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("Mermaid not ready yet, retrying...");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error checking Mermaid status: {ex.Message}");
+                    }
+                };
+
+                checkTimer.Start();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to load MermaidHost.html: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error initializing WebView: {ex}");
+                // Show error in the UI
+                var errorMessage = $"Error initializing diagram preview: {ex.Message}";
+                PreviewBrowser.NavigateToString($"<div style='color:red; padding:20px;'>{errorMessage}</div>");
             }
         }
 
         private async Task CopyAssetsToLocalFolder()
         {
             var localFolder = ApplicationData.Current.LocalFolder;
+            var mermaidFolder = await localFolder.CreateFolderAsync("Mermaid", CreationCollisionOption.OpenIfExists);
             var assetsSourcePath = Path.Combine(Windows.ApplicationModel.Package.Current.InstalledLocation.Path, "Assets");
 
+            // First, copy all assets except mermaid files
             await Task.Run(() =>
             {
-                CopyDirectory(assetsSourcePath, localFolder.Path);
+                foreach (string file in Directory.GetFiles(assetsSourcePath))
+                {
+                    // Skip mermaid files in the root copy
+                    if (Path.GetFileName(file).StartsWith("mermaid")) continue;
+                    
+                    string destFile = Path.Combine(localFolder.Path, Path.GetFileName(file));
+                    try
+                    {
+                        if (File.Exists(destFile))
+                        {
+                            File.Delete(destFile);
+                        }
+                        File.Copy(file, destFile, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to copy asset {file}: {ex.Message}");
+                    }
+                }
             });
+
+            // Check if we need to copy the default mermaid files
+            var mermaidFile = Path.Combine(mermaidFolder.Path, "mermaid.min.js");
+            var versionFile = Path.Combine(mermaidFolder.Path, "mermaid-version.txt");
+
+            if (!File.Exists(mermaidFile) || !File.Exists(versionFile))
+            {
+                var sourceMermaid = Path.Combine(assetsSourcePath, "mermaid.min.js");
+                if (File.Exists(sourceMermaid))
+                {
+                    try
+                    {
+                        File.Copy(sourceMermaid, mermaidFile, true);
+                        await File.WriteAllTextAsync(versionFile, "10.9.0"); // Default version
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to copy mermaid files: {ex.Message}");
+                    }
+                }
+            }
         }
 
         private void CopyDirectory(string sourceDir, string destinationDir)
@@ -254,17 +574,42 @@ namespace MermaidDiagramApp
 
         private async Task UpdatePreview()
         {
-            if (!_isWebViewReady || PreviewBrowser?.CoreWebView2 == null)
+            try
             {
-                System.Diagnostics.Debug.WriteLine("Preview not ready or CoreWebView2 is null.");
-                return;
-            }
+                if (PreviewBrowser?.CoreWebView2 == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("WebView not initialized yet");
+                    return;
+                }
 
-            var code = CodeEditor.Text;
-            _lastPreviewedCode = code; // Cache the code that is being sent to the preview
-            System.Diagnostics.Debug.WriteLine($"Updating preview with code: {code}");
-            var escapedCode = System.Text.Json.JsonSerializer.Serialize(code);
-            await PreviewBrowser.CoreWebView2.ExecuteScriptAsync($"renderDiagram({escapedCode})");
+                var code = CodeEditor.Text;
+                if (code == _lastPreviewedCode)
+                {
+                    return; // Skip if the code hasn't changed
+                }
+
+                _lastPreviewedCode = code;
+                System.Diagnostics.Debug.WriteLine($"Updating preview with code: {code}");
+                
+                // Escape the code for JavaScript
+                var escapedCode = System.Text.Json.JsonSerializer.Serialize(code);
+                
+                // Check if Mermaid is ready
+                var isReady = await PreviewBrowser.ExecuteScriptAsync("window.mermaid !== undefined");
+                if (isReady != "true")
+                {
+                    System.Diagnostics.Debug.WriteLine("Mermaid is not ready yet");
+                    return;
+                }
+                
+                // Render the diagram
+                var result = await PreviewBrowser.ExecuteScriptAsync($"renderDiagram({escapedCode})");
+                System.Diagnostics.Debug.WriteLine($"Render result: {result}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in UpdatePreview: {ex}");
+            }
         }
 
         private void NewClassDiagram_Click(object sender, RoutedEventArgs e)
@@ -596,17 +941,77 @@ namespace MermaidDiagramApp
             Application.Current.Exit();
         }
 
+        private async Task<bool> FileExistsAsync(StorageFolder folder, string fileName)
+        {
+            try
+            {
+                var item = await folder.TryGetItemAsync(fileName);
+                return item != null && item.IsOfType(StorageItemTypes.File);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private async void About_Click(object sender, RoutedEventArgs e)
         {
             var package = Windows.ApplicationModel.Package.Current;
             var version = package.Id.Version;
-            var versionString = $"Version: {version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
+            var versionString = $"App Version: {version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
 
             var installDate = package.InstalledDate;
             var installDateString = $"Installed: {installDate.ToLocalTime():yyyy-MM-dd HH:mm:ss}";
 
+            // Get Mermaid.js version
+            string mermaidVersionString = "Mermaid.js Version: Checking...";
+            string versionFilePath = string.Empty;
+            string versionContent = string.Empty;
+
+            try
+            {
+                // Try to get the version from the Mermaid folder
+                var localFolder = ApplicationData.Current.LocalFolder;
+                var mermaidFolder = await localFolder.CreateFolderAsync("Mermaid", CreationCollisionOption.OpenIfExists);
+                var versionFile = await mermaidFolder.CreateFileAsync("mermaid-version.txt", CreationCollisionOption.OpenIfExists);
+                versionFilePath = versionFile.Path;
+                
+                try
+                {
+                    versionContent = await FileIO.ReadTextAsync(versionFile);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error reading version file: {ex.Message}");
+                }
+
+                // If we couldn't read the version, use the default
+                if (string.IsNullOrWhiteSpace(versionContent))
+                {
+                    versionContent = "10.9.0";
+                    try
+                    {
+                        await FileIO.WriteTextAsync(versionFile, versionContent);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error writing default version: {ex.Message}");
+                    }
+                }
+
+                mermaidVersionString = $"Mermaid.js Version: {versionContent.Trim()}";
+                System.Diagnostics.Debug.WriteLine($"Mermaid version: {versionContent.Trim()}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error details - Type: {ex.GetType().Name}, Message: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                mermaidVersionString = "Mermaid.js Version: Error checking version";
+            }
+
             VersionTextBlock.Text = versionString;
             InstallDateTextBlock.Text = installDateString;
+            MermaidVersionTextBlock.Text = mermaidVersionString;
 
             AboutDialog.XamlRoot = this.Content.XamlRoot;
             await AboutDialog.ShowAsync();
@@ -806,23 +1211,69 @@ namespace MermaidDiagramApp
                 {
                     var newMermaidJsContent = await client.GetStringAsync(downloadUrl);
 
-                    var localFolder = ApplicationData.Current.LocalFolder.Path;
-                    var localFilePath = Path.Combine(localFolder, "mermaid.min.js");
-                    await File.WriteAllTextAsync(localFilePath, newMermaidJsContent);
+                    // Ensure the local Mermaid folder exists
+                    var localFolder = ApplicationData.Current.LocalFolder;
+                    var mermaidFolder = await localFolder.CreateFolderAsync("Mermaid", CreationCollisionOption.OpenIfExists);
+                    
+                    try
+                    {
+                        // Save the mermaid.js file
+                        var localFile = await mermaidFolder.CreateFileAsync("mermaid.min.js", CreationCollisionOption.ReplaceExisting);
+                        await FileIO.WriteTextAsync(localFile, newMermaidJsContent);
+                        System.Diagnostics.Debug.WriteLine($"Successfully saved mermaid.min.js to {localFile.Path}");
 
-                    var versionFilePath = Path.Combine(localFolder, "mermaid-version.txt");
-                    await File.WriteAllTextAsync(versionFilePath, latestVersionStr);
+                        // Save the version file
+                        var versionFile = await mermaidFolder.CreateFileAsync("mermaid-version.txt", CreationCollisionOption.ReplaceExisting);
+                        await FileIO.WriteTextAsync(versionFile, latestVersionStr);
+                        System.Diagnostics.Debug.WriteLine($"Successfully saved version {latestVersionStr} to {versionFile.Path}");
+                        
+                        // Clear the WebView2 cache to ensure the new version is loaded
+                        if (PreviewBrowser?.CoreWebView2 != null)
+                        {
+                            try 
+                            {
+                                await PreviewBrowser.CoreWebView2.Profile.ClearBrowsingDataAsync();
+                                System.Diagnostics.Debug.WriteLine("Successfully cleared WebView2 cache");
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Warning: Failed to clear WebView2 cache: {ex.Message}");
+                            }
+                        }
+
+                        // Write the updated Mermaid.js to the temporary folder for immediate use
+                        try
+                        {
+                            var tempFolder = ApplicationData.Current.TemporaryFolder;
+                            var tempMermaidFile = await tempFolder.CreateFileAsync("mermaid.min.js", CreationCollisionOption.ReplaceExisting);
+                            await FileIO.WriteTextAsync(tempMermaidFile, newMermaidJsContent);
+                            System.Diagnostics.Debug.WriteLine($"Saved updated Mermaid.js to temporary folder: {tempMermaidFile.Path}");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Warning: Failed to copy Mermaid.js to temp folder: {ex.Message}");
+                            // Continue with restart even if temp copy fails
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error saving Mermaid files: {ex.Message}");
+                        throw; // Re-throw to be caught by the outer try-catch
+                    }
                 }
 
-                UpdateInfoBar.IsOpen = false;
-                RestartDialog.XamlRoot = this.Content.XamlRoot;
-                var result = await RestartDialog.ShowAsync();
-
-                if (result == ContentDialogResult.Primary)
-                {
-                    // Restart the application
-                    AppInstance.Restart("");
-                }
+                // Update the UI to show success
+                UpdateInfoBar.Message = "Mermaid.js has been successfully updated to version " + latestVersionStr + ". Restarting application...";
+                UpdateInfoBar.Severity = InfoBarSeverity.Success;
+                UpdateInfoBar.IsOpen = true;
+                
+                // Force UI update
+                await Task.Delay(1000);
+                
+                // Restart the application immediately
+                System.Diagnostics.Debug.WriteLine("Restarting application to apply Mermaid.js update...");
+                AppInstance.Restart("");
+                Application.Current.Exit();
             }
             catch (Exception ex)
             {
