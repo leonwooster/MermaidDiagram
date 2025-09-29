@@ -1,0 +1,59 @@
+```mermaid
+graph TD
+    subgraph UI Layer
+        A["`MainWindow`\nMenu & Commands"]
+        B["`PatternSelectionDialog`\nCatalog Explorer"]
+        C["`PatternCustomizationDialog`\nParameter Form + Live Preview"]
+    end
+
+    subgraph Application Layer
+        D["`DesignPatternController`\nOrchestrates selection, customization, generation"]
+        E["`PatternCatalogService`\nLoads `IPatternTemplate` metadata"]
+        F["`PatternDocumentationService`\nProvides `IPatternDocumentation`"]
+    end
+
+    subgraph Domain Layer
+        G(("`IPatternTemplate`"))
+        H(("`IPatternRenderer`"))
+        I(("`ICustomizationSchema`"))
+        J["Concrete Templates\nSingletonTemplate / AdapterTemplate / ..."]
+    end
+
+    subgraph Infrastructure
+        K["Template Providers\nJSON files / Embedded resources"]
+        L["Documentation Sources\nMarkdown, JSON, Web links"]
+    end
+
+    subgraph Existing Platform Integration
+        M["`CodeEditor`\n(TextControlBox)"]
+        N["`PreviewBrowser`\n(WebView2)"]
+    end
+
+    A -->|"Open Catalog"| B
+    A -->|"Launch Customization"| C
+
+    B -->|"Select pattern"| D
+    C -->|"Submit configuration"| D
+
+    D -->|"Fetch catalog"| E
+    D -->|"Load docs"| F
+    D -->|"Create instances"| G
+    D -->|"Generate Mermaid"| H
+    D -->|"Validate inputs"| I
+    D -->|"Return Mermaid code"| M
+    D -->|"Refresh preview"| N
+
+    E --> K
+    F --> L
+
+    G --> J
+    H --> J
+    I --> J
+
+    J -->|"Implements"| G
+    J -->|"Provides renderer"| H
+    J -->|"Defines schema"| I
+
+    M -->|"Set text"| N
+```
+```

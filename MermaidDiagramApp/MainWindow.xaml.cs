@@ -124,6 +124,19 @@ namespace MermaidDiagramApp
             }
         }
 
+        private async void RefreshPreview_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _lastPreviewedCode = null;
+                await UpdatePreview();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Manual refresh failed: {ex.Message}", ex);
+            }
+        }
+
         private async Task CheckForNewerVersionAsync(string currentVersionStr)
         {
             try
@@ -591,7 +604,6 @@ namespace MermaidDiagramApp
                     return; // Skip if the code hasn't changed
                 }
 
-                _lastPreviewedCode = code;
                 _logger.LogDebug($"Updating preview with code length: {code.Length}");
                 
                 // Escape the code for JavaScript
@@ -604,7 +616,9 @@ namespace MermaidDiagramApp
                     _logger.LogDebug("Mermaid is not ready yet");
                     return;
                 }
-                
+
+                _lastPreviewedCode = code;
+
                 // Render the diagram
                 var result = await PreviewBrowser.ExecuteScriptAsync($"renderDiagram({escapedCode})");
                 _logger.LogDebug($"Render result: {result}");

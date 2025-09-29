@@ -3,120 +3,109 @@
 ## Epic: Design Pattern Diagram Generation
 
 ### Overview
-Add functionality to automatically generate Mermaid diagrams for common software design patterns, allowing users to quickly create standardized pattern visualizations.
+Deliver a reusable pattern catalog and diagram generator so users can scaffold UML diagrams from canonical design patterns with minimal manual effort.
+
+### Architecture & Design Principles
+* __Single Responsibility (S)__ — Separate concerns across presentation (`PatternSelectionDialog`), orchestration (`DesignPatternController`), and template data (`IPatternTemplate` implementations).
+* __Open/Closed (O)__ — Allow new patterns to be added by creating additional template classes or JSON documents without modifying existing logic.
+* __Liskov Substitution (L)__ — Ensure every template implements a common interface so the generator treats all patterns uniformly.
+* __Interface Segregation (I)__ — Provide focused interfaces (`IPatternMetadata`, `IPatternRenderer`, `ICustomizationSchema`) consumed only by components that need them.
+* __Dependency Inversion (D)__ — Resolve template providers and documentation services through abstractions to keep `MainWindow` and UI code decoupled from data sources.
 
 ### User Stories
 
-#### Story 1: Design Pattern Selection UI
-**As a** developer  
-**I want** to select from a list of common design patterns  
-**So that** I can quickly generate standardized pattern diagrams  
+#### Story 1: Discover Patterns in the UI
+**As a** diagram author  
+**I want** an organized pattern catalog inside the editor  
+**So that** I can quickly find the pattern I need without leaving the app
 
 **Acceptance Criteria:**
-- [ ] Add "Design Patterns" menu to main menu bar
-- [ ] Create pattern selection dialog with categories
-- [ ] Display pattern descriptions and use cases
-- [ ] Show preview thumbnail for each pattern
+- [ ] A `Design Patterns` top-level menu (or submenu) appears next to existing templates in `MainMenuBar` of `MainWindow.xaml`.
+- [ ] Selecting the menu opens a `PatternSelectionDialog` with tabs or filters for Creational, Structural, and Behavioral categories.
+- [ ] Each catalog card shows pattern name, one-sentence summary, and difficulty tag.
+- [ ] Selecting a card highlights it and enables the `Use Pattern` action.
+- [ ] The catalog loads from the pattern registry service; removing a pattern from the registry hides it without UI changes.
 
 **Estimated Effort:** 8 story points
 
-#### Story 2: Creational Pattern Templates
+#### Story 2: Generate Creational Pattern Diagrams
 **As a** developer  
-**I want** to generate diagrams for creational design patterns  
-**So that** I can visualize object creation mechanisms  
-
-**Patterns to Support:**
-- [ ] Singleton Pattern
-- [ ] Factory Method Pattern  
-- [ ] Abstract Factory Pattern
-- [ ] Builder Pattern
-- [ ] Prototype Pattern
+**I want** the app to scaffold Mermaid diagrams for standard creational patterns  
+**So that** I can communicate object-creation strategies quickly
 
 **Acceptance Criteria:**
-- [ ] Pre-built Mermaid class diagram templates
-- [ ] Customizable class and method names
-- [ ] Proper UML relationships and stereotypes
-- [ ] Generated code appears in editor for modification
+- [ ] Patterns supported: Singleton, Factory Method, Abstract Factory, Builder, Prototype.
+- [ ] Selecting `Use Pattern` injects the generated Mermaid code into the editor and triggers `UpdatePreview()`.
+- [ ] Template output adheres to Mermaid class diagram syntax with correct relationships and stereotypes.
+- [ ] The generator exposes a `Customize…` button when optional role names are available.
+- [ ] Unit tests confirm each pattern renders expected Mermaid markup via an `IPatternRenderer` contract.
 
 **Estimated Effort:** 13 story points
 
-#### Story 3: Structural Pattern Templates
+#### Story 3: Generate Structural Pattern Diagrams
 **As a** developer  
-**I want** to generate diagrams for structural design patterns  
-**So that** I can visualize object composition and relationships  
-
-**Patterns to Support:**
-- [ ] Adapter Pattern
-- [ ] Decorator Pattern
-- [ ] Facade Pattern
-- [ ] Composite Pattern
-- [ ] Bridge Pattern
-- [ ] Proxy Pattern
+**I want** ready-made diagrams for structural patterns  
+**So that** I can show object composition and delegation clearly
 
 **Acceptance Criteria:**
-- [ ] Class diagram templates showing structure
-- [ ] Interface and inheritance relationships
-- [ ] Composition and aggregation links
-- [ ] Configurable component names
+- [ ] Patterns supported: Adapter, Decorator, Facade, Composite, Bridge, Proxy.
+- [ ] Diagram output matches UML expectations (composition, aggregation, inheritance) using Mermaid syntax.
+- [ ] Each template provides sensible default participant names and relationships that can be customized.
+- [ ] Pattern templates reside in individual classes or JSON files so additional patterns can be added without modifying core logic.
+- [ ] Integration tests validate the generator returns non-empty code for every registered structural pattern.
 
 **Estimated Effort:** 13 story points
 
-#### Story 4: Behavioral Pattern Templates
+#### Story 4: Generate Behavioral Pattern Diagrams
 **As a** developer  
-**I want** to generate diagrams for behavioral design patterns  
-**So that** I can visualize object interactions and responsibilities  
-
-**Patterns to Support:**
-- [ ] Observer Pattern
-- [ ] Strategy Pattern
-- [ ] Command Pattern
-- [ ] State Pattern
-- [ ] Template Method Pattern
-- [ ] Chain of Responsibility Pattern
+**I want** behavior-focused diagrams for collaboration patterns  
+**So that** I can illustrate control flow and interactions
 
 **Acceptance Criteria:**
-- [ ] Class and sequence diagram options
-- [ ] Method call flows and interactions
-- [ ] State transitions where applicable
-- [ ] Parameterizable participant names
+- [ ] Patterns supported: Observer, Strategy, Command, State, Template Method, Chain of Responsibility.
+- [ ] Each pattern chooses the most expressive Mermaid format (class, sequence, or state) defined in the template metadata.
+- [ ] Templates include interaction notes (e.g., method calls, state transitions) rendered using Mermaid annotations.
+- [ ] Each pattern exposes a step-by-step description in the customization dialog’s “How it works” panel.
+- [ ] Automated tests assert that every behavioral template compiles through the Mermaid renderer without errors.
 
 **Estimated Effort:** 21 story points
 
-#### Story 5: Pattern Customization Dialog
+#### Story 5: Customize Pattern Parameters
 **As a** developer  
-**I want** to customize pattern parameters before generation  
-**So that** I can create domain-specific implementations  
+**I want** to tailor class and participant names before inserting a pattern  
+**So that** the generated diagram matches my domain vocabulary
 
 **Acceptance Criteria:**
-- [ ] Parameter input form for each pattern
-- [ ] Real-time preview of generated diagram
-- [ ] Validation of input parameters
-- [ ] Save custom pattern configurations
-- [ ] Import/export pattern templates
+- [ ] Selecting `Customize…` opens a WinUI dialog bound to the template’s `ICustomizationSchema` (e.g., role names, method labels).
+- [ ] The dialog shows validation feedback (required fields, naming clashes) before the `Insert` button is enabled.
+- [ ] Changes update a live preview section powered by the WebView2 instance using throttled renders.
+- [ ] User selections persist for the current session so reopening the dialog preserves prior inputs.
+- [ ] Canceling the dialog leaves the editor unchanged.
 
 **Estimated Effort:** 13 story points
 
-#### Story 6: Pattern Documentation Integration
+#### Story 6: Contextual Documentation & Guidance
 **As a** developer  
-**I want** to access pattern documentation and examples  
-**So that** I can understand when and how to use each pattern  
+**I want** quick access to pattern documentation inside the dialog  
+**So that** I understand when to use each pattern and its trade-offs
 
 **Acceptance Criteria:**
-- [ ] Built-in help system for each pattern
-- [ ] Code examples in multiple languages
-- [ ] Best practices and anti-patterns
-- [ ] Links to external resources
-- [ ] Pattern comparison matrix
+- [ ] Each pattern exposes a documentation pane with sections: “When to use”, “Participants”, “Sample code (language toggle)”, and “Pitfalls”.
+- [ ] External resource links open in the default browser via `Launcher.LaunchUriAsync`.
+- [ ] A comparison matrix is available from the dialog, highlighting similar patterns (e.g., Strategy vs State) with key differences.
+- [ ] Documentation content is supplied by a provider implementing `IPatternDocumentationService`, keeping UI decoupled from content.
+- [ ] Accessibility review verifies the dialog is keyboard navigable and compliant with contrast guidelines.
 
 **Estimated Effort:** 8 story points
 
 ### Technical Considerations
 
 #### Implementation Approach
-- Extend existing template system in MainWindow.xaml.cs
-- Create PatternTemplate class hierarchy
-- Add PatternSelectionDialog WinUI3 window
-- Integrate with existing Mermaid code generation
+- Introduce `DesignPatternModule` containing interfaces (`IPatternTemplate`, `IPatternRenderer`, `IPatternCustomizationSchema`).
+- Implement a registry (`PatternCatalogService`) that loads template metadata from embedded JSON or assembly scanning.
+- Build a WinUI `PatternSelectionDialog` leveraging MVVM (view model orchestrates selections, documentation, customization flow).
+- Reuse `MainWindow.UpdatePreview()` by injecting generated code into `CodeEditor.Text` and resetting `_lastPreviewedCode`.
+- Provide extension points for future template packs (e.g., enterprise patterns) without modifying existing services.
 
 #### Mermaid Template Examples
 
@@ -153,16 +142,16 @@ classDiagram
 ```
 
 ### Definition of Done
-- [ ] All acceptance criteria met
-- [ ] Unit tests for pattern generation logic
-- [ ] Integration tests for UI components
-- [ ] Documentation updated
-- [ ] Code review completed
-- [ ] Performance testing (pattern generation < 100ms)
+- [ ] All story-level acceptance criteria satisfied
+- [ ] Unit tests for template generation and customization logic
+- [ ] Integration tests covering pattern selection and live preview
+- [ ] Documentation updated (`USER_GUIDE.md`, inline help)
+- [ ] Code review completed with architectural sign-off
+- [ ] Performance verified (pattern render < 100 ms on reference hardware)
 
 ### Priority: Medium
 ### Target Sprint: Future (Post-MVP)
-### Dependencies: Core editor functionality, UML template system
+### Dependencies: Core editor functionality, UML template system, WebView2 preview pipeline
 
 ---
 

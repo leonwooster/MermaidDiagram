@@ -86,7 +86,7 @@
         });
         
         log('Starting Mermaid initialization...');
-        
+       
         // Load Mermaid.js with fallback
         function loadMermaid() {
             return new Promise((resolve, reject) => {
@@ -121,15 +121,42 @@
         }
         
         // Initialize the application
+        async function getMermaidVersion() {
+            try {
+                if (mermaid.mermaidAPI?.getDiagramFromText) {
+                    const infoDiagram = await mermaid.mermaidAPI.getDiagramFromText('info');
+                    const versionFromInfo = infoDiagram?.db?.getVersion?.();
+                    if (versionFromInfo) {
+                        return versionFromInfo;
+                    }
+                }
+
+                if (mermaid.version) {
+                    return mermaid.version;
+                }
+
+                if (mermaid.mermaidAPI?.version) {
+                    return mermaid.mermaidAPI.version;
+                }
+            } catch (error) {
+                log('Failed to determine Mermaid version from runtime:', error);
+            }
+
+            return 'unknown';
+        }
+
         async function init() {
             try {
                 await loadMermaid();
-                
+
                 if (typeof mermaid === 'undefined') {
                     throw new Error('Mermaid is not defined after loading');
                 }
-                
-                log('Mermaid version:', mermaid.version);
+
+                const runtimeVersion = await getMermaidVersion();
+
+                window.detectedMermaidVersion = runtimeVersion;
+                log('Mermaid version (runtime):', runtimeVersion);
                 
                 window.mermaid.initialize({
                     startOnLoad: false,
