@@ -958,6 +958,134 @@ namespace MermaidDiagramApp
             Application.Current.Exit();
         }
 
+        private async void CheckSyntax_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var code = CodeEditor.Text;
+                
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    var emptyDialog = new ContentDialog
+                    {
+                        Title = "No Code to Check",
+                        Content = "The editor is empty. Please add some Mermaid diagram code first.",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await emptyDialog.ShowAsync();
+                    return;
+                }
+
+                var analyzer = new MermaidSyntaxAnalyzer();
+                var fixer = new MermaidSyntaxFixer();
+                var currentCode = code;
+                var totalFixesApplied = 0;
+
+                // Iterative fix-and-recheck loop
+                while (true)
+                {
+                    // Analyze the current code
+                    var issues = analyzer.Analyze(currentCode);
+
+                    // Show the dialog
+                    var dialog = new SyntaxIssuesDialog
+                    {
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    dialog.LoadIssues(issues, currentCode);
+
+                    var result = await dialog.ShowAsync();
+
+                    if (result == ContentDialogResult.Primary)
+                    {
+                        // User clicked "Apply Fixes"
+                        var selectedIssues = dialog.ViewModel.Issues.Where(i => i.IsSelected).ToList();
+                        
+                        if (selectedIssues.Any())
+                        {
+                            // Apply fixes
+                            var fixedCode = fixer.ApplyFixes(currentCode, selectedIssues);
+                            totalFixesApplied += selectedIssues.Count;
+
+                            // Update the editor
+                            CodeEditor.Text = fixedCode;
+                            currentCode = fixedCode;
+
+                            // Update preview
+                            await UpdatePreview();
+
+                            // Recheck for remaining issues
+                            var remainingIssues = analyzer.Analyze(fixedCode);
+
+                            if (remainingIssues.Count > 0)
+                            {
+                                // Show dialog asking if user wants to continue fixing
+                                var continueDialog = new ContentDialog
+                                {
+                                    Title = "More Issues Found",
+                                    Content = $"Applied {selectedIssues.Count} fix(es). Found {remainingIssues.Count} remaining issue(s).\n\nDo you want to review and fix the remaining issues?",
+                                    PrimaryButtonText = "Yes, Continue",
+                                    CloseButtonText = "No, Done",
+                                    DefaultButton = ContentDialogButton.Primary,
+                                    XamlRoot = this.Content.XamlRoot
+                                };
+
+                                var continueResult = await continueDialog.ShowAsync();
+                                
+                                if (continueResult == ContentDialogResult.Primary)
+                                {
+                                    // Continue to next iteration
+                                    continue;
+                                }
+                                else
+                                {
+                                    // User chose to stop
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                // No more issues found - show success and exit
+                                var successDialog = new ContentDialog
+                                {
+                                    Title = "All Issues Fixed!",
+                                    Content = $"Successfully applied {totalFixesApplied} fix(es) in total.\n\nNo remaining syntax issues detected. Your diagram is clean!",
+                                    CloseButtonText = "OK",
+                                    XamlRoot = this.Content.XamlRoot
+                                };
+                                await successDialog.ShowAsync();
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            // No issues selected, exit
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        // User cancelled, exit
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error checking syntax: {ex.Message}", ex);
+                
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error",
+                    Content = $"An error occurred while checking syntax: {ex.Message}",
+                    CloseButtonText = "OK",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
+        }
+
         private async Task<bool> FileExistsAsync(StorageFolder folder, string fileName)
         {
             try

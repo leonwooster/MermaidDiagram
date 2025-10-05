@@ -239,3 +239,249 @@ Introduce a customizable stick-figure creation workflow that lets users compose 
 ### Priority: Low-Medium (Backlog)
 ### Target Sprint: Future
 ### Dependencies: Stable template infrastructure, enhanced preview pipeline
+
+---
+
+## Epic: Manual Mermaid Syntax Fixer with Validation
+
+### Overview
+Deliver a manual syntax fixer that first shows all detected syntax errors and allows users to review and confirm before applying fixes, providing full visibility and control over what changes will be made to their diagrams.
+
+### Architecture & Design Principles
+* __Single Responsibility (S)__ — Separate concerns: syntax detection (`ISyntaxAnalyzer`), issue presentation (`SyntaxIssuesPanel`), and fix application (`ISyntaxFixer`).
+* __Open/Closed (O)__ — Allow new detection rules to be added without modifying core analyzer logic.
+* __Interface Segregation (I)__ — Provide focused interfaces for detection, preview, and fix operations.
+* __Dependency Inversion (D)__ — Resolve analyzers and fixers through abstractions to keep UI decoupled from detection logic.
+
+### User Stories
+
+#### Story 1: Trigger Syntax Analysis via Menu
+**As a** diagram creator  
+**I want** a menu item to analyze syntax issues in the current file  
+**So that** I can see what problems exist before deciding to fix them
+
+**Acceptance Criteria:**
+- [ ] Menu item available in editor context menu (right-click)
+- [ ] Menu item available in top menu bar (e.g., Edit > Check Mermaid Syntax)
+- [ ] Menu item only appears when editing `.mmd` files
+- [ ] Keyboard shortcut is available and configurable
+- [ ] Menu item is clearly labeled (e.g., "Check & Fix Mermaid Syntax")
+
+**Estimated Effort:** 5 story points
+
+#### Story 2: Display Detected Syntax Issues
+**As a** diagram creator  
+**I want** to see a clear list of all detected syntax issues  
+**So that** I understand what's wrong before fixing
+
+**Acceptance Criteria:**
+- [ ] Issues displayed in a dedicated panel/dialog
+- [ ] Each issue shows: line number, column, issue type, and description
+- [ ] Issues are grouped by type (Unicode chars, line breaks, etc.)
+- [ ] Shows count of each issue type
+- [ ] Displays "No issues found" if file is clean
+- [ ] Issues are sortable by line number or type
+- [ ] Click on issue navigates to that line in editor
+
+**Estimated Effort:** 8 story points
+
+#### Story 3: Preview Proposed Fixes
+**As a** diagram creator  
+**I want** to see exactly what changes will be made for each issue  
+**So that** I can verify the fixes are correct before applying
+
+**Acceptance Criteria:**
+- [ ] Side-by-side diff view shows before/after for each issue
+- [ ] Original text and replacement text clearly highlighted
+- [ ] Can navigate between issues using next/previous buttons
+- [ ] Shows context (surrounding lines) for each fix
+- [ ] Visual indicators for additions/deletions/changes
+- [ ] Preview updates in real-time as user selects issues
+
+**Estimated Effort:** 13 story points
+
+#### Story 4: Selective Fix Application
+**As a** diagram creator  
+**I want** to choose which issues to fix  
+**So that** I have granular control over changes
+
+**Acceptance Criteria:**
+- [ ] Checkbox next to each issue to select/deselect
+- [ ] "Select All" / "Deselect All" options available
+- [ ] Can select all issues of a specific type
+- [ ] Selected count displayed (e.g., "5 of 12 selected")
+- [ ] Only selected issues are fixed when applying
+- [ ] Unselected issues remain unchanged
+
+**Estimated Effort:** 8 story points
+
+#### Story 5: Confirm Before Applying Fixes
+**As a** diagram creator  
+**I want** a final confirmation step before fixes are applied  
+**So that** I can prevent accidental changes
+
+**Acceptance Criteria:**
+- [ ] "Apply Fixes" button clearly visible
+- [ ] Confirmation dialog shows summary of changes to be made
+- [ ] Summary includes: number of fixes, affected lines, issue types
+- [ ] "Cancel" option discards all changes
+- [ ] Cannot apply if no issues are selected
+- [ ] Confirmation can be disabled in settings (with warning)
+
+**Estimated Effort:** 5 story points
+
+#### Story 6: Unicode Character Detection & Replacement
+**As a** diagram creator  
+**I want** the analyzer to detect problematic Unicode characters  
+**So that** I can see and fix Unicode-related parse errors
+
+**Acceptance Criteria:**
+- [ ] Detects en-dashes (–), em-dashes (—), and suggests hyphen (-)
+- [ ] Detects Unicode arrows (→, ←, ↔) and suggests text/removal
+- [ ] Detects smart quotes (" " ' ') and suggests straight quotes
+- [ ] Shows exact Unicode character code in issue details
+- [ ] Highlights problematic character in editor when selected
+- [ ] Provides explanation why character causes issues
+
+**Estimated Effort:** 8 story points
+
+#### Story 7: Line Break Syntax Detection
+**As a** diagram creator  
+**I want** the analyzer to detect incompatible line break syntax  
+**So that** I can fix multi-line label issues
+
+**Acceptance Criteria:**
+- [ ] Detects `\n` escape sequences in node labels
+- [ ] Suggests replacement with `<br/>` tags
+- [ ] Only flags `\n` within node labels `[...]`
+- [ ] Does not flag `\n` in comments or other contexts
+- [ ] Shows preview of how label will appear after fix
+- [ ] Handles multiple `\n` sequences in same label
+
+**Estimated Effort:** 5 story points
+
+#### Story 8: Issue Severity Levels
+**As a** diagram creator  
+**I want** issues categorized by severity  
+**So that** I can prioritize critical fixes
+
+**Acceptance Criteria:**
+- [ ] Issues marked as: Error, Warning, or Info
+- [ ] Errors prevent diagram rendering (must fix)
+- [ ] Warnings may cause issues (recommended to fix)
+- [ ] Info items are suggestions (optional)
+- [ ] Visual indicators (icons/colors) for each severity
+- [ ] Can filter view by severity level
+- [ ] Error count displayed prominently
+
+**Estimated Effort:** 5 story points
+
+#### Story 9: Batch Analysis for Multiple Files
+**As a** diagram creator  
+**I want** to analyze multiple `.mmd` files at once  
+**So that** I can identify issues across my project
+
+**Acceptance Criteria:**
+- [ ] Right-click multiple files in explorer to analyze
+- [ ] Command to analyze all `.mmd` files in workspace
+- [ ] Results grouped by file
+- [ ] Shows total issue count per file
+- [ ] Can expand/collapse each file's issues
+- [ ] Can fix all issues in selected files after review
+- [ ] Progress indicator during batch analysis
+
+**Estimated Effort:** 13 story points
+
+#### Story 10: Post-Fix Summary & Undo
+**As a** diagram creator  
+**I want** a summary after fixes are applied and ability to undo  
+**So that** I can verify results and revert if needed
+
+**Acceptance Criteria:**
+- [ ] Success message shows number of fixes applied
+- [ ] Lists which issue types were fixed
+- [ ] Shows which lines were modified
+- [ ] Standard undo (Ctrl+Z) reverts all fixes as one operation
+- [ ] "Undo" button available in summary notification
+- [ ] Can re-run analysis to verify all issues resolved
+- [ ] Summary can be copied to clipboard
+
+**Estimated Effort:** 5 story points
+
+#### Story 11: Configurable Detection Rules
+**As a** power user  
+**I want** to configure which syntax issues to detect  
+**So that** I can customize the analyzer for my needs
+
+**Acceptance Criteria:**
+- [ ] Settings panel lists all detection rules
+- [ ] Each rule can be enabled/disabled
+- [ ] Can set severity level per rule (Error/Warning/Info)
+- [ ] Custom rules can be added via regex patterns
+- [ ] Settings persist across sessions
+- [ ] Can export/import rule configurations
+- [ ] Changes apply to next analysis run
+
+**Estimated Effort:** 13 story points
+
+#### Story 12: Manual-Only Operation
+**As a** diagram creator  
+**I want** the analyzer to only run when I explicitly trigger it  
+**So that** I'm never interrupted by automatic checks
+
+**Acceptance Criteria:**
+- [ ] No automatic analysis on file open
+- [ ] No automatic analysis on file save
+- [ ] No automatic analysis while typing
+- [ ] Only runs via menu item or command
+- [ ] Clear indication when analysis is running
+- [ ] Can cancel analysis if taking too long
+
+**Estimated Effort:** 3 story points
+
+### User Flow
+1. User opens `.mmd` file with syntax errors
+2. User clicks "Check & Fix Mermaid Syntax" menu item
+3. Analyzer scans file and displays issues panel
+4. User reviews each issue with preview
+5. User selects which issues to fix (or select all)
+6. User clicks "Apply Fixes" button
+7. Confirmation dialog shows summary
+8. User confirms, fixes are applied
+9. Success summary displayed with undo option
+
+### Technical Considerations
+
+#### Implementation Approach
+- Introduce `SyntaxAnalysisModule` containing interfaces (`ISyntaxAnalyzer`, `ISyntaxFixer`, `ISyntaxRule`).
+- Implement a rule-based analyzer that scans for Unicode issues, line break problems, and other syntax errors.
+- Build a WinUI `SyntaxIssuesPanel` with diff preview leveraging MVVM pattern.
+- Provide atomic undo/redo support for all fixes applied in a single operation.
+- Support extensible rule system for future syntax checks.
+
+#### Detection Rules
+- **Unicode Dash Detection**: Regex pattern to find en-dash (U+2013), em-dash (U+2014)
+- **Unicode Arrow Detection**: Pattern for →, ←, ↔, ⇒, etc.
+- **Smart Quote Detection**: Pattern for curly quotes " " ' '
+- **Line Break Detection**: Pattern for `\n` within `[...]` node labels
+- **Parentheses in Labels**: Detection of problematic parentheses usage
+
+### Definition of Done
+- [ ] All story-level acceptance criteria satisfied
+- [ ] Unit tests for syntax detection and fix logic
+- [ ] Integration tests covering analysis workflow and fix application
+- [ ] Documentation updated (`USER_GUIDE.md`, inline help)
+- [ ] Code review completed with architectural sign-off
+- [ ] Performance verified (analysis < 1 second for 5,000 line files)
+- [ ] Zero data loss or corruption in fix operations
+
+### Priority: High
+### Target Sprint: Next Sprint
+### Dependencies: Core editor functionality, file operations, undo/redo system
+
+### Success Metrics
+- 95% of syntax errors detected accurately
+- Zero false positives in detection
+- User applies fixes 80%+ of the time after review
+- Average time from detection to fix <30 seconds
+- User satisfaction rating >4.5/5

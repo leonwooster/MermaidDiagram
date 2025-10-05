@@ -1,0 +1,74 @@
+flowchart LR
+  %% ===== GROUP: Step 1 - Load models =====
+  subgraph G1[Step 1 – Load models]
+    A1[UnetLoaderGGUF\nQwen-Image-Edit-2509 (GGUF)]
+    A2[LoraLoaderModelOnly\nQwen-Image-Lightning LoRA]
+    A3[ModelSamplingAuraFlow]
+    A4[CFGNorm]
+    A1 --> A2 --> A3 --> A4
+  end
+
+  subgraph G1b[Text Encoder & VAE]
+    B1[CLIPLoader\nqwen_2.5_vl_7b_fp8_scaled]
+    B2[VAELoader\nqwen_image_vae]
+  end
+
+  %% ===== GROUP: Step 2 - Upload image(s) =====
+  subgraph G2[Step 2 – Upload image for editing]
+    C1[LoadImage #1\n(dark portrait)]
+    C2[LoadImage #2\n(optional ref)]
+    C3[LoadImage #3\n(optional ref)]
+  end
+
+  %% ===== GROUP: Step 3 - Size control / Latent prep =====
+  subgraph G3[Step 3 – Image Size / Latent]
+    D1[ImageScaleToTotalPixels\n(avoid oversized inputs)]
+    D2[VAEEncode\n(encode scaled image → latent)]
+    D3[EmptySD3LatentImage\n(optional: replace VAEEncode)]
+  end
+
+  %% ===== GROUP: Step 4 - Prompting =====
+  subgraph G4[Step 4 – Prompt / Conditioning]
+    E1[TextEncodeQwenImageEditPlus\n(POSITIVE prompt + images)]
+    E2[TextEncodeQwenImageEditPlus\n(ALT prompt branch)]
+  end
+
+  %% ===== GROUP: Sampler / Decode / Save =====
+  subgraph G5[Sampling → Decode → Save]
+    F1[KSampler\nsteps / cfg / sampler / scheduler / denoise]
+    F2[VAEDecode\n(latent → image)]
+    F3[SaveImage]
+  end
+
+  %% ===== Connections across groups =====
+  %% Encoders & VAE
+  B1 --> E1
+  B2 --> E1
+  B1 --> E2
+  B2 --> E2
+
+  %% Images into scaler
+  C1 --> D1
+  C2 --> E1
+  C2 --> E2
+  C3 --> E1
+  C3 --> E2
+  D1 --> D2
+
+  %% Scaled image also into Text Encoder (image1)
+  D1 --> E1
+  D1 --> E2
+
+  %% Model path into sampler
+  A4 --> F1
+
+  %% Conditioning into sampler
+  E1 -- positive/negative --> F1
+  E2 -- (alternative prompt branch) --> F1
+
+  %% Latent into sampler (choose one)
+  D2 --> F1
+  D3 -. optional .-> F1
+
+  %% Decode & save
+  F1 --> F2 --> F3
