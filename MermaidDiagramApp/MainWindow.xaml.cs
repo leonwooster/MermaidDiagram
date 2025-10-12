@@ -88,6 +88,10 @@ namespace MermaidDiagramApp
                 content.Loaded += MainWindow_Loaded;
             }
             this.Closed += MainWindow_Closed;
+            
+            // Add keyboard event handler to PreviewBrowser to handle Escape key when WebView has focus
+            PreviewBrowser.KeyDown += PreviewBrowser_KeyDown;
+            
             _ = CheckForMermaidUpdatesAsync();
             UpdateBuilderVisibility(); // Ensure builder is hidden on startup
             
@@ -974,6 +978,24 @@ namespace MermaidDiagramApp
             }
         }
 
+        private void PreviewBrowser_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            // Handle Escape key when WebView has focus (e.g., immediately after entering full screen)
+            if (e.Key == Windows.System.VirtualKey.Escape)
+            {
+                if (_isFullScreen)
+                {
+                    ToggleFullScreen_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                }
+                else if (_isPresentationMode)
+                {
+                    PresentationMode_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                }
+            }
+        }
+
         private void PanTool_Click(object sender, RoutedEventArgs e)
         {
             _isPanModeEnabled = PanTool.IsChecked;
@@ -1379,9 +1401,42 @@ namespace MermaidDiagramApp
                 mermaidVersionString = "Mermaid.js Version: Error checking version";
             }
 
+            // Get markdown-it version
+            string markdownVersionString = "markdown-it Version: Checking...";
+            try
+            {
+                if (_isWebViewReady && PreviewBrowser?.CoreWebView2 != null)
+                {
+                    var markdownVersionJson = await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(
+                        "window.md && window.md.constructor && window.md.constructor.version ? window.md.constructor.version : 'Unknown'");
+                    var markdownVersion = JsonSerializer.Deserialize<string>(markdownVersionJson);
+                    
+                    if (!string.IsNullOrEmpty(markdownVersion) && markdownVersion != "Unknown")
+                    {
+                        markdownVersionString = $"markdown-it Version: {markdownVersion}";
+                    }
+                    else
+                    {
+                        // Fallback to hardcoded version from UnifiedRenderer.html
+                        markdownVersionString = "markdown-it Version: 13.0.1";
+                    }
+                }
+                else
+                {
+                    // WebView not ready, use hardcoded version
+                    markdownVersionString = "markdown-it Version: 13.0.1";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error determining markdown-it version: {ex.Message}", ex);
+                markdownVersionString = "markdown-it Version: 13.0.1";
+            }
+
             VersionTextBlock.Text = versionString;
             InstallDateTextBlock.Text = installDateString;
             MermaidVersionTextBlock.Text = mermaidVersionString;
+            MarkdownVersionTextBlock.Text = markdownVersionString;
 
             AboutDialog.XamlRoot = this.Content.XamlRoot;
             await AboutDialog.ShowAsync();

@@ -54,6 +54,7 @@
                 <TextBlock x:Name="VersionTextBlock"/>
                 <TextBlock x:Name="InstallDateTextBlock"/>
                 <TextBlock x:Name="MermaidVersionTextBlock"/>
+                <TextBlock x:Name="MarkdownVersionTextBlock"/>
             </StackPanel>
         </ContentDialog>
 
