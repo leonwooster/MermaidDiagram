@@ -1592,6 +1592,20 @@ namespace MermaidDiagramApp
                 _currentFilePath = file.Path;
                 CodeEditor.Text = await FileIO.ReadTextAsync(file);
                 await UpdatePreview();
+                UpdateWindowTitle();
+            }
+        }
+
+        private void UpdateWindowTitle()
+        {
+            if (!string.IsNullOrEmpty(_currentFilePath))
+            {
+                var fileName = Path.GetFileName(_currentFilePath);
+                this.Title = $"{fileName} - Mermaid Diagram Editor";
+            }
+            else
+            {
+                this.Title = "Mermaid Diagram Editor";
             }
         }
 
@@ -1623,6 +1637,7 @@ namespace MermaidDiagramApp
                 await FileIO.WriteTextAsync(file, CodeEditor.Text);
                 _currentFilePath = file.Path;
                 _logger.LogInformation($"File saved: {file.Path}");
+                UpdateWindowTitle();
             }
         }
 
