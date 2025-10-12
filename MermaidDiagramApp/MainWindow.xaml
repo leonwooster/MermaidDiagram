@@ -111,6 +111,8 @@
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Markdown Style Settings..." Click="MarkdownStyleSettings_Click"/>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Refresh Preview" Click="RefreshPreview_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="F5" Modifiers="Control"/>

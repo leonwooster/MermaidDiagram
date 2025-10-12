@@ -29,4 +29,9 @@ public interface IRenderingContext
     /// Gets the file path of the content being rendered.
     /// </summary>
     string FilePath { get; }
+
+    /// <summary>
+    /// Gets the Markdown style settings for customizable rendering.
+    /// </summary>
+    MarkdownStyleSettings? StyleSettings { get; }
 }

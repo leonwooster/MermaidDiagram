@@ -72,15 +72,32 @@ public class MarkdownRenderer : IContentRenderer
     /// <summary>
     /// Generates the JavaScript command to render Markdown in WebView2.
     /// </summary>
-    public string GenerateRenderScript(string content, bool enableMermaid, string theme)
+    public string GenerateRenderScript(string content, bool enableMermaid, string theme, MarkdownStyleSettings? styleSettings = null, string filePath = "")
     {
         // Escape content for JavaScript
         var escapedContent = System.Text.Json.JsonSerializer.Serialize(content);
+        var escapedFilePath = System.Text.Json.JsonSerializer.Serialize(filePath);
+        
+        // Serialize style settings if provided
+        string styleSettingsJson = "null";
+        if (styleSettings != null)
+        {
+            var settings = new
+            {
+                fontSize = styleSettings.FontSize,
+                fontFamily = styleSettings.FontFamily,
+                lineHeight = styleSettings.LineHeight,
+                maxContentWidth = styleSettings.MaxContentWidth,
+                codeFontFamily = styleSettings.CodeFontFamily,
+                codeFontSize = styleSettings.CodeFontSize
+            };
+            styleSettingsJson = System.Text.Json.JsonSerializer.Serialize(settings);
+        }
         
         return $@"
             (async function() {{
                 try {{
-                    await window.renderMarkdown({escapedContent}, {enableMermaid.ToString().ToLower()}, '{theme}');
+                    await window.renderMarkdown({escapedContent}, {enableMermaid.ToString().ToLower()}, '{theme}', {styleSettingsJson}, {escapedFilePath});
                 }} catch (error) {{
                     console.error('Markdown render error:', error);
                     window.chrome.webview.postMessage({{

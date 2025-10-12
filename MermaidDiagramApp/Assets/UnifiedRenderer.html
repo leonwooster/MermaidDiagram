@@ -11,6 +11,14 @@
             --link-color: #58a6ff;
             --border-color: #444;
             --code-bg: #1e1e1e;
+            
+            /* User-customizable Markdown styling */
+            --md-font-size: 16px;
+            --md-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            --md-line-height: 1.6;
+            --md-max-width: 900px;
+            --md-code-font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            --md-code-font-size: 14px;
         }
 
         body {
@@ -47,8 +55,14 @@
 
         /* Markdown-specific styles */
         #content-container.markdown-mode {
-            max-width: 900px;
+            max-width: var(--md-max-width);
             margin: 0 auto;
+        }
+
+        .markdown-body {
+            font-size: var(--md-font-size);
+            font-family: var(--md-font-family);
+            line-height: var(--md-line-height);
         }
 
         .markdown-body h1, .markdown-body h2 {
@@ -75,8 +89,8 @@
             background-color: var(--code-bg);
             padding: 0.2em 0.4em;
             border-radius: 3px;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 85%;
+            font-family: var(--md-code-font-family);
+            font-size: var(--md-code-font-size);
         }
 
         .markdown-body pre {
@@ -89,6 +103,8 @@
         .markdown-body pre code {
             background-color: transparent;
             padding: 0;
+            font-family: var(--md-code-font-family);
+            font-size: var(--md-code-font-size);
         }
 
         .markdown-body table {
@@ -345,8 +361,50 @@
             }
         };
 
+        // Update style settings dynamically
+        window.updateStyleSettings = function(settings) {
+            try {
+                const root = document.documentElement;
+                if (settings.fontSize) root.style.setProperty('--md-font-size', settings.fontSize + 'px');
+                if (settings.fontFamily) root.style.setProperty('--md-font-family', settings.fontFamily);
+                if (settings.lineHeight) root.style.setProperty('--md-line-height', settings.lineHeight);
+                if (settings.maxContentWidth) root.style.setProperty('--md-max-width', settings.maxContentWidth > 0 ? settings.maxContentWidth + 'px' : '100%');
+                if (settings.codeFontFamily) root.style.setProperty('--md-code-font-family', settings.codeFontFamily);
+                if (settings.codeFontSize) root.style.setProperty('--md-code-font-size', settings.codeFontSize + 'px');
+                log('Style settings updated');
+            } catch (error) {
+                log('Error updating style settings:', error.message);
+            }
+        };
+
+        // Resolve local image paths
+        window.resolveImagePath = function(imagePath, baseFilePath) {
+            if (!imagePath || imagePath.startsWith('http://') || imagePath.startsWith('https://') || imagePath.startsWith('data:')) {
+                return imagePath;
+            }
+            
+            try {
+                // Handle relative paths
+                if (baseFilePath && !imagePath.startsWith('/')) {
+                    const basePath = baseFilePath.substring(0, baseFilePath.lastIndexOf('\\'));
+                    const resolvedPath = basePath + '\\' + imagePath.replace(/\//g, '\\');
+                    return 'file:///' + resolvedPath.replace(/\\/g, '/');
+                }
+                
+                // Handle absolute paths
+                if (imagePath.match(/^[a-zA-Z]:\\/)) {
+                    return 'file:///' + imagePath.replace(/\\/g, '/');
+                }
+                
+                return imagePath;
+            } catch (error) {
+                log('Error resolving image path:', error.message);
+                return imagePath;
+            }
+        };
+
         // Render Markdown content
-        window.renderMarkdown = async function(content, enableMermaid = true, theme = 'dark') {
+        window.renderMarkdown = async function(content, enableMermaid = true, theme = 'dark', styleSettings = null, baseFilePath = '') {
             const container = document.getElementById('content-container');
             container.className = 'markdown-mode';
             
@@ -361,9 +419,27 @@
                 // Update theme
                 document.body.className = theme.toLowerCase() === 'light' ? 'light-theme' : '';
                 
+                // Update style settings if provided
+                if (styleSettings) {
+                    window.updateStyleSettings(styleSettings);
+                }
+                
                 // Render Markdown to HTML
                 const html = window.md.render(content);
                 container.innerHTML = `<div class="markdown-body">${html}</div>`;
+                
+                // Resolve local image paths
+                if (baseFilePath) {
+                    const images = container.querySelectorAll('img');
+                    images.forEach(img => {
+                        const originalSrc = img.getAttribute('src');
+                        const resolvedSrc = window.resolveImagePath(originalSrc, baseFilePath);
+                        if (resolvedSrc !== originalSrc) {
+                            img.setAttribute('src', resolvedSrc);
+                            log(`Resolved image: ${originalSrc} -> ${resolvedSrc}`);
+                        }
+                    });
+                }
                 
                 // Render embedded Mermaid diagrams if enabled
                 if (enableMermaid) {
@@ -427,13 +503,13 @@
         };
 
         // Unified rendering function
-        window.renderContent = async function(content, mode, enableMermaid = true, theme = 'dark') {
+        window.renderContent = async function(content, mode, enableMermaid = true, theme = 'dark', styleSettings = null, baseFilePath = '') {
             log(`Rendering content in ${mode} mode`);
             
             if (mode === 'mermaid') {
                 await window.renderMermaid(content, theme);
             } else if (mode === 'markdown') {
-                await window.renderMarkdown(content, enableMermaid, theme);
+                await window.renderMarkdown(content, enableMermaid, theme, styleSettings, baseFilePath);
             } else {
                 log(`Unknown rendering mode: ${mode}`);
             }

@@ -10,6 +10,7 @@ public class RenderingContext : IRenderingContext
     public bool EnableMermaidInMarkdown { get; set; } = true;
     public ThemeMode Theme { get; set; } = ThemeMode.Light;
     public string FilePath { get; set; } = string.Empty;
+    public MarkdownStyleSettings? StyleSettings { get; set; }
 }
 
 /// <summary>

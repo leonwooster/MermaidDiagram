@@ -62,6 +62,7 @@ namespace MermaidDiagramApp
         private readonly ContentRendererFactory _rendererFactory;
         private ContentType _currentContentType = ContentType.Unknown;
         private string _currentFilePath = string.Empty;
+        private readonly MarkdownStyleSettingsService _styleSettingsService;
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -80,6 +81,9 @@ namespace MermaidDiagramApp
             _rendererFactory = new ContentRendererFactory();
             _renderingOrchestrator = new RenderingOrchestrator(_contentTypeDetector, _rendererFactory);
             _renderingOrchestrator.RenderingStateChanged += OnRenderingStateChanged;
+            
+            // Initialize style settings service
+            _styleSettingsService = new MarkdownStyleSettingsService();
 
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
@@ -152,6 +156,69 @@ namespace MermaidDiagramApp
             catch (Exception ex)
             {
                 _logger.LogError($"Manual refresh failed: {ex.Message}", ex);
+            }
+        }
+
+        private async void MarkdownStyleSettings_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Show info if not viewing Markdown content
+                if (_currentContentType != ContentType.Markdown && _currentContentType != ContentType.MarkdownWithMermaid)
+                {
+                    var infoDialog = new ContentDialog
+                    {
+                        Title = "Markdown Style Settings",
+                        Content = "Note: These settings only apply to Markdown (.md) files. You are currently viewing a Mermaid diagram. Open a Markdown file to see the style changes.",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+                    await infoDialog.ShowAsync();
+                }
+
+                var dialog = new Views.MarkdownStyleSettingsDialog
+                {
+                    XamlRoot = this.Content.XamlRoot
+                };
+
+                var result = await dialog.ShowAsync();
+
+                if (result == ContentDialogResult.Primary)
+                {
+                    // Clear the cache to ensure we get the newly saved settings
+                    _styleSettingsService.ClearCache();
+                    
+                    // Settings were saved, apply them immediately via JavaScript
+                    var settings = _styleSettingsService.LoadSettings();
+                    _logger.LogDebug($"Loaded settings - FontSize: {settings.FontSize}, FontFamily: {settings.FontFamily}");
+                    _logger.LogDebug($"Current content type: {_currentContentType}");
+                    
+                    var settingsJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        fontSize = settings.FontSize,
+                        fontFamily = settings.FontFamily,
+                        lineHeight = settings.LineHeight,
+                        maxContentWidth = settings.MaxContentWidth,
+                        codeFontFamily = settings.CodeFontFamily,
+                        codeFontSize = settings.CodeFontSize
+                    });
+
+                    _logger.LogDebug($"Settings JSON: {settingsJson}");
+
+                    // Apply settings immediately without full re-render
+                    var updateScript = $"if (window.updateStyleSettings) {{ window.updateStyleSettings({settingsJson}); }}";
+                    var scriptResult = await PreviewBrowser.ExecuteScriptAsync(updateScript);
+                    _logger.LogDebug($"Script execution result: {scriptResult}");
+
+                    // Then refresh the preview to ensure everything is updated
+                    _lastPreviewedCode = null;
+                    await UpdatePreview();
+                    _logger.LogDebug("Markdown style settings updated and applied");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error opening Markdown style settings: {ex.Message}", ex);
             }
         }
 
@@ -696,7 +763,8 @@ namespace MermaidDiagramApp
                     FileExtension = fileExtension,
                     FilePath = _currentFilePath,
                     EnableMermaidInMarkdown = true,
-                    Theme = ThemeMode.Dark // TODO: Detect from app theme
+                    Theme = ThemeMode.Dark, // TODO: Detect from app theme
+                    StyleSettings = _styleSettingsService.LoadSettings()
                 };
 
                 // Use orchestrator to render content
@@ -748,7 +816,8 @@ namespace MermaidDiagramApp
                 case ContentType.MarkdownWithMermaid:
                     var markdownRenderer = _renderingOrchestrator.GetRenderer(ContentType.Markdown) as MarkdownRenderer;
                     var enableMermaid = contentType == ContentType.MarkdownWithMermaid || context.EnableMermaidInMarkdown;
-                    script = markdownRenderer?.GenerateRenderScript(content, enableMermaid, theme)
+                    var styleSettings = _styleSettingsService.LoadSettings();
+                    script = markdownRenderer?.GenerateRenderScript(content, enableMermaid, theme, styleSettings, context.FilePath)
                         ?? $"if (window.renderMarkdown) {{ window.renderMarkdown({escapedContent}, {enableMermaid.ToString().ToLower()}, '{theme}'); }}";
                     break;
 
