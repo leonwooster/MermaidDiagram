@@ -29,6 +29,7 @@ using TextControlBoxNS;
 using MermaidDiagramApp.ViewModels;
 using MermaidDiagramApp.Services;
 using MermaidDiagramApp.Services.Logging;
+using MermaidDiagramApp.Services.Rendering;
 using MermaidDiagramApp.Models;
 using Microsoft.UI.Windowing;
 using Microsoft.UI;
@@ -54,6 +55,13 @@ namespace MermaidDiagramApp
         private MermaidLinter _linter;
         private Version? _mermaidVersion;
         private readonly ILogger _logger = LoggingService.Instance.GetLogger<MainWindow>();
+        
+        // Rendering orchestration components
+        private readonly RenderingOrchestrator _renderingOrchestrator;
+        private readonly IContentTypeDetector _contentTypeDetector;
+        private readonly ContentRendererFactory _rendererFactory;
+        private ContentType _currentContentType = ContentType.Unknown;
+        private string _currentFilePath = string.Empty;
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -66,6 +74,12 @@ namespace MermaidDiagramApp
             BuilderViewModel.PropertyChanged += DiagramBuilderViewModel_PropertyChanged;
 
             _linter = new MermaidLinter();
+            
+            // Initialize rendering orchestration
+            _contentTypeDetector = new ContentTypeDetector();
+            _rendererFactory = new ContentRendererFactory();
+            _renderingOrchestrator = new RenderingOrchestrator(_contentTypeDetector, _rendererFactory);
+            _renderingOrchestrator.RenderingStateChanged += OnRenderingStateChanged;
 
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
@@ -357,27 +371,80 @@ namespace MermaidDiagramApp
                     var message = e.TryGetWebMessageAsString();
                     _logger.LogDebug($"[WebView2 Message] {message}");
 
-                    if (string.Equals(message, "MermaidReady", StringComparison.Ordinal))
+                    // Try to parse as JSON for structured messages
+                    try
                     {
-                        _logger.LogInformation("Received MermaidReady message from WebView");
-                        _isWebViewReady = true;
-
-                        // Stop any ongoing readiness polling
-                        checkTimer?.Stop();
-
-                        // Force the next preview update on the UI thread
-                        DispatcherQueue.TryEnqueue(async () =>
+                        var jsonDoc = JsonDocument.Parse(message);
+                        var root = jsonDoc.RootElement;
+                        
+                        if (root.TryGetProperty("type", out var typeElement))
                         {
-                            try
+                            var messageType = typeElement.GetString();
+                            
+                            if (messageType == "ready")
                             {
-                                _lastPreviewedCode = null; // ensure UpdatePreview runs even if code unchanged
-                                await UpdatePreview();
+                                _logger.LogInformation("Received ready message from UnifiedRenderer");
+                                _isWebViewReady = true;
+                                checkTimer?.Stop();
+                                
+                                DispatcherQueue.TryEnqueue(async () =>
+                                {
+                                    try
+                                    {
+                                        _lastPreviewedCode = null;
+                                        await UpdatePreview();
+                                    }
+                                    catch (Exception updateEx)
+                                    {
+                                        _logger.LogError($"Error updating preview after ready: {updateEx.Message}", updateEx);
+                                    }
+                                });
                             }
-                            catch (Exception updateEx)
+                            else if (messageType == "renderComplete")
                             {
-                                _logger.LogError($"Error updating preview after MermaidReady: {updateEx.Message}", updateEx);
+                                if (root.TryGetProperty("mode", out var modeElement))
+                                {
+                                    _logger.LogInformation($"Render completed in {modeElement.GetString()} mode");
+                                }
                             }
-                        });
+                            else if (messageType == "renderError")
+                            {
+                                if (root.TryGetProperty("error", out var errorElement))
+                                {
+                                    _logger.LogError($"Render error from WebView: {errorElement.GetString()}");
+                                }
+                            }
+                            else if (messageType == "log")
+                            {
+                                if (root.TryGetProperty("message", out var msgElement))
+                                {
+                                    _logger.LogDebug($"[WebView Log] {msgElement.GetString()}");
+                                }
+                            }
+                        }
+                    }
+                    catch (JsonException)
+                    {
+                        // Not JSON, check for legacy messages
+                        if (string.Equals(message, "MermaidReady", StringComparison.Ordinal))
+                        {
+                            _logger.LogInformation("Received legacy MermaidReady message");
+                            _isWebViewReady = true;
+                            checkTimer?.Stop();
+                            
+                            DispatcherQueue.TryEnqueue(async () =>
+                            {
+                                try
+                                {
+                                    _lastPreviewedCode = null;
+                                    await UpdatePreview();
+                                }
+                                catch (Exception updateEx)
+                                {
+                                    _logger.LogError($"Error updating preview: {updateEx.Message}", updateEx);
+                                }
+                            });
+                        }
                     }
                 };
 
@@ -390,12 +457,12 @@ namespace MermaidDiagramApp
                     }
                 };
 
-                // Navigate to the packaged Mermaid host page through the virtual host
-                var hostPageUri = new Uri($"https://{virtualHost}/MermaidHost.html");
+                // Navigate to the packaged Unified Renderer page through the virtual host
+                var hostPageUri = new Uri($"https://{virtualHost}/UnifiedRenderer.html");
                 coreWebView2.Navigate(hostPageUri.ToString());
                 _logger.LogInformation($"Navigating WebView to {hostPageUri}");
 
-                // Set up a timer to check if Mermaid is loaded
+                // Set up a timer to check if renderers are loaded
                 checkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
                 int checkCount = 0;
                 checkTimer.Tick += async (s, e) =>
@@ -404,28 +471,30 @@ namespace MermaidDiagramApp
                     if (checkCount > 15) // 15 second timeout
                     {
                         checkTimer.Stop();
-                        _logger.LogWarning("Mermaid initialization timed out");
+                        _logger.LogWarning("Renderer initialization timed out");
                         return;
                     }
 
                     try
                     {
-                        var isReady = await PreviewBrowser.ExecuteScriptAsync("window.mermaid !== undefined");
+                        // Check if both mermaid and markdown-it are loaded
+                        var isReady = await PreviewBrowser.ExecuteScriptAsync(
+                            "window.mermaid !== undefined && window.md !== undefined");
                         if (isReady == "true")
                         {
                             checkTimer.Stop();
-                            _logger.LogInformation("Mermaid.js is ready!");
+                            _logger.LogInformation("Renderers are ready!");
                             _isWebViewReady = true;
                             await UpdatePreview(); // Initial render
                         }
                         else
                         {
-                            _logger.LogDebug("Mermaid not ready yet, retrying...");
+                            _logger.LogDebug($"Waiting for renderers... (attempt {checkCount})");
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"Error checking Mermaid status: {ex.Message}", ex);
+                        _logger.LogError($"Error checking renderer readiness: {ex.Message}", ex);
                     }
                 };
 
@@ -567,6 +636,13 @@ namespace MermaidDiagramApp
         {
             if (_mermaidVersion == null) return;
 
+            // Only lint pure Mermaid content, not Markdown
+            if (_currentContentType == ContentType.Markdown || _currentContentType == ContentType.MarkdownWithMermaid)
+            {
+                LinterInfoBar.IsOpen = false;
+                return;
+            }
+
             var issues = _linter.Lint(code, _mermaidVersion);
             if (issues.Any())
             {
@@ -605,28 +681,178 @@ namespace MermaidDiagramApp
                 }
 
                 _logger.LogDebug($"Updating preview with code length: {code.Length}");
-                
-                // Escape the code for JavaScript
-                var escapedCode = System.Text.Json.JsonSerializer.Serialize(code);
-                
-                // Check if Mermaid is ready
-                var isReady = await PreviewBrowser.ExecuteScriptAsync("window.mermaid !== undefined");
-                if (isReady != "true")
+
+                // Create rendering context
+                var fileExtension = !string.IsNullOrEmpty(_currentFilePath) 
+                    ? Path.GetExtension(_currentFilePath).TrimStart('.') 
+                    : "mmd";
+
+                var context = new RenderingContext
                 {
-                    _logger.LogDebug("Mermaid is not ready yet");
+                    FileExtension = fileExtension,
+                    FilePath = _currentFilePath,
+                    EnableMermaidInMarkdown = true,
+                    Theme = ThemeMode.Dark // TODO: Detect from app theme
+                };
+
+                // Use orchestrator to render content
+                var renderResult = await _renderingOrchestrator.RenderAsync(code, context);
+                
+                if (!renderResult.Success)
+                {
+                    _logger.LogError($"Rendering failed: {renderResult.ErrorMessage}");
                     return;
                 }
 
-                _lastPreviewedCode = code;
+                _currentContentType = renderResult.DetectedContentType;
+                _logger.LogInformation($"Detected content type: {_currentContentType}");
 
-                // Render the diagram
-                var result = await PreviewBrowser.ExecuteScriptAsync($"renderDiagram({escapedCode})");
-                _logger.LogDebug($"Render result: {result}");
+                // Execute appropriate JavaScript rendering based on content type
+                await ExecuteRenderingScript(code, renderResult.DetectedContentType, context);
+
+                _lastPreviewedCode = code;
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error in UpdatePreview: {ex.Message}", ex);
             }
+        }
+
+        private async Task ExecuteRenderingScript(string content, ContentType contentType, RenderingContext context)
+        {
+            // Check if WebView is ready
+            if (!_isWebViewReady)
+            {
+                _logger.LogDebug("WebView not ready yet, skipping render");
+                return;
+            }
+
+            var escapedContent = System.Text.Json.JsonSerializer.Serialize(content);
+            var theme = context.Theme.ToString().ToLower();
+
+            string script;
+
+            switch (contentType)
+            {
+                case ContentType.Mermaid:
+                    var mermaidRenderer = _renderingOrchestrator.GetRenderer(ContentType.Mermaid) as MermaidRenderer;
+                    script = mermaidRenderer?.GenerateRenderScript(content, theme) 
+                        ?? $"if (window.renderMermaid) {{ window.renderMermaid({escapedContent}, '{theme}'); }}";
+                    break;
+
+                case ContentType.Markdown:
+                case ContentType.MarkdownWithMermaid:
+                    var markdownRenderer = _renderingOrchestrator.GetRenderer(ContentType.Markdown) as MarkdownRenderer;
+                    var enableMermaid = contentType == ContentType.MarkdownWithMermaid || context.EnableMermaidInMarkdown;
+                    script = markdownRenderer?.GenerateRenderScript(content, enableMermaid, theme)
+                        ?? $"if (window.renderMarkdown) {{ window.renderMarkdown({escapedContent}, {enableMermaid.ToString().ToLower()}, '{theme}'); }}";
+                    break;
+
+                default:
+                    _logger.LogWarning($"Unknown content type: {contentType}, defaulting to Mermaid");
+                    script = $"if (window.renderMermaid) {{ window.renderMermaid({escapedContent}, '{theme}'); }}";
+                    break;
+            }
+
+            try
+            {
+                var result = await PreviewBrowser.ExecuteScriptAsync(script);
+                _logger.LogDebug($"Render script executed: {result}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error executing render script: {ex.Message}", ex);
+            }
+        }
+
+        private void OnRenderingStateChanged(object? sender, RenderingStateChangedEventArgs e)
+        {
+            _logger.LogInformation($"Rendering state changed: {e.State}");
+            
+            if (e.State == RenderingState.Failed && e.Result != null)
+            {
+                _logger.LogError($"Rendering failed: {e.Result.ErrorMessage}");
+            }
+            else if (e.State == RenderingState.Completed && e.Result != null)
+            {
+                // Update status bar on UI thread
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    UpdateRenderModeIndicator(e.Result.DetectedContentType);
+                });
+            }
+        }
+
+        private void UpdateRenderModeIndicator(ContentType contentType)
+        {
+            switch (contentType)
+            {
+                case ContentType.Mermaid:
+                    RenderModeText.Text = "Mermaid Diagram";
+                    RenderModeIcon.Glyph = "\uE8A5"; // Chart icon
+                    break;
+                case ContentType.Markdown:
+                    RenderModeText.Text = "Markdown Document";
+                    RenderModeIcon.Glyph = "\uE8A5"; // Document icon
+                    break;
+                case ContentType.MarkdownWithMermaid:
+                    RenderModeText.Text = "Markdown with Diagrams";
+                    RenderModeIcon.Glyph = "\uE8A5"; // Combined icon
+                    break;
+                default:
+                    RenderModeText.Text = "Unknown";
+                    RenderModeIcon.Glyph = "\uE897"; // Warning icon
+                    break;
+            }
+        }
+
+        private void RenderModeOverride_Click(object sender, RoutedEventArgs e)
+        {
+            // Flyout will open automatically
+        }
+
+        private async void AutoDetectMode_Click(object sender, RoutedEventArgs e)
+        {
+            _logger.LogInformation("Switching to auto-detect mode");
+            // Clear any forced content type
+            _lastPreviewedCode = null;
+            await UpdatePreview();
+        }
+
+        private async void ForceMermaidMode_Click(object sender, RoutedEventArgs e)
+        {
+            _logger.LogInformation("Forcing Mermaid rendering mode");
+            
+            var code = CodeEditor.Text;
+            var context = new RenderingContext
+            {
+                FileExtension = "mmd",
+                FilePath = _currentFilePath,
+                ForcedContentType = ContentType.Mermaid,
+                EnableMermaidInMarkdown = false,
+                Theme = ThemeMode.Dark
+            };
+
+            await ExecuteRenderingScript(code, ContentType.Mermaid, context);
+            UpdateRenderModeIndicator(ContentType.Mermaid);
+        }
+
+        private async void ForceMarkdownMode_Click(object sender, RoutedEventArgs e)
+        {
+            _logger.LogInformation("Forcing Markdown rendering mode");
+            
+            var code = CodeEditor.Text;
+            var context = new RenderingContext
+            {
+                FileExtension = "md",
+                FilePath = _currentFilePath,
+                ForcedContentType = ContentType.Markdown,
+                EnableMermaidInMarkdown = true,
+                Theme = ThemeMode.Dark
+            };
+
+            await ExecuteRenderingScript(code, ContentType.Markdown, context);
+            UpdateRenderModeIndicator(ContentType.Markdown);
         }
 
         private void NewClassDiagram_Click(object sender, RoutedEventArgs e)
@@ -1234,10 +1460,12 @@ namespace MermaidDiagramApp
 
             openPicker.FileTypeFilter.Add(".mmd");
             openPicker.FileTypeFilter.Add(".md");
+            openPicker.FileTypeFilter.Add(".markdown");
 
             var file = await openPicker.PickSingleFileAsync();
             if (file != null)
             {
+                _currentFilePath = file.Path;
                 CodeEditor.Text = await FileIO.ReadTextAsync(file);
                 await UpdatePreview();
             }
@@ -1249,13 +1477,28 @@ namespace MermaidDiagramApp
             WinRT_InterOp.InitializeWithWindow(savePicker, this);
 
             savePicker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-            savePicker.FileTypeChoices.Add("Mermaid Diagram", new List<string>() { ".mmd" });
-            savePicker.SuggestedFileName = "NewDiagram";
+            
+            // Add file type options based on current content type
+            if (_currentContentType == ContentType.Markdown || _currentContentType == ContentType.MarkdownWithMermaid)
+            {
+                savePicker.FileTypeChoices.Add("Markdown Document", new List<string>() { ".md" });
+                savePicker.FileTypeChoices.Add("Markdown", new List<string>() { ".markdown" });
+                savePicker.FileTypeChoices.Add("Mermaid Diagram", new List<string>() { ".mmd" });
+                savePicker.SuggestedFileName = "NewDocument";
+            }
+            else
+            {
+                savePicker.FileTypeChoices.Add("Mermaid Diagram", new List<string>() { ".mmd" });
+                savePicker.FileTypeChoices.Add("Markdown Document", new List<string>() { ".md" });
+                savePicker.SuggestedFileName = "NewDiagram";
+            }
 
             var file = await savePicker.PickSaveFileAsync();
             if (file != null)
             {
                 await FileIO.WriteTextAsync(file, CodeEditor.Text);
+                _currentFilePath = file.Path;
+                _logger.LogInformation($"File saved: {file.Path}");
             }
         }
 

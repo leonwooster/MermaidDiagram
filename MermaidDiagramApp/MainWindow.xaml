@@ -19,7 +19,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid RowDefinitions="Auto, Auto, Auto, *" KeyDown="MainWindow_KeyDown">
+    <Grid RowDefinitions="Auto, Auto, Auto, *, Auto" KeyDown="MainWindow_KeyDown">
         <ContentDialog x:Name="PngExportDialog"
                        Title="Export PNG Options"
                        PrimaryButtonText="Export"
@@ -237,5 +237,51 @@
                         Click="RefreshPreview_Click"/>
             </Grid>
         </Grid>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="4" 
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="12,6">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon x:Name="RenderModeIcon" 
+                              Glyph="&#xE8A5;" 
+                              FontSize="14"
+                              Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                    <TextBlock x:Name="RenderModeText" 
+                               Text="Mermaid Diagram"
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="2" 
+                            Orientation="Horizontal" 
+                            Spacing="12">
+                    <Button x:Name="RenderModeOverrideButton"
+                            Content="Rendering Mode"
+                            FontSize="12"
+                            Padding="8,4"
+                            Click="RenderModeOverride_Click"
+                            ToolTipService.ToolTip="Override automatic content type detection">
+                        <Button.Flyout>
+                            <MenuFlyout x:Name="RenderModeFlyout">
+                                <RadioMenuFlyoutItem x:Name="AutoDetectMode" 
+                                                     Text="Auto-detect" 
+                                                     IsChecked="True"
+                                                     Click="AutoDetectMode_Click"/>
+                                <RadioMenuFlyoutItem x:Name="ForceMermaidMode" 
+                                                     Text="Force Mermaid" 
+                                                     Click="ForceMermaidMode_Click"/>
+                                <RadioMenuFlyoutItem x:Name="ForceMarkdownMode" 
+                                                     Text="Force Markdown" 
+                                                     Click="ForceMarkdownMode_Click"/>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

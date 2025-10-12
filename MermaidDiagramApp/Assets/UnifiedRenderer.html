@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified Content Renderer</title>
+    <style>
+        :root {
+            --bg-color: #222;
+            --text-color: #fff;
+            --link-color: #58a6ff;
+            --border-color: #444;
+            --code-bg: #1e1e1e;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        body.light-theme {
+            --bg-color: #ffffff;
+            --text-color: #24292f;
+            --link-color: #0969da;
+            --border-color: #d0d7de;
+            --code-bg: #f6f8fa;
+        }
+
+        #content-container {
+            width: 100%;
+            max-width: 100%;
+            overflow: auto;
+        }
+
+        /* Mermaid-specific styles */
+        #content-container.mermaid-mode {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 40px);
+            text-align: center;
+        }
+
+        /* Markdown-specific styles */
+        #content-container.markdown-mode {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .markdown-body h1, .markdown-body h2 {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.3em;
+            margin-top: 24px;
+            margin-bottom: 16px;
+        }
+
+        .markdown-body h1 { font-size: 2em; }
+        .markdown-body h2 { font-size: 1.5em; }
+        .markdown-body h3 { font-size: 1.25em; }
+
+        .markdown-body a {
+            color: var(--link-color);
+            text-decoration: none;
+        }
+
+        .markdown-body a:hover {
+            text-decoration: underline;
+        }
+
+        .markdown-body code {
+            background-color: var(--code-bg);
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 85%;
+        }
+
+        .markdown-body pre {
+            background-color: var(--code-bg);
+            padding: 16px;
+            border-radius: 6px;
+            overflow: auto;
+        }
+
+        .markdown-body pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+
+        .markdown-body table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 16px 0;
+        }
+
+        .markdown-body table th,
+        .markdown-body table td {
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+        }
+
+        .markdown-body table tr:nth-child(even) {
+            background-color: rgba(128, 128, 128, 0.1);
+        }
+
+        .markdown-body blockquote {
+            border-left: 4px solid var(--border-color);
+            padding-left: 16px;
+            margin-left: 0;
+            color: #888;
+        }
+
+        .markdown-body ul, .markdown-body ol {
+            padding-left: 2em;
+        }
+
+        .markdown-body img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .markdown-body .task-list-item {
+            list-style-type: none;
+        }
+
+        .markdown-body .task-list-item input[type="checkbox"] {
+            margin-right: 0.5em;
+        }
+
+        .error {
+            color: #ff6b6b;
+            white-space: pre-wrap;
+            padding: 20px;
+            background-color: rgba(255, 107, 107, 0.1);
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+
+        #debug-info {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.9);
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow: auto;
+            display: none;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+    <div id="content-container">
+        <div id="loading-placeholder">Loading renderer...</div>
+    </div>
+    <div id="debug-info"></div>
+    
+    <script>
+        // Logging utility
+        window.log = function() {
+            const args = Array.from(arguments);
+            console.log(...args);
+            
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage({
+                    type: 'log',
+                    message: args.map(arg => 
+                        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+                    ).join(' ')
+                });
+            }
+            
+            const debugInfo = document.getElementById('debug-info');
+            if (debugInfo) {
+                const line = document.createElement('div');
+                line.textContent = args.join(' ');
+                debugInfo.appendChild(line);
+                debugInfo.scrollTop = debugInfo.scrollHeight;
+            }
+        };
+        
+        // Toggle debug panel with Ctrl+Shift+D
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                const debugInfo = document.getElementById('debug-info');
+                if (debugInfo) {
+                    debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
+                }
+            }
+        });
+
+        // Load libraries
+        async function loadLibraries() {
+            log('Loading rendering libraries...');
+            
+            // Load Mermaid
+            await loadScript('mermaid.min.js', 'https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js');
+            
+            // Load markdown-it
+            await loadScript('markdown-it.min.js', 'https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js');
+            
+            // Load highlight.js for code syntax highlighting
+            await loadScript('highlight.min.js', 'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/highlight.min.js');
+            
+            log('All libraries loaded successfully');
+        }
+
+        function loadScript(localPath, cdnUrl) {
+            return new Promise((resolve, reject) => {
+                const localScript = document.createElement('script');
+                localScript.src = localPath;
+                
+                localScript.onload = () => {
+                    log(`Loaded ${localPath} from local`);
+                    resolve();
+                };
+                
+                localScript.onerror = () => {
+                    log(`Failed to load ${localPath} locally, trying CDN...`);
+                    const cdnScript = document.createElement('script');
+                    cdnScript.src = cdnUrl;
+                    
+                    cdnScript.onload = () => {
+                        log(`Loaded from CDN: ${cdnUrl}`);
+                        resolve();
+                    };
+                    
+                    cdnScript.onerror = () => {
+                        const error = `Failed to load ${localPath} from both local and CDN`;
+                        log(error);
+                        reject(new Error(error));
+                    };
+                    
+                    document.head.appendChild(cdnScript);
+                };
+                
+                document.head.appendChild(localScript);
+            });
+        }
+
+        // Initialize libraries
+        async function init() {
+            try {
+                await loadLibraries();
+                
+                // Initialize Mermaid
+                if (typeof mermaid !== 'undefined') {
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        securityLevel: 'loose',
+                        theme: 'dark',
+                        logLevel: 1
+                    });
+                    log('Mermaid initialized');
+                }
+                
+                // Initialize markdown-it
+                if (typeof markdownit !== 'undefined') {
+                    window.md = markdownit({
+                        html: true,
+                        linkify: true,
+                        typographer: true,
+                        highlight: function (str, lang) {
+                            if (lang && typeof hljs !== 'undefined' && hljs.getLanguage(lang)) {
+                                try {
+                                    return hljs.highlight(str, { language: lang }).value;
+                                } catch (__) {}
+                            }
+                            return '';
+                        }
+                    });
+                    log('markdown-it initialized');
+                }
+                
+                // Notify host that we're ready
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({ type: 'ready' });
+                }
+                
+                const container = document.getElementById('content-container');
+                container.innerHTML = '<div style="color:#888;">Ready to render content</div>';
+                
+            } catch (error) {
+                const errorMsg = `Initialization failed: ${error.message || error}`;
+                log(errorMsg);
+                document.getElementById('content-container').innerHTML = 
+                    `<div class="error">${errorMsg}</div>`;
+            }
+        }
+
+        // Render Mermaid diagram
+        window.renderMermaid = async function(content, theme = 'dark') {
+            const container = document.getElementById('content-container');
+            container.className = 'mermaid-mode';
+            
+            if (!content || !content.trim()) {
+                container.innerHTML = '<div style="color:#888;">No content to render</div>';
+                return;
+            }
+            
+            log('Rendering Mermaid diagram...');
+            container.innerHTML = '<div>Rendering diagram...</div>';
+            
+            try {
+                // Update theme if needed
+                if (mermaid.initialize) {
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        securityLevel: 'loose',
+                        theme: theme.toLowerCase(),
+                        logLevel: 1
+                    });
+                }
+                
+                const { svg } = await mermaid.render('mermaid-diagram-' + Date.now(), content);
+                container.innerHTML = svg;
+                
+                log('Mermaid diagram rendered successfully');
+                
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'renderComplete',
+                        mode: 'mermaid'
+                    });
+                }
+            } catch (error) {
+                const errorMsg = `Mermaid rendering failed: ${error.message || error}`;
+                log(errorMsg);
+                container.innerHTML = `<div class="error">${errorMsg}</div>`;
+                
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'renderError',
+                        error: error.message
+                    });
+                }
+            }
+        };
+
+        // Render Markdown content
+        window.renderMarkdown = async function(content, enableMermaid = true, theme = 'dark') {
+            const container = document.getElementById('content-container');
+            container.className = 'markdown-mode';
+            
+            if (!content || !content.trim()) {
+                container.innerHTML = '<div style="color:#888;">No content to render</div>';
+                return;
+            }
+            
+            log('Rendering Markdown content...');
+            
+            try {
+                // Update theme
+                document.body.className = theme.toLowerCase() === 'light' ? 'light-theme' : '';
+                
+                // Render Markdown to HTML
+                const html = window.md.render(content);
+                container.innerHTML = `<div class="markdown-body">${html}</div>`;
+                
+                // Render embedded Mermaid diagrams if enabled
+                if (enableMermaid) {
+                    const mermaidBlocks = container.querySelectorAll('code.language-mermaid');
+                    
+                    if (mermaidBlocks.length > 0) {
+                        log(`Found ${mermaidBlocks.length} Mermaid code blocks`);
+                        
+                        // Update Mermaid theme
+                        if (mermaid.initialize) {
+                            mermaid.initialize({
+                                startOnLoad: false,
+                                securityLevel: 'loose',
+                                theme: theme.toLowerCase(),
+                                logLevel: 1
+                            });
+                        }
+                        
+                        for (let i = 0; i < mermaidBlocks.length; i++) {
+                            const block = mermaidBlocks[i];
+                            const code = block.textContent;
+                            
+                            try {
+                                const { svg } = await mermaid.render(`mermaid-${i}-${Date.now()}`, code);
+                                const div = document.createElement('div');
+                                div.innerHTML = svg;
+                                div.style.textAlign = 'center';
+                                div.style.margin = '20px 0';
+                                block.parentElement.replaceWith(div);
+                            } catch (error) {
+                                log(`Failed to render Mermaid block ${i}:`, error.message);
+                                const errorDiv = document.createElement('div');
+                                errorDiv.className = 'error';
+                                errorDiv.textContent = `Mermaid diagram error: ${error.message}`;
+                                block.parentElement.replaceWith(errorDiv);
+                            }
+                        }
+                    }
+                }
+                
+                log('Markdown rendered successfully');
+                
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'renderComplete',
+                        mode: 'markdown'
+                    });
+                }
+            } catch (error) {
+                const errorMsg = `Markdown rendering failed: ${error.message || error}`;
+                log(errorMsg);
+                container.innerHTML = `<div class="error">${errorMsg}</div>`;
+                
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'renderError',
+                        error: error.message
+                    });
+                }
+            }
+        };
+
+        // Unified rendering function
+        window.renderContent = async function(content, mode, enableMermaid = true, theme = 'dark') {
+            log(`Rendering content in ${mode} mode`);
+            
+            if (mode === 'mermaid') {
+                await window.renderMermaid(content, theme);
+            } else if (mode === 'markdown') {
+                await window.renderMarkdown(content, enableMermaid, theme);
+            } else {
+                log(`Unknown rendering mode: ${mode}`);
+            }
+        };
+
+        // Get current SVG (for export)
+        window.getSvg = function() {
+            const container = document.getElementById('content-container');
+            const svg = container.querySelector('svg');
+            return svg ? svg.outerHTML : '';
+        };
+
+        // Start initialization
+        init();
+    </script>
+</body>
+</html>
