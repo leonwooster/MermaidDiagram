@@ -948,3 +948,284 @@ Deliver a manual syntax fixer that first shows all detected syntax errors and al
 - Story 9: Batch Analysis for Multiple Files (13 SP)
 - Story 10: Post-Fix Summary & Undo (5 SP)
 - Story 11: Configurable Detection Rules (13 SP)
+
+
+---
+
+## Epic: Multi-Tab Document Interface
+
+### Overview
+Transform the single-document editor into a multi-tab interface that allows users to work with multiple Mermaid diagrams and Markdown documents simultaneously. Each tab maintains its own editor state, preview, and file association, enabling efficient multi-document workflows with individual save, close, and export operations.
+
+### Architecture & Design Principles
+* __Single Responsibility (S)__ — Separate concerns: `TabManager` handles tab lifecycle, `DocumentTab` encapsulates individual document state, `TabViewModel` manages UI binding, and existing rendering pipeline remains unchanged.
+* __Open/Closed (O)__ — Allow new tab types (e.g., settings tab, diff view) to be added by extending `DocumentTab` base class without modifying core tab management logic.
+* __Liskov Substitution (L)__ — All tab implementations can be used interchangeably through the `IDocumentTab` interface with consistent behavior for save, close, and state management.
+* __Interface Segregation (I)__ — Provide focused interfaces: `IDocumentTab` for tab operations, `ITabManager` for tab orchestration, `ITabState` for persistence, keeping dependencies minimal.
+* __Dependency Inversion (D)__ — [MainWindow](cci:1://file:///d:/Tester/MermaidDiagram/MermaidDiagramApp/MainWindow.xaml.cs:68:8-103:9) depends on `ITabManager` abstraction rather than concrete tab implementations. Tab manager resolves appropriate tab types at runtime.
+
+### Design Patterns
+* __Composite Pattern__ — Tab collection managed as a composite structure where each tab contains editor, preview, and state components.
+* __Memento Pattern__ — Tab state (content, cursor position, scroll position, file path) captured for undo/redo and session restoration.
+* __Observer Pattern__ — Active tab changes notify UI components to update title bar, status indicators, and context-sensitive commands.
+* __Command Pattern__ — Tab operations (New, Open, Close, Save, CloseAll) implemented as commands for undo support and keyboard shortcuts.
+
+### User Stories
+
+#### Story 1: Tab Bar UI Component
+**As a** user  
+**I want** a tab bar above the editor showing all open documents  
+**So that** I can see and switch between multiple files at a glance
+
+**Acceptance Criteria:**
+- [ ] Tab bar displays horizontally above the editor/preview split view
+- [ ] Each tab shows the filename (or "Untitled" for new documents)
+- [ ] Active tab is visually distinct (highlighted/bold)
+- [ ] Tabs show file type icon (Mermaid vs Markdown)
+- [ ] Tabs show unsaved indicator (dot or asterisk) when modified
+- [ ] Tab bar scrolls horizontally when too many tabs to fit
+- [ ] Maximum 20 tabs can be open simultaneously
+- [ ] Tab bar integrates seamlessly with existing UI theme (light/dark)
+- [ ] Tab bar is keyboard accessible (Tab/Shift+Tab navigation)
+
+**Estimated Effort:** 8 story points
+
+#### Story 2: Create New Tab
+**As a** user  
+**I want** to create a new empty tab  
+**So that** I can start working on a new diagram without closing my current work
+
+**Acceptance Criteria:**
+- [ ] "New Tab" button visible in tab bar (+ icon)
+- [ ] Keyboard shortcut Ctrl+T creates new tab
+- [ ] File → New menu creates new tab instead of replacing current content
+- [ ] New tab contains empty editor with default Mermaid template option
+- [ ] New tab is automatically focused after creation
+- [ ] New tab is named "Untitled-1", "Untitled-2", etc.
+- [ ] Creating new tab preserves state of all other tabs
+- [ ] New tab inherits theme and editor settings from preferences
+
+**Estimated Effort:** 5 story points
+
+#### Story 3: Switch Between Tabs
+**As a** user  
+**I want** to click on tabs to switch between documents  
+**So that** I can quickly navigate between my open files
+
+**Acceptance Criteria:**
+- [ ] Clicking a tab makes it active and displays its content
+- [ ] Ctrl+Tab switches to next tab (circular navigation)
+- [ ] Ctrl+Shift+Tab switches to previous tab
+- [ ] Ctrl+1 through Ctrl+9 switches to tab by position
+- [ ] Switching tabs preserves editor state (cursor position, scroll, selection)
+- [ ] Switching tabs updates preview to show active tab's content
+- [ ] Switching tabs updates window title to show active filename
+- [ ] Switching tabs updates status bar with active tab's content type
+- [ ] Tab switching animation is smooth (<100ms)
+- [ ] Middle-click on tab closes it (optional)
+
+**Estimated Effort:** 8 story points
+
+#### Story 4: Close Individual Tabs
+**As a** user  
+**I want** to close tabs individually  
+**So that** I can remove documents I'm done working with
+
+**Acceptance Criteria:**
+- [ ] Each tab has a close button (X icon) on hover
+- [ ] Clicking close button closes that specific tab
+- [ ] Keyboard shortcut Ctrl+W closes active tab
+- [ ] Closing unsaved tab prompts "Save changes?" dialog
+- [ ] Dialog offers "Save", "Don't Save", "Cancel" options
+- [ ] Closing tab activates the next tab to the right (or left if last)
+- [ ] Closing last tab creates a new empty tab automatically
+- [ ] Ctrl+Shift+W closes all tabs (with save prompts)
+- [ ] Close all tabs except current tab option in context menu
+- [ ] Recently closed tabs can be reopened (Ctrl+Shift+T)
+
+**Estimated Effort:** 13 story points
+
+#### Story 5: Save Individual Tabs
+**As a** user  
+**I want** to save each tab independently  
+**So that** I can persist changes to specific documents
+
+**Acceptance Criteria:**
+- [ ] Ctrl+S saves the active tab only
+- [ ] File → Save saves active tab
+- [ ] File → Save All saves all modified tabs
+- [ ] Unsaved tabs show visual indicator (dot/asterisk in tab)
+- [ ] Saving tab removes unsaved indicator
+- [ ] Save As creates new file and updates tab name
+- [ ] Saving tab updates window title if active
+- [ ] Auto-save option saves all tabs periodically
+- [ ] Save confirmation appears in status bar
+- [ ] Closing app with unsaved tabs prompts for each
+
+**Estimated Effort:** 8 story points
+
+#### Story 6: Open Files in New Tabs
+**As a** user  
+**I want** to open multiple files, each in its own tab  
+**So that** I can work with several documents simultaneously
+
+**Acceptance Criteria:**
+- [ ] File → Open creates new tab for selected file
+- [ ] Opening file that's already open switches to that tab
+- [ ] Drag and drop file onto app opens in new tab
+- [ ] Drag and drop multiple files opens each in separate tab
+- [ ] Command line arguments open files in tabs on startup
+- [ ] Opening file preserves state of all other tabs
+- [ ] Recent files menu opens file in new tab
+- [ ] Double-click in file explorer opens in new tab (if app running)
+- [ ] Maximum file size warning before opening large files
+
+**Estimated Effort:** 13 story points
+
+#### Story 7: Tab Context Menu
+**As a** user  
+**I want** to right-click on tabs for additional options  
+**So that** I can perform common operations quickly
+
+**Acceptance Criteria:**
+- [ ] Right-click on tab shows context menu
+- [ ] Context menu includes: Close, Close Others, Close All, Close to Right
+- [ ] Context menu includes: Save, Save As, Rename
+- [ ] Context menu includes: Copy File Path, Reveal in File Explorer
+- [ ] Context menu includes: Duplicate Tab (copy content to new tab)
+- [ ] Context menu includes: Pin Tab (prevents accidental closing)
+- [ ] Pinned tabs appear first and show pin icon
+- [ ] Context menu adapts based on tab state (saved/unsaved/pinned)
+- [ ] All context menu items have keyboard shortcuts displayed
+
+**Estimated Effort:** 8 story points
+
+#### Story 8: Export Active Tab Only
+**As a** user  
+**I want** export operations to apply only to the active tab  
+**So that** I can export specific diagrams without affecting others
+
+**Acceptance Criteria:**
+- [ ] Export SVG exports only the active tab's preview
+- [ ] Export PNG exports only the active tab's preview
+- [ ] Export filename defaults to active tab's filename
+- [ ] Export dialog shows active tab name in title
+- [ ] Switching tabs during export cancels the operation
+- [ ] Export success notification shows which tab was exported
+- [ ] Export All option available to export all tabs at once
+- [ ] Batch export saves files with tab names as filenames
+- [ ] Export only works if active tab has renderable content
+
+**Estimated Effort:** 5 story points
+
+#### Story 9: Tab State Persistence
+**As a** user  
+**I want** my open tabs to be restored when I restart the app  
+**So that** I can continue working where I left off
+
+**Acceptance Criteria:**
+- [ ] All open tabs saved to session state on app close
+- [ ] Session state includes: file path, content (if unsaved), cursor position, scroll position
+- [ ] Session state restored on app startup
+- [ ] Active tab restored and focused
+- [ ] Unsaved changes restored with unsaved indicator
+- [ ] Files that no longer exist show warning but keep content
+- [ ] Option to disable session restoration in settings
+- [ ] Crash recovery restores last session state
+- [ ] Session state stored in ApplicationData.LocalFolder
+- [ ] Maximum 20 tabs restored (oldest tabs dropped if exceeded)
+
+**Estimated Effort:** 13 story points
+
+#### Story 10: Tab Reordering
+**As a** user  
+**I want** to drag and drop tabs to reorder them  
+**So that** I can organize my workspace logically
+
+**Acceptance Criteria:**
+- [ ] Click and drag tab to move it horizontally
+- [ ] Visual indicator shows drop position while dragging
+- [ ] Dropping tab reorders it in the tab bar
+- [ ] Reordering preserves all tab state
+- [ ] Keyboard shortcuts to move tab left/right (Ctrl+Shift+PageUp/Down)
+- [ ] Pinned tabs cannot be reordered past unpinned tabs
+- [ ] Tab order persisted in session state
+- [ ] Smooth animation during reorder
+- [ ] Drag outside tab bar to create floating window (future enhancement)
+
+**Estimated Effort:** 8 story points
+
+#### Story 11: Split View with Tabs
+**As a** user  
+**I want** to view two tabs side-by-side  
+**So that** I can compare or reference multiple documents
+
+**Acceptance Criteria:**
+- [ ] Split editor horizontally or vertically
+- [ ] Each split pane has its own tab bar
+- [ ] Drag tab to split area to move it to that pane
+- [ ] Each pane has independent active tab
+- [ ] Closing all tabs in a pane removes the split
+- [ ] Split state persisted in session
+- [ ] Keyboard shortcut to toggle split view
+- [ ] Synchronized scrolling option for split panes
+- [ ] Each pane can have different zoom levels
+- [ ] Maximum 2 panes supported initially
+
+**Estimated Effort:** 21 story points
+
+#### Story 12: Tab Performance Optimization
+**As a** developer  
+**I want** tabs to load and switch efficiently  
+**So that** the app remains responsive with many tabs open
+
+**Acceptance Criteria:**
+- [ ] Inactive tabs don't consume preview rendering resources
+- [ ] Switching tabs completes in <100ms
+- [ ] Opening new tab completes in <50ms
+- [ ] Memory usage scales linearly with tab count
+- [ ] Lazy loading for tab content (load on first activation)
+- [ ] Preview rendering only for active tab
+- [ ] Background tabs update preview on activation
+- [ ] Tab thumbnails generated asynchronously
+- [ ] Performance metrics logged for tab operations
+- [ ] No memory leaks when closing tabs
+
+**Estimated Effort:** 13 story points
+
+### Technical Considerations
+
+#### Implementation Approach
+1. **Phase 1: Core Tab Infrastructure**
+   - Create `IDocumentTab` interface and `DocumentTab` class
+   - Implement `TabManager` service for tab lifecycle management
+   - Create `TabViewModel` for MVVM binding
+   - Add `TabBar` XAML control with basic tab display
+
+2. **Phase 2: Tab Operations**
+   - Implement New, Open, Close tab operations
+   - Add tab switching logic with state preservation
+   - Integrate with existing file operations
+   - Add keyboard shortcuts and commands
+
+3. **Phase 3: Enhanced Features**
+   - Implement tab context menu
+   - Add tab reordering via drag and drop
+   - Implement pinned tabs
+   - Add recently closed tabs history
+
+4. **Phase 4: State Management**
+   - Implement session state persistence
+   - Add crash recovery
+   - Implement auto-save for tabs
+   - Add unsaved changes tracking
+
+5. **Phase 5: Advanced Features**
+   - Implement split view with independent tab bars
+   - Add tab thumbnails/previews
+   - Optimize performance for many tabs
+   - Add batch operations (Save All, Close All, Export All)
+
+#### File Structure
+MermaidDiagramApp/ ├── Services/ │ ├── TabManagement/ │ │ ├── IDocumentTab.cs │ │ ├── DocumentTab.cs │ │ ├── ITabManager.cs │ │ ├── TabManager.cs │ │ ├── TabState.cs │ │ ├── SessionStateService.cs │ │ └── RecentTabsService.cs │ └── (existing services) ├── ViewModels/ │ ├── TabViewModel.cs │ ├── TabBarViewModel.cs │ └── (existing view models) ├── Views/ │ ├── TabBar.xaml │ ├── TabItem.xaml │ └── (existing views) ├── Models/ │ ├── TabInfo.cs │ ├── TabSession.cs │ └── (existing models) └── (existing files)
+

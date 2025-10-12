@@ -335,9 +335,179 @@ Return ContentType.Markdown
 
 The Mermaid Diagram App's new architecture provides a robust, scalable, and maintainable foundation for rendering Mermaid diagrams and Markdown documentation. By applying SOLID principles and design patterns, the application ensures a clear separation of concerns, extensibility, and flexibility. The unified rendering engine, powered by WebView2 and JavaScript interop, enables seamless rendering of both Mermaid diagrams and Markdown content.
 
+### 3.5. Style Management System
+
+The application provides a comprehensive style customization system for Markdown rendering.
+
+#### 3.5.1. MarkdownStyleSettings Model
+**Location:** `Models/MarkdownStyleSettings.cs`
+
+Encapsulates user-configurable style preferences:
+
+```csharp
+public class MarkdownStyleSettings
+{
+    public int FontSize { get; set; } = 16;
+    public string FontFamily { get; set; } = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+    public double LineHeight { get; set; } = 1.6;
+    public int MaxContentWidth { get; set; } = 900;
+    public string CodeFontFamily { get; set; } = "'Consolas', 'Monaco', 'Courier New', monospace";
+    public int CodeFontSize { get; set; } = 14;
+    
+    public MarkdownStyleSettings Validate();
+    public string ToCssVariables();
+}
+```
+
+**Responsibilities:**
+- Store user preferences for Markdown rendering
+- Validate settings within acceptable ranges
+- Generate CSS variables for WebView2 injection
+
+#### 3.5.2. MarkdownStyleSettingsService
+**Location:** `Services/MarkdownStyleSettingsService.cs`
+
+Manages persistence and retrieval of style settings using `ApplicationData.LocalSettings`.
+
+**Key Features:**
+- Settings cached in memory for performance
+- Atomic writes to prevent corruption
+- Validation on load and save
+- Reset to defaults functionality
+
+**Storage Keys:**
+- `MarkdownFontSize`
+- `MarkdownFontFamily`
+- `MarkdownLineHeight`
+- `MarkdownMaxContentWidth`
+- `MarkdownCodeFontFamily`
+- `MarkdownCodeFontSize`
+
+#### 3.5.3. CSS Variable System
+
+The `UnifiedRenderer.html` defines CSS variables that can be dynamically updated:
+
+```css
+:root {
+    --md-font-size: 16px;
+    --md-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --md-line-height: 1.6;
+    --md-max-width: 900px;
+    --md-code-font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    --md-code-font-size: 14px;
+}
+
+.markdown-body {
+    font-size: var(--md-font-size);
+    font-family: var(--md-font-family);
+    line-height: var(--md-line-height);
+}
+```
+
+JavaScript function `updateStyleSettings()` allows runtime updates without page reload:
+
+```javascript
+window.updateStyleSettings = function(settings) {
+    const root = document.documentElement;
+    if (settings.fontSize) root.style.setProperty('--md-font-size', settings.fontSize + 'px');
+    if (settings.fontFamily) root.style.setProperty('--md-font-family', settings.fontFamily);
+    // ... other properties
+};
+```
+
+#### 3.5.4. MarkdownStyleSettingsDialog
+**Location:** `Views/MarkdownStyleSettingsDialog.xaml`
+
+Provides UI for customizing Markdown appearance:
+
+**Features:**
+- Sliders for numeric values (font size, line height)
+- ComboBoxes for font family selection
+- Live preview showing changes in real-time
+- Reset to defaults button
+- Validation and range constraints
+
+**Integration:**
+Settings are loaded on every render and passed through `RenderingContext.StyleSettings` to ensure consistency.
+
+### 3.6. Image Resolution System
+
+The application supports local image paths in Markdown documents through automatic path resolution.
+
+#### 3.6.1. Path Resolution Algorithm
+
+**Location:** `Assets/UnifiedRenderer.html` - `resolveImagePath()` function
+
+```javascript
+window.resolveImagePath = function(imagePath, baseFilePath) {
+    // Skip if already a URL or data URI
+    if (imagePath.startsWith('http://') || 
+        imagePath.startsWith('https://') || 
+        imagePath.startsWith('data:')) {
+        return imagePath;
+    }
+    
+    // Handle relative paths
+    if (baseFilePath && !imagePath.startsWith('/')) {
+        const basePath = baseFilePath.substring(0, baseFilePath.lastIndexOf('\\'));
+        const resolvedPath = basePath + '\\' + imagePath.replace(/\//g, '\\');
+        return 'file:///' + resolvedPath.replace(/\\/g, '/');
+    }
+    
+    // Handle absolute Windows paths
+    if (imagePath.match(/^[a-zA-Z]:\\/)) {
+        return 'file:///' + imagePath.replace(/\\/g, '/');
+    }
+    
+    return imagePath;
+};
+```
+
+#### 3.6.2. Resolution Flow
+
+1. Markdown is rendered to HTML by markdown-it.js
+2. All `<img>` tags are identified in the DOM
+3. For each image, `resolveImagePath()` is called with:
+   - `imagePath`: The src attribute from the Markdown
+   - `baseFilePath`: The full path of the current Markdown file
+4. Relative paths are resolved relative to the Markdown file's directory
+5. Absolute Windows paths (e.g., `C:\Users\...`) are converted to `file:///` URLs
+6. HTTP/HTTPS URLs and data URIs pass through unchanged
+
+#### 3.6.3. Supported Path Formats
+
+**Relative Paths:**
+```markdown
+![Image](./images/diagram.png)
+![Image](../assets/screenshot.png)
+```
+
+**Absolute Paths:**
+```markdown
+![Image](C:\Users\Documents\diagram.png)
+![Image](D:\Projects\images\chart.png)
+```
+
+**URLs:**
+```markdown
+![Image](https://example.com/image.png)
+![Image](data:image/png;base64,iVBORw0KG...)
+```
+
+#### 3.6.4. Integration with MarkdownRenderer
+
+The `MarkdownRenderer.GenerateRenderScript()` method passes the current file path to the JavaScript renderer:
+
+```csharp
+var escapedFilePath = System.Text.Json.JsonSerializer.Serialize(filePath);
+await window.renderMarkdown(content, enableMermaid, theme, styleSettings, {escapedFilePath});
+```
+
+This enables the image resolution system to correctly resolve relative paths.
+
 ## 7. Future Work
 
 - **Improve Performance**: Optimize rendering performance by leveraging caching, parallel processing, and lazy loading.
 - **Enhance Markdown Support**: Add support for additional Markdown features, such as tables, task lists, and syntax highlighting.
 - **Integrate with Other Tools**: Integrate the Mermaid Diagram App with popular development tools, such as Visual Studio Code and GitHub.
-- **Provide Customization Options**: Offer users customization options for the rendering engine, such as theme selection and font sizes.
+- **Multi-Tab Interface**: Implement tabbed document interface for working with multiple files simultaneously (see BACKLOG.md Epic: Multi-Tab Document Interface).
