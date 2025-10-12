@@ -1,5 +1,384 @@
 # WinUI3 Mermaid Diagram Editor - Product Backlog
 
+## Epic: Markdown Documentation Rendering
+
+### Overview
+Enable the application to render standard Markdown documentation files alongside Mermaid diagrams, transforming the editor into a dual-purpose tool that can preview both technical diagrams and their accompanying documentation. This feature maintains strict separation of concerns between Mermaid and Markdown rendering logic while leveraging the existing WebView2 infrastructure.
+
+### Architecture & Design Principles
+* __Single Responsibility (S)__ — Separate rendering concerns across distinct components: `IContentRenderer` interface with `MermaidRenderer` and `MarkdownRenderer` implementations, `ContentTypeDetector` for file analysis, and `RenderingOrchestrator` for coordinating the rendering pipeline.
+* __Open/Closed (O)__ — Allow new content types (e.g., AsciiDoc, reStructuredText) to be added by implementing `IContentRenderer` without modifying existing rendering logic or the orchestrator.
+* __Liskov Substitution (L)__ — Ensure all renderer implementations can be used interchangeably through the `IContentRenderer` interface, with consistent behavior and error handling.
+* __Interface Segregation (I)__ — Provide focused interfaces: `IContentRenderer` for rendering operations, `IContentTypeDetector` for type detection, `IRenderingContext` for passing rendering parameters, keeping dependencies minimal.
+* __Dependency Inversion (D)__ — `MainWindow` depends on `IContentRenderer` abstraction rather than concrete renderer implementations. Use dependency injection or factory pattern to resolve the appropriate renderer at runtime.
+
+### Design Patterns
+* __Strategy Pattern__ — `IContentRenderer` implementations (MermaidRenderer, MarkdownRenderer) encapsulate different rendering algorithms, selected at runtime based on content type.
+* __Factory Pattern__ — `ContentRendererFactory` creates appropriate renderer instances based on detected content type, centralizing instantiation logic.
+* __Template Method Pattern__ — Base `ContentRenderer` abstract class defines the rendering workflow (validate → preprocess → render → postprocess), with subclasses implementing specific steps.
+* __Observer Pattern__ — Rendering mode changes notify UI components to update status indicators and available actions.
+
+### User Stories
+
+#### Story 1: Detect Content Type Automatically
+**As a** user  
+**I want** the application to automatically detect whether my file contains Mermaid diagrams or Markdown documentation  
+**So that** the preview renders correctly without manual intervention
+
+**Acceptance Criteria:**
+- [ ] A new `ContentTypeDetector` service analyzes file content and extension to determine type.
+- [ ] Detection logic checks file extension first (`.mmd` → Mermaid, `.md` → analyze content).
+- [ ] For `.md` files, detector scans first 10 lines for Mermaid diagram keywords (`graph`, `sequenceDiagram`, `classDiagram`, etc.).
+- [ ] If Mermaid keywords found at start of file, treats as Mermaid; otherwise treats as Markdown.
+- [ ] Detection result cached per file to avoid repeated analysis.
+- [ ] Unit tests verify correct detection for pure Mermaid, pure Markdown, and mixed content files.
+- [ ] Detection completes in <10ms for files up to 10,000 lines.
+
+**Estimated Effort:** 5 story points
+
+#### Story 2: Implement Markdown Renderer Service
+**As a** developer  
+**I want** a dedicated Markdown rendering service separate from Mermaid rendering  
+**So that** the codebase follows single responsibility principle and is maintainable
+
+**Acceptance Criteria:**
+- [ ] Create `IContentRenderer` interface with methods: `CanRender(ContentType)`, `RenderAsync(string content, IRenderingContext context)`, `GetSupportedFeatures()`.
+- [ ] Implement `MarkdownRenderer` class that implements `IContentRenderer`.
+- [ ] `MarkdownRenderer` uses markdown-it.js library loaded in WebView2 for rendering.
+- [ ] Renderer converts Markdown to HTML with proper styling (headings, lists, code blocks, tables, links).
+- [ ] Supports GitHub Flavored Markdown (GFM) features: task lists, tables, strikethrough.
+- [ ] Handles edge cases: empty content, malformed markdown, extremely large files (>1MB).
+- [ ] Unit tests verify HTML output correctness for various Markdown constructs.
+- [ ] Integration tests confirm rendering in WebView2 produces expected visual output.
+
+**Estimated Effort:** 13 story points
+
+#### Story 3: Implement Mermaid Renderer Service (Refactor)
+**As a** developer  
+**I want** existing Mermaid rendering logic extracted into a dedicated service  
+**So that** it mirrors the Markdown renderer architecture and follows SOLID principles
+
+**Acceptance Criteria:**
+- [ ] Create `MermaidRenderer` class that implements `IContentRenderer`.
+- [ ] Extract existing Mermaid rendering logic from `MainWindow.UpdatePreview()` into `MermaidRenderer.RenderAsync()`.
+- [ ] `MermaidRenderer` encapsulates all Mermaid-specific JavaScript interop and error handling.
+- [ ] Maintains backward compatibility with existing Mermaid rendering behavior.
+- [ ] No changes to user-facing functionality during refactoring.
+- [ ] Unit tests verify Mermaid rendering produces identical output to previous implementation.
+- [ ] Code coverage for `MermaidRenderer` exceeds 80%.
+
+**Estimated Effort:** 8 story points
+
+#### Story 4: Create Rendering Orchestrator
+**As a** developer  
+**I want** a central orchestrator that coordinates content detection and rendering  
+**So that** MainWindow remains decoupled from rendering implementation details
+
+**Acceptance Criteria:**
+- [ ] Create `RenderingOrchestrator` class that manages the rendering pipeline.
+- [ ] Orchestrator uses `ContentTypeDetector` to determine content type.
+- [ ] Uses `ContentRendererFactory` to obtain appropriate renderer instance.
+- [ ] Delegates rendering to selected renderer via `IContentRenderer` interface.
+- [ ] Handles renderer errors gracefully with fallback to error display.
+- [ ] Provides events/callbacks for rendering state changes (started, completed, failed).
+- [ ] `MainWindow.UpdatePreview()` simplified to call `orchestrator.RenderAsync(content)`.
+- [ ] Unit tests verify orchestrator selects correct renderer for each content type.
+- [ ] Integration tests confirm end-to-end rendering pipeline works correctly.
+
+**Estimated Effort:** 8 story points
+
+#### Story 5: Render Mermaid Code Blocks Within Markdown
+**As a** documentation author  
+**I want** Mermaid diagrams embedded in Markdown code blocks to render as visual diagrams  
+**So that** I can create rich documentation with inline diagrams
+
+**Acceptance Criteria:**
+- [ ] `MarkdownRenderer` detects code blocks with `mermaid` language identifier (` ```mermaid `).
+- [ ] Extracts Mermaid code from these blocks and renders them as diagrams inline.
+- [ ] Uses same Mermaid.js engine as `MermaidRenderer` for consistency.
+- [ ] Rendered diagrams appear in place of code blocks within the Markdown flow.
+- [ ] Multiple Mermaid diagrams in single document all render correctly.
+- [ ] Non-Mermaid code blocks (e.g., `python`, `javascript`) render as syntax-highlighted code.
+- [ ] Handles errors in individual Mermaid blocks without breaking entire document rendering.
+- [ ] Unit tests verify extraction and rendering of Mermaid blocks from Markdown.
+- [ ] Integration tests confirm mixed Markdown + Mermaid content renders properly.
+
+**Estimated Effort:** 13 story points
+
+#### Story 6: Add Rendering Mode Indicator
+**As a** user  
+**I want** a visual indicator showing the current rendering mode  
+**So that** I understand how my content is being interpreted
+
+**Acceptance Criteria:**
+- [ ] Status bar or info bar displays current rendering mode ("Mermaid Diagram" or "Markdown Document").
+- [ ] Indicator updates automatically when content type changes.
+- [ ] Clicking indicator shows tooltip with detection rationale.
+- [ ] Visual distinction between modes (different icons or colors).
+- [ ] Indicator visible but non-intrusive in the UI.
+- [ ] Accessible via keyboard navigation and screen readers.
+- [ ] Unit tests verify indicator state updates correctly.
+
+**Estimated Effort:** 5 story points
+
+#### Story 7: Manual Rendering Mode Override
+**As a** power user  
+**I want** to manually override automatic content type detection  
+**So that** I can force a specific rendering mode when needed
+
+**Acceptance Criteria:**
+- [ ] Add "Rendering Mode" menu item with options: "Auto-detect", "Force Mermaid", "Force Markdown".
+- [ ] Manual override persists for current file session only.
+- [ ] Reopening file resets to auto-detect mode.
+- [ ] Menu shows checkmark next to active mode.
+- [ ] Keyboard shortcut available to toggle between modes (e.g., Ctrl+Shift+M).
+- [ ] Override choice logged for debugging purposes.
+- [ ] Settings allow configuring default mode per file extension.
+- [ ] Unit tests verify override logic works correctly.
+
+**Estimated Effort:** 5 story points
+
+#### Story 8: Unified HTML Host Page
+**As a** developer  
+**I want** a single HTML host page that supports both Mermaid and Markdown rendering  
+**So that** we avoid duplicating WebView2 initialization and asset management
+
+**Acceptance Criteria:**
+- [ ] Create or modify `UnifiedRenderer.html` that loads both mermaid.min.js and markdown-it.min.js.
+- [ ] Exposes JavaScript API: `renderContent(content, mode)` where mode is 'mermaid' or 'markdown'.
+- [ ] Handles mode switching without page reload.
+- [ ] Applies consistent styling across both rendering modes.
+- [ ] Includes error handling and reports errors back to C# via WebView2 messaging.
+- [ ] Optimizes asset loading (lazy load libraries based on first use).
+- [ ] Maintains existing Mermaid rendering performance (<100ms for typical diagrams).
+- [ ] Integration tests verify both rendering modes work in same WebView2 instance.
+
+**Estimated Effort:** 8 story points
+
+#### Story 9: Markdown Styling and Theming
+**As a** user  
+**I want** rendered Markdown to have professional, readable styling  
+**So that** documentation is pleasant to read and matches modern standards
+
+**Acceptance Criteria:**
+- [ ] Markdown renders with clean, professional typography (readable font, proper spacing).
+- [ ] Supports both light and dark themes matching WinUI3 app theme.
+- [ ] Code blocks have syntax highlighting using highlight.js or similar.
+- [ ] Tables render with proper borders and alternating row colors.
+- [ ] Links are visually distinct and clickable (open in default browser).
+- [ ] Images in Markdown (if local paths) display correctly.
+- [ ] Responsive layout adapts to preview pane width.
+- [ ] CSS follows modern best practices (no inline styles, maintainable).
+- [ ] User can customize styling via settings (font size, font family).
+
+**Estimated Effort:** 8 story points
+
+#### Story 10: Error Handling and Fallback Rendering
+**As a** user  
+**I want** clear error messages when content fails to render  
+**So that** I can understand and fix issues quickly
+
+**Acceptance Criteria:**
+- [ ] Rendering errors display in preview pane with clear error message.
+- [ ] Error message includes: error type, line number (if applicable), suggested fix.
+- [ ] Markdown rendering errors fall back to plain text display.
+- [ ] Mermaid rendering errors show syntax error details from Mermaid.js.
+- [ ] Errors logged to application log file with full stack trace.
+- [ ] Partial rendering succeeds when possible (e.g., render valid sections, skip invalid).
+- [ ] Error state doesn't crash application or leave preview in broken state.
+- [ ] Unit tests verify error handling for various failure scenarios.
+
+**Estimated Effort:** 5 story points
+
+### Technical Considerations
+
+#### Implementation Approach
+1. **Phase 1: Interface & Architecture Setup**
+   - Define `IContentRenderer`, `IContentTypeDetector`, `IRenderingContext` interfaces
+   - Create abstract `ContentRenderer` base class with template method pattern
+   - Implement `ContentTypeDetector` with configurable detection rules
+   - Set up dependency injection container or factory for renderer resolution
+
+2. **Phase 2: Renderer Implementations**
+   - Implement `MarkdownRenderer` using markdown-it.js in WebView2
+   - Refactor existing code into `MermaidRenderer` implementing `IContentRenderer`
+   - Create `ContentRendererFactory` for renderer instantiation
+   - Add unit tests for each renderer in isolation
+
+3. **Phase 3: Orchestration & Integration**
+   - Implement `RenderingOrchestrator` to coordinate detection and rendering
+   - Refactor `MainWindow.UpdatePreview()` to use orchestrator
+   - Update `Timer_Tick` to pass content through orchestrator
+   - Add integration tests for full rendering pipeline
+
+4. **Phase 4: Enhanced Features**
+   - Implement Mermaid-in-Markdown rendering support
+   - Add rendering mode indicator to UI
+   - Implement manual mode override functionality
+   - Add theming and styling for Markdown output
+
+5. **Phase 5: Polish & Optimization**
+   - Optimize rendering performance (caching, debouncing)
+   - Add comprehensive error handling and logging
+   - Update user documentation and inline help
+   - Conduct performance testing and optimization
+
+#### File Structure
+```
+MermaidDiagramApp/
+├── Services/
+│   ├── Rendering/
+│   │   ├── IContentRenderer.cs
+│   │   ├── IRenderingContext.cs
+│   │   ├── ContentRenderer.cs (abstract base)
+│   │   ├── MermaidRenderer.cs
+│   │   ├── MarkdownRenderer.cs
+│   │   ├── ContentTypeDetector.cs
+│   │   ├── IContentTypeDetector.cs
+│   │   ├── ContentRendererFactory.cs
+│   │   └── RenderingOrchestrator.cs
+│   └── (existing services)
+├── Models/
+│   ├── ContentType.cs (enum)
+│   ├── RenderingContext.cs
+│   └── RenderingResult.cs
+├── Assets/
+│   ├── UnifiedRenderer.html
+│   ├── mermaid.min.js
+│   ├── markdown-it.min.js
+│   ├── highlight.min.js (for code syntax highlighting)
+│   └── css/
+│       ├── markdown-light.css
+│       └── markdown-dark.css
+└── (existing files)
+```
+
+#### Key Interfaces
+
+```csharp
+public interface IContentRenderer
+{
+    ContentType SupportedType { get; }
+    bool CanRender(ContentType type);
+    Task<RenderingResult> RenderAsync(string content, IRenderingContext context);
+    IReadOnlyList<string> GetSupportedFeatures();
+}
+
+public interface IContentTypeDetector
+{
+    ContentType DetectContentType(string content, string fileExtension);
+    void RegisterDetectionRule(string extension, Func<string, ContentType> rule);
+}
+
+public interface IRenderingContext
+{
+    string FileExtension { get; }
+    ContentType? ForcedContentType { get; }
+    bool EnableMermaidInMarkdown { get; }
+    ThemeMode Theme { get; }
+}
+```
+
+#### JavaScript API (UnifiedRenderer.html)
+
+```javascript
+// Unified rendering function
+window.renderContent = async function(content, mode) {
+    const preview = document.getElementById('preview');
+    
+    try {
+        if (mode === 'mermaid') {
+            await renderMermaid(content, preview);
+        } else if (mode === 'markdown') {
+            await renderMarkdown(content, preview);
+        }
+        
+        window.chrome.webview.postMessage({
+            type: 'renderComplete',
+            mode: mode
+        });
+    } catch (error) {
+        displayError(error, preview);
+        window.chrome.webview.postMessage({
+            type: 'renderError',
+            error: error.message
+        });
+    }
+};
+
+// Mermaid-specific rendering
+async function renderMermaid(content, container) {
+    container.innerHTML = '<div class="mermaid">' + content + '</div>';
+    await mermaid.run();
+}
+
+// Markdown-specific rendering with Mermaid support
+async function renderMarkdown(content, container) {
+    const html = md.render(content);
+    container.innerHTML = html;
+    
+    // Find and render embedded Mermaid diagrams
+    const mermaidBlocks = container.querySelectorAll('code.language-mermaid');
+    for (let block of mermaidBlocks) {
+        const code = block.textContent;
+        const div = document.createElement('div');
+        div.className = 'mermaid';
+        div.textContent = code;
+        block.parentElement.replaceWith(div);
+    }
+    
+    if (mermaidBlocks.length > 0) {
+        await mermaid.run();
+    }
+}
+```
+
+#### Dependencies to Add
+- **markdown-it.min.js** (v13.0.1 or later) - Core Markdown parser
+- **highlight.min.js** (v11.8.0 or later) - Syntax highlighting for code blocks
+- **GitHub Flavored Markdown plugin** for markdown-it (optional, for GFM features)
+
+### Definition of Done
+- [ ] All story-level acceptance criteria satisfied
+- [ ] Unit tests for all renderer implementations (>80% code coverage)
+- [ ] Integration tests covering full rendering pipeline
+- [ ] Performance benchmarks meet targets (Markdown render <200ms, Mermaid unchanged)
+- [ ] Documentation updated (`SOFTWARE_DESIGN.md`, `USER_GUIDE.md`)
+- [ ] Code review completed with architectural sign-off
+- [ ] Zero regression in existing Mermaid rendering functionality
+- [ ] Accessibility review confirms WCAG 2.1 AA compliance
+- [ ] Memory leak testing confirms no WebView2 resource leaks
+
+### Priority: High
+### Target Sprint: Next 2-3 Sprints
+### Dependencies: 
+- Existing WebView2 preview infrastructure
+- Current file operations (Open/Save)
+- Syntax highlighting system
+
+### Success Metrics
+- 100% backward compatibility with existing `.mmd` files
+- Markdown rendering performance <200ms for typical documentation files
+- User can seamlessly switch between Mermaid and Markdown files
+- Zero crashes or errors during content type switching
+- 90%+ user satisfaction with Markdown rendering quality
+- Code maintainability score improved (lower cyclomatic complexity in MainWindow)
+
+### Risks & Mitigation
+- **Risk**: Adding markdown-it.js increases bundle size  
+  **Mitigation**: Use minified version, lazy load only when needed, consider CDN fallback
+  
+- **Risk**: Rendering mode detection may be ambiguous for some files  
+  **Mitigation**: Provide manual override, log detection decisions, allow user configuration
+  
+- **Risk**: Refactoring existing Mermaid code may introduce regressions  
+  **Mitigation**: Comprehensive unit tests before refactoring, feature flags for gradual rollout
+  
+- **Risk**: Performance degradation with large Markdown files  
+  **Mitigation**: Implement virtual scrolling, progressive rendering, file size warnings
+
+---
+
 ## Epic: Design Pattern Diagram Generation
 
 ### Overview
@@ -485,3 +864,5 @@ Deliver a manual syntax fixer that first shows all detected syntax errors and al
 - User applies fixes 80%+ of the time after review
 - Average time from detection to fix <30 seconds
 - User satisfaction rating >4.5/5
+
+```
