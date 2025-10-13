@@ -349,11 +349,6 @@ async function renderMarkdown(content, container) {
 - [ ] Accessibility review confirms WCAG 2.1 AA compliance
 - [ ] Memory leak testing confirms no WebView2 resource leaks
 
-### Status: **SUBSTANTIALLY COMPLETED**
-**Completed Stories:** 8.5 of 10 (85%)  
-**Implementation Date:** 2025-10-13  
-**Remaining Work:** Unit/integration tests, accessibility review, documentation updates
-
 ### Priority: High
 ### Target Sprint: Next 2-3 Sprints
 ### Dependencies: 
@@ -584,85 +579,6 @@ classDiagram
 - Should integrate seamlessly with current file operations and preview
 - Consider extensibility for custom user-defined patterns
 - May require WebView2 integration for enhanced preview capabilities
-
----
-
-## Epic: Stick Figure Pose Builder
-
-### Overview
-Introduce a customizable stick-figure creation workflow that lets users compose human poses inside the Mermaid editor. The feature should expose granular controls for limbs, posture, head orientation, rotation, and provide a dedicated menu entry to launch the experience.
-
-### User Stories
-
-#### Story 1: Stick Figure Menu Entry
-**As a** diagram author  
-**I want** a "Stick Figure" item in the Templates menu  
-**So that** I can quickly open the pose builder workspace
-
-**Acceptance Criteria:**
-- [ ] Add "Stick Figure" option to the Templates (or dedicated) menu without implementation yet
-- [ ] Launches placeholder dialog or page once implemented
-- [ ] Integrates with future stick figure pose builder
-
-**Estimated Effort:** 3 story points
-
-#### Story 2: Limb Control Panel
-**As a** designer  
-**I want** to adjust stick figure arm and leg angles  
-**So that** I can depict different gestures and stances
-
-**Acceptance Criteria:**
-- [ ] Sliders or numeric inputs for shoulder, elbow, hip, and knee angles
-- [ ] Visual feedback in Mermaid preview
-- [ ] Preset poses (e.g., neutral, walking, running)
-
-**Estimated Effort:** 8 story points
-
-#### Story 3: Posture & Balance Controls
-**As a** user  
-**I want** to set the torso lean and overall posture  
-**So that** I can represent different movement dynamics
-
-**Acceptance Criteria:**
-- [ ] Controls for torso tilt (forward/backward, left/right)
-- [ ] Adjustable center-of-mass / base stance width
-- [ ] Real-time validation to avoid impossible poses
-
-**Estimated Effort:** 8 story points
-
-#### Story 4: Head Orientation
-**As a** user  
-**I want** to specify the head direction (front/back/left/right)  
-**So that** the figure conveys attention and motion direction
-
-**Acceptance Criteria:**
-- [ ] Dropdown or toggle for head orientation presets
-- [ ] Optional fine-grained yaw, pitch, roll controls
-- [ ] Head orientation reflected in generated Mermaid markup
-
-**Estimated Effort:** 5 story points
-
-#### Story 5: Figure Rotation & Placement
-**As a** diagram author  
-**I want** to rotate and position the entire figure  
-**So that** I can align it within complex diagrams
-
-**Acceptance Criteria:**
-- [ ] Global rotation control (0°–360°)
-- [ ] Position offsets (X/Y) relative to diagram origin
-- [ ] Snapping options for alignment with other diagram elements
-
-**Estimated Effort:** 5 story points
-
-### Technical Considerations
-- Extend existing Mermaid template generation to support stick figure primitives (e.g., `graph TD` or custom `flowchart` shapes).
-- Evaluate whether a custom Mermaid plugin or SVG overlay is required for fine-grained limb articulation.
-- Persist pose configurations alongside diagrams for later editing.
-- Ensure future UI dialog matches WinUI3 design guidelines and responds to theme changes.
-
-### Priority: Low-Medium (Backlog)
-### Target Sprint: Future
-### Dependencies: Stable template infrastructure, enhanced preview pipeline
 
 ---
 
@@ -1229,3 +1145,31 @@ Transform the single-document editor into a multi-tab interface that allows user
 #### File Structure
 MermaidDiagramApp/ ├── Services/ │ ├── TabManagement/ │ │ ├── IDocumentTab.cs │ │ ├── DocumentTab.cs │ │ ├── ITabManager.cs │ │ ├── TabManager.cs │ │ ├── TabState.cs │ │ ├── SessionStateService.cs │ │ └── RecentTabsService.cs │ └── (existing services) ├── ViewModels/ │ ├── TabViewModel.cs │ ├── TabBarViewModel.cs │ └── (existing view models) ├── Views/ │ ├── TabBar.xaml │ ├── TabItem.xaml │ └── (existing views) ├── Models/ │ ├── TabInfo.cs │ ├── TabSession.cs │ └── (existing models) └── (existing files)
 
+
+---
+
+## Epic: Visual Diagram Builder with Drag-and-Drop Canvas
+
+**Status:** See detailed documentation in [`docs/features/visual-diagram-builder-epic.md`](docs/features/visual-diagram-builder-epic.md)
+
+### Quick Summary
+Transform the diagram creation experience by providing a professional drag-and-drop visual editor. Users can drag shapes from a categorized toolbox onto a canvas, connect them visually, and have the application automatically generate the corresponding Mermaid syntax.
+
+**Key Features:**
+- Three-panel interface (toolbox, canvas, properties)
+- Drag-and-drop shape creation
+- Visual connection drawing
+- Automatic Mermaid code generation
+- Bi-directional code synchronization
+- Undo/redo system
+- Multiple diagram type support
+
+**Documentation:**
+- [Full Epic Details](docs/features/visual-diagram-builder-epic.md) - 15 user stories, architecture, technical details
+- [Technical Design](docs/design/diagram-builder-design.md) - Architecture, data models, implementation phases
+- [User Guide](docs/user-guides/visual-diagram-builder-guide.md) - How to use the feature when available
+
+---
+
+## Notes
+{{ ... }}

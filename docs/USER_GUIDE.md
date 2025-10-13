@@ -259,7 +259,13 @@ The app records diagnostic information to rotating log files so you can troubles
 | `F11` | Full screen preview |
 | `Ctrl+F5` | Refresh preview |
 
-## 12. Tips & Best Practices
+## 12. Visual Diagram Builder
+
+**Full documentation available:** [`docs/user-guides/visual-diagram-builder-guide.md`](user-guides/visual-diagram-builder-guide.md)
+
+The application will soon feature a professional drag-and-drop visual editor for creating diagrams without writing code.
+
+## 13. Tips & Best Practices
 
 ### For Mermaid Diagrams
 - Use straight quotes (`"`) not curly quotes (`"` )
