@@ -87,6 +87,7 @@
             </Grid>
         </ScrollViewer>
 
+
         <!-- Zoom Controls -->
         <StackPanel Orientation="Horizontal"
                     HorizontalAlignment="Right"

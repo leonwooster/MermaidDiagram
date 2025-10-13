@@ -39,6 +39,8 @@ namespace MermaidDiagramApp.Models.Canvas
         private bool _isSelected;
         private string _lineColor;
         private double _lineWidth;
+        private string _startAnchor;
+        private string _endAnchor;
 
         public string Id
         {
@@ -100,6 +102,18 @@ namespace MermaidDiagramApp.Models.Canvas
             set => SetProperty(ref _lineWidth, value);
         }
 
+        public string StartAnchor
+        {
+            get => _startAnchor;
+            set => SetProperty(ref _startAnchor, value);
+        }
+
+        public string EndAnchor
+        {
+            get => _endAnchor;
+            set => SetProperty(ref _endAnchor, value);
+        }
+
         public CanvasConnector()
         {
             _id = $"conn{Guid.NewGuid().ToString("N").Substring(0, 8)}";
@@ -112,6 +126,8 @@ namespace MermaidDiagramApp.Models.Canvas
             _isSelected = false;
             _lineColor = "#000000";
             _lineWidth = 2;
+            _startAnchor = "center";
+            _endAnchor = "center";
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
