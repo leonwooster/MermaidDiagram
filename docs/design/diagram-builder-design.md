@@ -24,39 +24,51 @@ The Visual Diagram Builder transforms the Mermaid Diagram Editor from a code-fir
 
 ### 2.1 High-Level Architecture
 
+```mermaid
+graph TB
+    subgraph MainWindow["MainWindow"]
+        subgraph LeftPanel["Left Panel - Toolbox"]
+            Shapes["[Shapes]"]
+            Lines["[Lines]"]
+            UML["[UML]"]
+        end
+        
+        subgraph CenterPanel["Center Panel - Canvas"]
+            CanvasNodes["CanvasNode<br/>CanvasNode<br/>CanvasConnector"]
+        end
+        
+        subgraph RightPanel["Right Panel - Properties"]
+            NodeProps["[Node Props]"]
+            LineProps["[Line Props]"]
+            DiagramProps["[Diagram Props]"]
+        end
+    end
+    
+    LeftPanel --> ShapeToolboxVM["ShapeToolbox<br/>ViewModel"]
+    CenterPanel --> DiagramCanvasVM["DiagramCanvas<br/>ViewModel"]
+    RightPanel --> PropertiesPanelVM["PropertiesPanel<br/>ViewModel"]
+    
+    ShapeToolboxVM --> SyncManager["Code Sync<br/>Manager"]
+    DiagramCanvasVM --> SyncManager
+    PropertiesPanelVM --> SyncManager
+    
+    SyncManager --> CodeGen["MermaidCode<br/>Generator"]
+    SyncManager --> CodeParser["MermaidCode<br/>Parser"]
+    
+    style MainWindow fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff
+    style LeftPanel fill:#1a202c,stroke:#4a5568,stroke-width:1px,color:#fff
+    style CenterPanel fill:#1a202c,stroke:#4a5568,stroke-width:1px,color:#fff
+    style RightPanel fill:#1a202c,stroke:#4a5568,stroke-width:1px,color:#fff
+    style SyncManager fill:#2b6cb0,stroke:#2c5282,stroke-width:2px,color:#fff
+    style CodeGen fill:#38a169,stroke:#2f855a,stroke-width:2px,color:#fff
+    style CodeParser fill:#38a169,stroke:#2f855a,stroke-width:2px,color:#fff
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        MainWindow                            │
-├─────────────┬───────────────────────────┬───────────────────┤
-│  Toolbox    │    Canvas (Visual)        │   Properties      │
-│  Panel      │    ┌─────────────────┐    │   Panel           │
-│             │    │  CanvasNode     │    │                   │
-│  [Shapes]   │    │  CanvasNode     │    │  [Node Props]     │
-│  [Lines]    │    │  CanvasConnector│    │  [Line Props]     │
-│  [UML]      │    └─────────────────┘    │  [Diagram Props]  │
-│             │                            │                   │
-└─────────────┴────────────────────────────┴───────────────────┘
-       │                    │                        │
-       ▼                    ▼                        ▼
-┌─────────────┐    ┌──────────────┐      ┌─────────────────┐
-│ShapeToolbox │    │DiagramCanvas │      │PropertiesPanel  │
-│ ViewModel    │    │ViewModel     │      │ViewModel        │
-└─────────────┘    └──────────────┘      └─────────────────┘
-       │                    │                        │
-       └────────────────────┼────────────────────────┘
-                            ▼
-                   ┌──────────────────┐
-                   │  Code Sync       │
-                   │  Manager         │
-                   └──────────────────┘
-                            │
-              ┌─────────────┴─────────────┐
-              ▼                           ▼
-    ┌──────────────────┐        ┌──────────────────┐
-    │MermaidCode       │        │MermaidCode       │
-    │Generator         │        │Parser            │
-    └──────────────────┘        └──────────────────┘
-```
+
+**Component Flow:**
+1. **UI Layer**: Three-panel layout (Toolbox, Canvas, Properties)
+2. **ViewModel Layer**: MVVM pattern for each panel
+3. **Synchronization Layer**: Coordinates canvas ↔ code bidirectional sync
+4. **Code Generation Layer**: Converts canvas state to Mermaid syntax and vice versa
 
 ### 2.2 Component Responsibilities
 
