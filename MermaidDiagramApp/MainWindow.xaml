@@ -12,6 +12,7 @@
     xmlns:converters="using:MermaidDiagramApp.Converters"
     xmlns:models="using:MermaidDiagramApp.Models"
     xmlns:viewmodels="using:MermaidDiagramApp.ViewModels"
+    xmlns:views="using:MermaidDiagramApp.Views"
     mc:Ignorable="d"
     Title="MermaidDiagramApp">
 
@@ -130,14 +131,45 @@
 
         <Grid Grid.Row="3" Padding="12" x:Name="MainGrid">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="BuilderColumn" Width="Auto" MinWidth="0" MaxWidth="500"/>
+                <ColumnDefinition x:Name="ToolboxColumn" Width="Auto" MinWidth="0" MaxWidth="400"/>
+                <ColumnDefinition x:Name="ToolboxSplitterColumn" Width="Auto"/>
+                <ColumnDefinition x:Name="BuilderColumn" Width="Auto" MinWidth="0"/>
                 <ColumnDefinition x:Name="BuilderSplitterColumn" Width="Auto"/>
                 <ColumnDefinition x:Name="EditorColumn" Width="*"/>
                 <ColumnDefinition x:Name="EditorPreviewSplitterColumn" Width="Auto"/>
                 <ColumnDefinition x:Name="PreviewColumn" Width="*"/>
+                <ColumnDefinition x:Name="PropertiesSplitterColumn" Width="Auto"/>
+                <ColumnDefinition x:Name="PropertiesColumn" Width="Auto" MinWidth="0" MaxWidth="400"/>
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="BuilderPanel" Grid.Column="0" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12">
+            <!-- Shape Toolbox (New Visual Builder) -->
+            <Border x:Name="ToolboxPanel" Grid.Column="0" Visibility="Collapsed">
+                <views:ShapeToolbox x:Name="ShapeToolboxControl"/>
+            </Border>
+
+            <ctk:GridSplitter x:Name="ToolboxSplitter"
+                              Grid.Column="1"
+                              Width="12"
+                              Visibility="Collapsed"
+                              ResizeBehavior="BasedOnAlignment"
+                              ResizeDirection="Auto"
+                              Background="Transparent"/>
+
+            <!-- Visual Canvas (New Visual Builder) -->
+            <Border x:Name="CanvasPanel" Grid.Column="2" Visibility="Collapsed">
+                <views:DiagramCanvas x:Name="DiagramCanvasControl"/>
+            </Border>
+
+            <ctk:GridSplitter x:Name="CanvasSplitter"
+                              Grid.Column="3"
+                              Width="12"
+                              Visibility="Collapsed"
+                              ResizeBehavior="BasedOnAlignment"
+                              ResizeDirection="Auto"
+                              Background="Transparent"/>
+
+            <!-- Old Builder Panel (Legacy) -->
+            <Border x:Name="BuilderPanel" Grid.Column="2" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12" Visibility="Collapsed">
                 <Grid RowDefinitions="Auto, Auto, *, Auto, Auto, *, Auto">
                     <TextBlock Grid.Row="0" Text="Diagram Builder" Style="{ThemeResource TitleTextBlockStyle}" Margin="0,0,0,12"/>
 
@@ -204,26 +236,19 @@
                 </Grid>
             </Border>
 
-            <ctk:GridSplitter x:Name="BuilderSplitter"
-                                   Grid.Column="1"
-                                   Width="12"
-                                   ResizeBehavior="BasedOnAlignment"
-                                   ResizeDirection="Auto"
-                                   Background="Transparent"/>
-            
             <tcb:TextControlBox
                 x:Name="CodeEditor"
-                Grid.Column="2"
+                Grid.Column="4"
                 ShowLineNumbers="True"/>
 
             <ctk:GridSplitter x:Name="EditorPreviewSplitter"
-                                   Grid.Column="3"
+                                   Grid.Column="5"
                                    Width="12"
                                    ResizeBehavior="BasedOnAlignment"
                                    ResizeDirection="Auto"
                                    Background="Transparent"/>
 
-            <Grid Grid.Column="4">
+            <Grid Grid.Column="6">
                 <WebView2 x:Name="PreviewBrowser"/>
                 <Button x:Name="FloatingRefreshButton"
                         Content="⟳"
@@ -239,6 +264,19 @@
                         ToolTipService.ToolTip="Refresh Preview"
                         Click="RefreshPreview_Click"/>
             </Grid>
+
+            <!-- Properties Panel (New Visual Builder) -->
+            <ctk:GridSplitter x:Name="PropertiesSplitter"
+                              Grid.Column="7"
+                              Width="12"
+                              Visibility="Collapsed"
+                              ResizeBehavior="BasedOnAlignment"
+                              ResizeDirection="Auto"
+                              Background="Transparent"/>
+
+            <Border x:Name="PropertiesPanel" Grid.Column="8" Visibility="Collapsed">
+                <views:PropertiesPanel x:Name="PropertiesPanelControl"/>
+            </Border>
         </Grid>
 
         <!-- Status Bar -->

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="MermaidDiagramApp.Views.DiagramCanvas"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MermaidDiagramApp.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:canvas="using:MermaidDiagramApp.Models.Canvas"
+    mc:Ignorable="d">
+
+    <Grid Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <ScrollViewer x:Name="CanvasScrollViewer"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto"
+                      ZoomMode="Disabled">
+            <Grid x:Name="CanvasContainer"
+                  Width="2000"
+                  Height="2000"
+                  Background="Transparent"
+                  AllowDrop="True"
+                  Drop="CanvasContainer_Drop"
+                  DragOver="CanvasContainer_DragOver"
+                  PointerPressed="CanvasContainer_PointerPressed">
+                
+                <!-- Grid Background -->
+                <Canvas x:Name="GridCanvas" IsHitTestVisible="False">
+                    <!-- Grid lines will be drawn programmatically -->
+                </Canvas>
+
+                <!-- Diagram Elements Canvas -->
+                <Canvas x:Name="DiagramElementsCanvas">
+                    <!-- Connectors (drawn first, so they appear behind nodes) -->
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Connectors, Mode=OneWay}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="canvas:CanvasConnector">
+                                <!-- Connector visualization will be added in code-behind -->
+                                <Border Width="100" Height="2" Background="Black"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Nodes - using Canvas for absolute positioning -->
+                    <Canvas x:Name="NodesCanvas">
+                        <!-- Nodes will be added programmatically -->
+                    </Canvas>
+                    
+                    <!-- Hidden ItemsControl just for data binding -->
+                    <ItemsControl x:Name="NodesItemsControl" 
+                                  ItemsSource="{x:Bind ViewModel.Nodes, Mode=OneWay}"
+                                  Visibility="Collapsed">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="canvas:CanvasNode">
+                                <Border Width="{x:Bind Size.Width, Mode=OneWay}"
+                                        Height="{x:Bind Size.Height, Mode=OneWay}"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="2"
+                                        CornerRadius="4"
+                                        Tag="{x:Bind}">
+                                    <Grid IsHitTestVisible="False">
+                                        <TextBlock Text="{x:Bind Text, Mode=OneWay}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   TextAlignment="Center"
+                                                   Margin="8"
+                                                   IsHitTestVisible="False"/>
+                                        
+                                        <!-- Selection indicator -->
+                                        <Border BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                                                BorderThickness="3"
+                                                CornerRadius="4"
+                                                IsHitTestVisible="False"
+                                                Visibility="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Canvas>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Zoom Controls -->
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="16"
+                    Spacing="8"
+                    Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                    Padding="8"
+                    CornerRadius="4">
+            <Button Content="-" 
+                    Width="32" 
+                    Height="32"
+                    Click="ZoomOut_Click"
+                    ToolTipService.ToolTip="Zoom Out"/>
+            <TextBlock Text="{x:Bind ViewModel.ZoomLevel, Mode=OneWay, Converter={StaticResource ZoomLevelConverter}}"
+                       VerticalAlignment="Center"
+                       MinWidth="50"
+                       TextAlignment="Center"/>
+            <Button Content="+" 
+                    Width="32" 
+                    Height="32"
+                    Click="ZoomIn_Click"
+                    ToolTipService.ToolTip="Zoom In"/>
+            <Button Content="⊡" 
+                    Width="32" 
+                    Height="32"
+                    Click="ResetZoom_Click"
+                    ToolTipService.ToolTip="Reset Zoom"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

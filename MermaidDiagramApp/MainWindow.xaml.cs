@@ -106,6 +106,32 @@ namespace MermaidDiagramApp
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             await InitializeWebViewAsync();
+            
+            // Wire up visual builder components
+            if (DiagramCanvasControl != null && PropertiesPanelControl != null && ShapeToolboxControl != null)
+            {
+                // Connect canvas ViewModel to properties panel
+                DiagramCanvasControl.ViewModel.PropertyChanged += (s, args) =>
+                {
+                    if (args.PropertyName == nameof(DiagramCanvasControl.ViewModel.SelectedNode))
+                    {
+                        PropertiesPanelControl.ViewModel.SelectedElement = DiagramCanvasControl.ViewModel.SelectedNode;
+                    }
+                    else if (args.PropertyName == nameof(DiagramCanvasControl.ViewModel.SelectedConnector))
+                    {
+                        PropertiesPanelControl.ViewModel.SelectedElement = DiagramCanvasControl.ViewModel.SelectedConnector;
+                    }
+                };
+                
+                // Connect canvas ViewModel to toolbox for code view
+                ShapeToolboxControl.WireUpCanvasViewModel(DiagramCanvasControl.ViewModel);
+                
+                // Handle apply code to editor
+                ShapeToolboxControl.ApplyCodeRequested += (s, code) =>
+                {
+                    CodeEditor.Text = code;
+                };
+            }
         }
 
         private async Task CheckForMermaidUpdatesAsync()
@@ -1257,8 +1283,18 @@ namespace MermaidDiagramApp
                 MainMenuBar.Visibility = Visibility.Collapsed;
                 EditorColumn.Width = new GridLength(0);
                 EditorPreviewSplitter.Visibility = Visibility.Collapsed;
+                
+                // Hide all builder panels
+                ToolboxColumn.Width = new GridLength(0);
+                ToolboxPanel.Visibility = Visibility.Collapsed;
+                ToolboxSplitter.Visibility = Visibility.Collapsed;
                 BuilderColumn.Width = new GridLength(0);
-                BuilderSplitter.Visibility = Visibility.Collapsed;
+                CanvasPanel.Visibility = Visibility.Collapsed;
+                CanvasSplitter.Visibility = Visibility.Collapsed;
+                BuilderPanel.Visibility = Visibility.Collapsed;
+                PropertiesColumn.Width = new GridLength(0);
+                PropertiesPanel.Visibility = Visibility.Collapsed;
+                PropertiesSplitter.Visibility = Visibility.Collapsed;
             }
             _isPresentationMode = !_isPresentationMode;
         }
@@ -1271,8 +1307,18 @@ namespace MermaidDiagramApp
                 MainMenuBar.Visibility = Visibility.Collapsed;
                 EditorColumn.Width = new GridLength(0);
                 EditorPreviewSplitter.Visibility = Visibility.Collapsed;
+                
+                // Hide all builder panels
+                ToolboxColumn.Width = new GridLength(0);
+                ToolboxPanel.Visibility = Visibility.Collapsed;
+                ToolboxSplitter.Visibility = Visibility.Collapsed;
                 BuilderColumn.Width = new GridLength(0);
-                BuilderSplitter.Visibility = Visibility.Collapsed;
+                CanvasPanel.Visibility = Visibility.Collapsed;
+                CanvasSplitter.Visibility = Visibility.Collapsed;
+                BuilderPanel.Visibility = Visibility.Collapsed;
+                PropertiesColumn.Width = new GridLength(0);
+                PropertiesPanel.Visibility = Visibility.Collapsed;
+                PropertiesSplitter.Visibility = Visibility.Collapsed;
             }
             else
             {
@@ -1293,15 +1339,49 @@ namespace MermaidDiagramApp
         {
             if (_isBuilderVisible)
             {
-                BuilderColumn.Width = new GridLength(300, GridUnitType.Pixel); // Or use GridLength.Auto
-                BuilderSplitter.Visibility = Visibility.Visible;
-                BuilderPanel.Visibility = Visibility.Visible;
+                // Show NEW Visual Builder (three-panel layout)
+                ToolboxColumn.Width = new GridLength(300, GridUnitType.Pixel);
+                ToolboxPanel.Visibility = Visibility.Visible;
+                ToolboxSplitter.Visibility = Visibility.Visible;
+
+                BuilderColumn.Width = new GridLength(1, GridUnitType.Star);
+                CanvasPanel.Visibility = Visibility.Visible;
+                CanvasSplitter.Visibility = Visibility.Visible;
+
+                PropertiesColumn.Width = new GridLength(300, GridUnitType.Pixel);
+                PropertiesPanel.Visibility = Visibility.Visible;
+                PropertiesSplitter.Visibility = Visibility.Visible;
+
+                // Hide old builder
+                BuilderPanel.Visibility = Visibility.Collapsed;
+                
+                // Hide code editor and preview in builder mode
+                EditorColumn.Width = new GridLength(0);
+                CodeEditor.Visibility = Visibility.Collapsed;
+                EditorPreviewSplitter.Visibility = Visibility.Collapsed;
+                PreviewColumn.Width = new GridLength(0);
             }
             else
             {
+                // Hide all builder panels
+                ToolboxColumn.Width = new GridLength(0);
+                ToolboxPanel.Visibility = Visibility.Collapsed;
+                ToolboxSplitter.Visibility = Visibility.Collapsed;
+
                 BuilderColumn.Width = new GridLength(0);
-                BuilderSplitter.Visibility = Visibility.Collapsed;
+                CanvasPanel.Visibility = Visibility.Collapsed;
+                CanvasSplitter.Visibility = Visibility.Collapsed;
                 BuilderPanel.Visibility = Visibility.Collapsed;
+
+                PropertiesColumn.Width = new GridLength(0);
+                PropertiesPanel.Visibility = Visibility.Collapsed;
+                PropertiesSplitter.Visibility = Visibility.Collapsed;
+                
+                // Show code editor and preview
+                EditorColumn.Width = new GridLength(1, GridUnitType.Star);
+                CodeEditor.Visibility = Visibility.Visible;
+                EditorPreviewSplitter.Visibility = Visibility.Visible;
+                PreviewColumn.Width = new GridLength(1, GridUnitType.Star);
             }
         }
 

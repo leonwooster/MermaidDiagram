@@ -14,6 +14,9 @@
             <!-- Other app resources here -->
             <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
             <converters:EnumToStringConverter x:Key="EnumToStringConverter"/>
+            <converters:ZoomLevelConverter x:Key="ZoomLevelConverter"/>
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
