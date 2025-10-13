@@ -204,11 +204,28 @@
         };
         
         // Toggle debug panel with Ctrl+Shift+D
+        // Also handle F11 and Escape for full screen mode
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.shiftKey && e.key === 'D') {
                 const debugInfo = document.getElementById('debug-info');
                 if (debugInfo) {
                     debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
+                }
+            }
+            
+            // Send F11 key press to host application
+            if (e.key === 'F11') {
+                e.preventDefault();
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage('F11_PRESSED');
+                }
+            }
+            
+            // Send Escape key press to host application
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage('ESCAPE_PRESSED');
                 }
             }
         });

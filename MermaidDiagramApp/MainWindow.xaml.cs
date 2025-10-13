@@ -528,6 +528,35 @@ namespace MermaidDiagramApp
                     }
                 };
 
+                // Set up keyboard event interception via JavaScript
+                coreWebView2.WebMessageReceived += (s, e) =>
+                {
+                    var message = e.TryGetWebMessageAsString();
+                    
+                    // Handle keyboard shortcuts sent from JavaScript
+                    if (message == "F11_PRESSED")
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            ToggleFullScreen_Click(this, new RoutedEventArgs());
+                        });
+                    }
+                    else if (message == "ESCAPE_PRESSED")
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            if (_isFullScreen)
+                            {
+                                ToggleFullScreen_Click(this, new RoutedEventArgs());
+                            }
+                            else if (_isPresentationMode)
+                            {
+                                PresentationMode_Click(this, new RoutedEventArgs());
+                            }
+                        });
+                    }
+                };
+
                 // Navigate to the packaged Unified Renderer page through the virtual host
                 var hostPageUri = new Uri($"https://{virtualHost}/UnifiedRenderer.html");
                 coreWebView2.Navigate(hostPageUri.ToString());
@@ -1062,6 +1091,12 @@ namespace MermaidDiagramApp
                     PresentationMode_Click(this, new RoutedEventArgs());
                     e.Handled = true;
                 }
+            }
+            // Handle F11 key for full screen toggle when WebView has focus
+            else if (e.Key == Windows.System.VirtualKey.F11)
+            {
+                ToggleFullScreen_Click(this, new RoutedEventArgs());
+                e.Handled = true;
             }
         }
 
