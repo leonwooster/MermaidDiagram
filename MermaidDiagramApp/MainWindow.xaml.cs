@@ -808,10 +808,14 @@ namespace MermaidDiagramApp
 
                 _logger.LogDebug($"Updating preview with code length: {code.Length}");
 
+                // Clear detection cache to ensure fresh content type detection
+                _contentTypeDetector.ClearCache();
+
                 // Create rendering context
+                // When no file is loaded, use empty extension to let content detection work
                 var fileExtension = !string.IsNullOrEmpty(_currentFilePath) 
                     ? Path.GetExtension(_currentFilePath).TrimStart('.') 
-                    : "mmd";
+                    : string.Empty;
 
                 var context = new RenderingContext
                 {
@@ -927,8 +931,8 @@ namespace MermaidDiagramApp
                     RenderModeIcon.Glyph = "\uE8A5"; // Document icon
                     break;
                 case ContentType.MarkdownWithMermaid:
-                    RenderModeText.Text = "Markdown with Diagrams";
-                    RenderModeIcon.Glyph = "\uE8A5"; // Combined icon
+                    RenderModeText.Text = "Hybrid Document";
+                    RenderModeIcon.Glyph = "\uE8FD"; // Combined icon
                     break;
                 default:
                     RenderModeText.Text = "Unknown";
@@ -953,7 +957,7 @@ namespace MermaidDiagramApp
                     ContentTypeIcon.Glyph = "\uE8A5"; // Document icon
                     break;
                 case ContentType.MarkdownWithMermaid:
-                    ContentTypeText.Text = "Markdown + Mermaid";
+                    ContentTypeText.Text = "Hybrid";
                     ContentTypeIcon.Glyph = "\uE8FD"; // Combined icon
                     break;
                 default:

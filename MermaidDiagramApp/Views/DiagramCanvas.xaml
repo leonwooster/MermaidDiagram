@@ -21,7 +21,9 @@
                   AllowDrop="True"
                   Drop="CanvasContainer_Drop"
                   DragOver="CanvasContainer_DragOver"
-                  PointerPressed="CanvasContainer_PointerPressed">
+                  PointerPressed="CanvasContainer_PointerPressed"
+                  PointerMoved="CanvasContainer_PointerMoved"
+                  PointerReleased="CanvasContainer_PointerReleased">
                 
                 <!-- Grid Background -->
                 <Canvas x:Name="GridCanvas" IsHitTestVisible="False">

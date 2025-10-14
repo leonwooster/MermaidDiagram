@@ -30,10 +30,17 @@ namespace MermaidDiagramApp.Views
         private CanvasConnector? _selectedConnector;
         private Dictionary<Line, CanvasConnector> _connectorLines = new Dictionary<Line, CanvasConnector>();
         private Dictionary<CanvasConnector, (Ellipse start, Ellipse end)> _connectorHandles = new Dictionary<CanvasConnector, (Ellipse, Ellipse)>();
+        private Dictionary<CanvasConnector, TextBlock> _connectorLabels = new Dictionary<CanvasConnector, TextBlock>();
         private bool _isDraggingConnectorEndpoint;
         private Ellipse? _draggedEndpoint;
         private CanvasConnector? _reconnectingConnector;
         private bool _isStartPoint;
+        private TextBox? _activeEditorTextBox;
+        
+        // Rubber-band selection
+        private bool _isRubberBandSelecting;
+        private Point _rubberBandStartPoint;
+        private Microsoft.UI.Xaml.Shapes.Rectangle? _rubberBandRectangle;
 
         public DiagramCanvas()
         {
@@ -57,25 +64,55 @@ namespace MermaidDiagramApp.Views
 
         private void DeleteSelectedNodes()
         {
-            // Check if a connector is selected
+            var deletedCount = 0;
+            
+            // First, collect all connectors to delete (including selected ones)
+            var connectorsToDelete = new List<CanvasConnector>();
+            
+            // Add the currently selected connector
             if (_selectedConnector != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[DELETE] Deleting connector: {_selectedConnector.Id}");
-                DeleteConnector(_selectedConnector);
-                return;
+                connectorsToDelete.Add(_selectedConnector);
             }
             
-            // Otherwise delete selected nodes
-            var selectedNodes = ViewModel.Nodes.Where(n => n.IsSelected).ToList();
-            if (selectedNodes.Count == 0)
-                return;
-
-            System.Diagnostics.Debug.WriteLine($"[DELETE] Deleting {selectedNodes.Count} node(s)");
+            // Add connectors from SelectedElements
+            var selectedConnectors = ViewModel.SelectedElements
+                .OfType<CanvasConnector>()
+                .ToList();
             
-            foreach (var node in selectedNodes)
+            foreach (var connector in selectedConnectors)
             {
-                ViewModel.RemoveNode(node);
-                RemoveNodeVisual(node);
+                if (!connectorsToDelete.Contains(connector))
+                {
+                    connectorsToDelete.Add(connector);
+                }
+            }
+            
+            // Delete all selected nodes
+            var selectedNodes = ViewModel.Nodes.Where(n => n.IsSelected).ToList();
+            if (selectedNodes.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DELETE] Deleting {selectedNodes.Count} node(s)");
+                
+                foreach (var node in selectedNodes)
+                {
+                    ViewModel.RemoveNode(node);
+                    RemoveNodeVisual(node);
+                    deletedCount++;
+                }
+            }
+            
+            // Delete all collected connectors
+            foreach (var connector in connectorsToDelete)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DELETE] Deleting connector: {connector.Id}");
+                DeleteConnector(connector);
+                deletedCount++;
+            }
+            
+            if (deletedCount > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DELETE] Total elements deleted: {deletedCount}");
             }
         }
         
@@ -97,11 +134,29 @@ namespace MermaidDiagramApp.Views
                 _connectorHandles.Remove(connector);
             }
             
+            // Remove label if exists
+            if (_connectorLabels.TryGetValue(connector, out var labelTextBlock))
+            {
+                // Find and remove the parent Border
+                var parent = VisualTreeHelper.GetParent(labelTextBlock);
+                if (parent is Border labelBorder)
+                {
+                    NodesCanvas.Children.Remove(labelBorder);
+                }
+                _connectorLabels.Remove(connector);
+            }
+            
             // Remove from view model
             ViewModel.RemoveConnector(connector);
             
-            // Clear selection
-            _selectedConnector = null;
+            // Remove from SelectedElements if present
+            ViewModel.SelectedElements.Remove(connector);
+            
+            // Clear selection if this was the selected connector
+            if (_selectedConnector == connector)
+            {
+                _selectedConnector = null;
+            }
             
             System.Diagnostics.Debug.WriteLine($"[DELETE] Connector deleted");
         }
@@ -213,6 +268,7 @@ namespace MermaidDiagramApp.Views
             border.ManipulationDelta += Node_ManipulationDelta;
             border.ManipulationCompleted += Node_ManipulationCompleted;
             border.Tapped += Node_Tapped;
+            border.DoubleTapped += Node_DoubleTapped;
 
             // Subscribe to property changes
             node.PropertyChanged += (s, e) =>
@@ -904,30 +960,195 @@ namespace MermaidDiagramApp.Views
 
         private void CanvasContainer_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
+            // Check if clicking on a node or connector - if so, don't start rubber-band selection
+            var clickedElement = e.OriginalSource as FrameworkElement;
+            bool clickedOnElement = false;
+            
+            // Check if clicked on a node
+            while (clickedElement != null)
+            {
+                if (clickedElement is Border border && border.Tag is CanvasNode)
+                {
+                    clickedOnElement = true;
+                    break;
+                }
+                if (clickedElement is Line line && line.Tag is CanvasConnector)
+                {
+                    clickedOnElement = true;
+                    break;
+                }
+                clickedElement = VisualTreeHelper.GetParent(clickedElement) as FrameworkElement;
+            }
+            
+            // If clicked on an element, don't start rubber-band selection
+            if (clickedOnElement)
+            {
+                return;
+            }
+            
+            // Close any active editor
+            CloseActiveEditor();
+            
             // Deselect all nodes when clicking on empty canvas
             foreach (var node in ViewModel.Nodes)
             {
                 node.IsSelected = false;
             }
             
-            // Deselect connector
-            if (_selectedConnector != null)
+            // Deselect all connectors
+            foreach (var kvp in _connectorLines)
             {
-                var line = _connectorLines.FirstOrDefault(kvp => kvp.Value == _selectedConnector).Key;
-                if (line != null)
-                {
-                    line.Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black);
-                    line.StrokeThickness = 2;
-                }
+                var line = kvp.Key;
+                var connector = kvp.Value;
+                
+                line.Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black);
+                line.StrokeThickness = 2;
+                connector.IsSelected = false;
                 
                 // Hide handles
-                if (_connectorHandles.TryGetValue(_selectedConnector, out var handles))
+                if (_connectorHandles.TryGetValue(connector, out var handles))
                 {
                     handles.start.Visibility = Visibility.Collapsed;
                     handles.end.Visibility = Visibility.Collapsed;
                 }
+            }
+            
+            _selectedConnector = null;
+            
+            // Clear SelectedElements
+            ViewModel.SelectedElements.Clear();
+            
+            // Start rubber-band selection
+            _isRubberBandSelecting = true;
+            _rubberBandStartPoint = e.GetCurrentPoint(NodesCanvas).Position;
+            
+            // Create selection rectangle
+            _rubberBandRectangle = new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Stroke = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                StrokeThickness = 1,
+                StrokeDashArray = new DoubleCollection { 4, 2 },
+                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(30, 30, 144, 255)),
+                IsHitTestVisible = false
+            };
+            
+            Canvas.SetLeft(_rubberBandRectangle, _rubberBandStartPoint.X);
+            Canvas.SetTop(_rubberBandRectangle, _rubberBandStartPoint.Y);
+            Canvas.SetZIndex(_rubberBandRectangle, 1000);
+            NodesCanvas.Children.Add(_rubberBandRectangle);
+            
+            // Capture pointer for drag events
+            (sender as UIElement)?.CapturePointer(e.Pointer);
+        }
+        
+        private void CanvasContainer_PointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            // Don't show rubber-band if a node is being manipulated
+            if (_manipulatedNode != null && _isRubberBandSelecting)
+            {
+                _isRubberBandSelecting = false;
+                if (_rubberBandRectangle != null)
+                {
+                    NodesCanvas.Children.Remove(_rubberBandRectangle);
+                    _rubberBandRectangle = null;
+                }
+                return;
+            }
+            
+            if (_isRubberBandSelecting && _rubberBandRectangle != null)
+            {
+                var currentPoint = e.GetCurrentPoint(NodesCanvas).Position;
                 
-                _selectedConnector = null;
+                // Calculate rectangle bounds
+                var left = Math.Min(_rubberBandStartPoint.X, currentPoint.X);
+                var top = Math.Min(_rubberBandStartPoint.Y, currentPoint.Y);
+                var width = Math.Abs(currentPoint.X - _rubberBandStartPoint.X);
+                var height = Math.Abs(currentPoint.Y - _rubberBandStartPoint.Y);
+                
+                Canvas.SetLeft(_rubberBandRectangle, left);
+                Canvas.SetTop(_rubberBandRectangle, top);
+                _rubberBandRectangle.Width = width;
+                _rubberBandRectangle.Height = height;
+                
+                // Select elements within rectangle
+                UpdateRubberBandSelection(left, top, width, height);
+            }
+        }
+        
+        private void CanvasContainer_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            if (_isRubberBandSelecting)
+            {
+                _isRubberBandSelecting = false;
+                
+                // Remove selection rectangle
+                if (_rubberBandRectangle != null)
+                {
+                    NodesCanvas.Children.Remove(_rubberBandRectangle);
+                    _rubberBandRectangle = null;
+                }
+                
+                // Release pointer capture
+                (sender as UIElement)?.ReleasePointerCapture(e.Pointer);
+            }
+        }
+        
+        private void UpdateRubberBandSelection(double left, double top, double width, double height)
+        {
+            var selectionRect = new Rect(left, top, width, height);
+            
+            // Select nodes within rectangle
+            foreach (var node in ViewModel.Nodes)
+            {
+                var nodeRect = new Rect(node.PositionX, node.PositionY, node.SizeWidth, node.SizeHeight);
+                
+                // Check intersection manually
+                bool intersects = !(nodeRect.Right < selectionRect.Left || 
+                                   nodeRect.Left > selectionRect.Right || 
+                                   nodeRect.Bottom < selectionRect.Top || 
+                                   nodeRect.Top > selectionRect.Bottom);
+                
+                node.IsSelected = intersects;
+            }
+            
+            // Select connectors within rectangle
+            foreach (var kvp in _connectorLines)
+            {
+                var line = kvp.Key;
+                var connector = kvp.Value;
+                
+                // Check if line intersects with selection rectangle
+                var lineRect = new Rect(
+                    Math.Min(line.X1, line.X2),
+                    Math.Min(line.Y1, line.Y2),
+                    Math.Abs(line.X2 - line.X1),
+                    Math.Abs(line.Y2 - line.Y1)
+                );
+                
+                // Check intersection manually
+                bool intersects = !(lineRect.Right < selectionRect.Left || 
+                                   lineRect.Left > selectionRect.Right || 
+                                   lineRect.Bottom < selectionRect.Top || 
+                                   lineRect.Top > selectionRect.Bottom);
+                
+                if (intersects)
+                {
+                    line.Stroke = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue);
+                    line.StrokeThickness = 3;
+                    connector.IsSelected = true;
+                    
+                    if (!ViewModel.SelectedElements.Contains(connector))
+                    {
+                        ViewModel.SelectedElements.Add(connector);
+                    }
+                }
+                else
+                {
+                    line.Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black);
+                    line.StrokeThickness = 2;
+                    connector.IsSelected = false;
+                    ViewModel.SelectedElements.Remove(connector);
+                }
             }
         }
 
@@ -936,11 +1157,44 @@ namespace MermaidDiagramApp.Views
         {
             if (sender is Border border && border.Tag is CanvasNode node)
             {
+                // Close any active editor
+                CloseActiveEditor();
+                
                 System.Diagnostics.Debug.WriteLine($"[TAP] Node tapped: {node.Id}");
                 
-                // Normal selection mode
+                // Check for Ctrl key for multi-select
                 var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
                 var addToSelection = ctrlState.HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+                
+                if (!addToSelection)
+                {
+                    // Deselect all connectors when selecting a node without Ctrl
+                    foreach (var kvp in _connectorLines)
+                    {
+                        var line = kvp.Key;
+                        var connector = kvp.Value;
+                        
+                        line.Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black);
+                        line.StrokeThickness = 2;
+                        connector.IsSelected = false;
+                        
+                        // Hide handles
+                        if (_connectorHandles.TryGetValue(connector, out var handles))
+                        {
+                            handles.start.Visibility = Visibility.Collapsed;
+                            handles.end.Visibility = Visibility.Collapsed;
+                        }
+                    }
+                    
+                    _selectedConnector = null;
+                    
+                    // Remove connectors from SelectedElements
+                    var connectorsToRemove = ViewModel.SelectedElements.OfType<CanvasConnector>().ToList();
+                    foreach (var conn in connectorsToRemove)
+                    {
+                        ViewModel.SelectedElements.Remove(conn);
+                    }
+                }
                 
                 ViewModel.SelectNode(node, addToSelection);
                 e.Handled = true;
@@ -951,6 +1205,101 @@ namespace MermaidDiagramApp.Views
             {
                 System.Diagnostics.Debug.WriteLine($"[TAP] Failed - sender type: {sender?.GetType().Name}, has tag: {(sender as Border)?.Tag != null}");
             }
+        }
+
+        private void Node_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            if (sender is Border border && border.Tag is CanvasNode node)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DOUBLE-TAP] Node double-tapped: {node.Id}");
+                ShowNodeTextEditor(border, node);
+                e.Handled = true;
+            }
+        }
+
+        private void ShowNodeTextEditor(Border nodeBorder, CanvasNode node)
+        {
+            // Close any existing editor first
+            CloseActiveEditor();
+            
+            // Find the Grid inside the Border
+            if (nodeBorder.Child is not Grid grid)
+                return;
+
+            // Hide the TextBlock
+            var textBlock = grid.Children.OfType<TextBlock>().FirstOrDefault();
+            if (textBlock != null)
+            {
+                textBlock.Visibility = Visibility.Collapsed;
+            }
+
+            // Create a TextBox for editing
+            var textBox = new TextBox
+            {
+                Text = node.Text,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(8),
+                AcceptsReturn = false,
+                BorderThickness = new Thickness(0),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+            };
+
+            // Store reference to active editor
+            _activeEditorTextBox = textBox;
+
+            // Focus the textbox
+            textBox.Loaded += (s, e) =>
+            {
+                textBox.Focus(FocusState.Programmatic);
+                textBox.SelectAll();
+            };
+
+            // Handle text changes
+            textBox.LostFocus += (s, e) =>
+            {
+                node.Text = textBox.Text;
+                grid.Children.Remove(textBox);
+                _activeEditorTextBox = null;
+                if (textBlock != null)
+                {
+                    textBlock.Text = node.Text;
+                    textBlock.Visibility = Visibility.Visible;
+                }
+                System.Diagnostics.Debug.WriteLine($"[EDIT] Node text updated: {node.Text}");
+            };
+
+            // Handle Enter key to finish editing
+            textBox.KeyDown += (s, e) =>
+            {
+                if (e.Key == Windows.System.VirtualKey.Enter)
+                {
+                    node.Text = textBox.Text;
+                    grid.Children.Remove(textBox);
+                    if (textBlock != null)
+                    {
+                        textBlock.Text = node.Text;
+                        textBlock.Visibility = Visibility.Visible;
+                    }
+                    e.Handled = true;
+                    System.Diagnostics.Debug.WriteLine($"[EDIT] Node text updated (Enter): {node.Text}");
+                }
+                else if (e.Key == Windows.System.VirtualKey.Escape)
+                {
+                    // Cancel editing
+                    grid.Children.Remove(textBox);
+                    if (textBlock != null)
+                    {
+                        textBlock.Visibility = Visibility.Visible;
+                    }
+                    e.Handled = true;
+                    System.Diagnostics.Debug.WriteLine($"[EDIT] Node text editing cancelled");
+                }
+            };
+
+            grid.Children.Add(textBox);
         }
 
         private void CreateConnectorVisual(CanvasConnector connector)
@@ -979,6 +1328,7 @@ namespace MermaidDiagramApp.Views
             
             // Make line selectable
             line.PointerPressed += Connector_PointerPressed;
+            line.DoubleTapped += Connector_DoubleTapped;
             line.PointerEntered += (s, e) =>
             {
                 this.ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Hand);
@@ -1041,49 +1391,311 @@ namespace MermaidDiagramApp.Views
             
             // Add line to canvas (behind nodes)
             NodesCanvas.Children.Insert(0, line);
+            
+            // Create label TextBlock if connector has a label
+            if (!string.IsNullOrWhiteSpace(connector.Label))
+            {
+                CreateConnectorLabel(connector, startNode, endNode);
+            }
+            
+            // Subscribe to label changes
+            connector.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(CanvasConnector.Label))
+                {
+                    UpdateConnectorLabel(connector, startNode, endNode);
+                }
+            };
+            
             System.Diagnostics.Debug.WriteLine($"[CONNECTOR] Connector visual added");
+        }
+        
+        private void CreateConnectorLabel(CanvasConnector connector, CanvasNode startNode, CanvasNode endNode)
+        {
+            // Wrap TextBlock in a Border for background
+            var labelTextBlock = new TextBlock
+            {
+                Text = connector.Label,
+                Padding = new Thickness(4, 2, 4, 2),
+                FontSize = 12
+            };
+            
+            var labelBorder = new Border
+            {
+                Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+                BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.LightGray),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(2),
+                Child = labelTextBlock,
+                IsHitTestVisible = false
+            };
+            
+            // Position at midpoint
+            var startPoint = GetAnchorPoint(startNode, connector.StartAnchor);
+            var endPoint = GetAnchorPoint(endNode, connector.EndAnchor);
+            var midPoint = new Point((startPoint.X + endPoint.X) / 2, (startPoint.Y + endPoint.Y) / 2);
+            
+            Canvas.SetLeft(labelBorder, midPoint.X - 30);
+            Canvas.SetTop(labelBorder, midPoint.Y - 12);
+            Canvas.SetZIndex(labelBorder, 100);
+            
+            NodesCanvas.Children.Add(labelBorder);
+            _connectorLabels[connector] = labelTextBlock;
+        }
+        
+        private void UpdateConnectorLabel(CanvasConnector connector, CanvasNode startNode, CanvasNode endNode)
+        {
+            // Remove old label if exists
+            if (_connectorLabels.TryGetValue(connector, out var oldLabel))
+            {
+                NodesCanvas.Children.Remove(oldLabel);
+                _connectorLabels.Remove(connector);
+            }
+            
+            // Create new label if text is not empty
+            if (!string.IsNullOrWhiteSpace(connector.Label))
+            {
+                CreateConnectorLabel(connector, startNode, endNode);
+            }
         }
         
         private void Connector_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
             if (sender is Line line && line.Tag is CanvasConnector connector)
             {
-                // Deselect all nodes
-                foreach (var node in ViewModel.Nodes)
+                // Close any active editor
+                CloseActiveEditor();
+                
+                // Check for Ctrl key for multi-select
+                var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+                var addToSelection = ctrlState.HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+                
+                if (!addToSelection)
                 {
-                    node.IsSelected = false;
+                    // Deselect all nodes if not adding to selection
+                    foreach (var node in ViewModel.Nodes)
+                    {
+                        node.IsSelected = false;
+                    }
+                    
+                    // Deselect other connectors
+                    DeselectAllConnectors();
                 }
                 
                 // Select this connector
-                SelectConnector(connector);
+                SelectConnector(connector, addToSelection);
                 
-                System.Diagnostics.Debug.WriteLine($"[CONNECTOR] Selected connector: {connector.Id}");
+                System.Diagnostics.Debug.WriteLine($"[CONNECTOR] Selected connector: {connector.Id}, Multi-select: {addToSelection}");
                 e.Handled = true;
             }
         }
         
-        private void SelectConnector(CanvasConnector connector)
+        private void DeselectAllConnectors()
         {
-            // Deselect previous connector
-            if (_selectedConnector != null)
+            foreach (var kvp in _connectorLines)
             {
-                var prevLine = _connectorLines.FirstOrDefault(kvp => kvp.Value == _selectedConnector).Key;
-                if (prevLine != null)
+                var line = kvp.Key;
+                var conn = kvp.Value;
+                
+                if (conn != _selectedConnector)
                 {
-                    prevLine.Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black);
-                    prevLine.StrokeThickness = 2;
+                    line.Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black);
+                    line.StrokeThickness = 2;
+                    
+                    // Hide handles
+                    if (_connectorHandles.TryGetValue(conn, out var handles))
+                    {
+                        handles.start.Visibility = Visibility.Collapsed;
+                        handles.end.Visibility = Visibility.Collapsed;
+                    }
+                }
+            }
+        }
+
+        private void Connector_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            if (sender is Line line && line.Tag is CanvasConnector connector)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DOUBLE-TAP] Connector double-tapped: {connector.Id}");
+                
+                // Check if we're double-clicking on the label itself
+                var position = e.GetPosition(NodesCanvas);
+                
+                // If there's a label, check if we clicked near it
+                if (_connectorLabels.TryGetValue(connector, out var labelTextBlock))
+                {
+                    var parent = VisualTreeHelper.GetParent(labelTextBlock);
+                    if (parent is Border labelBorder)
+                    {
+                        var labelLeft = Canvas.GetLeft(labelBorder);
+                        var labelTop = Canvas.GetTop(labelBorder);
+                        var labelRect = new Rect(labelLeft, labelTop, labelBorder.ActualWidth, labelBorder.ActualHeight);
+                        
+                        // If clicked on label, edit it
+                        if (labelRect.Contains(position))
+                        {
+                            ShowConnectorLabelEditor(line, connector, position);
+                            e.Handled = true;
+                            return;
+                        }
+                    }
                 }
                 
-                // Hide previous handles
-                if (_connectorHandles.TryGetValue(_selectedConnector, out var prevHandles))
+                // Otherwise, show editor at click position (to add new label)
+                ShowConnectorLabelEditor(line, connector, position);
+                e.Handled = true;
+            }
+        }
+
+        private void ShowConnectorLabelEditor(Line connectorLine, CanvasConnector connector, Point clickPosition)
+        {
+            // Close any existing editor first
+            CloseActiveEditor();
+            
+            // Create a TextBox for editing the label
+            var textBox = new TextBox
+            {
+                Text = connector.Label ?? string.Empty,
+                MinWidth = 100,
+                MaxWidth = 300,
+                TextWrapping = TextWrapping.Wrap,
+                AcceptsReturn = false,
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+                Padding = new Thickness(4)
+            };
+
+            // Store reference to active editor
+            _activeEditorTextBox = textBox;
+
+            // Position the textbox near the middle of the line
+            var startNode = ViewModel.Nodes.FirstOrDefault(n => n.Id == connector.StartNodeId);
+            var endNode = ViewModel.Nodes.FirstOrDefault(n => n.Id == connector.EndNodeId);
+            
+            if (startNode != null && endNode != null)
+            {
+                var startPoint = GetAnchorPoint(startNode, connector.StartAnchor);
+                var endPoint = GetAnchorPoint(endNode, connector.EndAnchor);
+                var midPoint = new Point((startPoint.X + endPoint.X) / 2, (startPoint.Y + endPoint.Y) / 2);
+                
+                Canvas.SetLeft(textBox, midPoint.X - 50);
+                Canvas.SetTop(textBox, midPoint.Y - 15);
+            }
+            else
+            {
+                Canvas.SetLeft(textBox, clickPosition.X - 50);
+                Canvas.SetTop(textBox, clickPosition.Y - 15);
+            }
+
+            Canvas.SetZIndex(textBox, 1000);
+
+            // Focus the textbox
+            textBox.Loaded += (s, e) =>
+            {
+                textBox.Focus(FocusState.Programmatic);
+                textBox.SelectAll();
+            };
+
+            // Handle text changes
+            textBox.LostFocus += (s, e) =>
+            {
+                connector.Label = textBox.Text;
+                NodesCanvas.Children.Remove(textBox);
+                _activeEditorTextBox = null;
+                System.Diagnostics.Debug.WriteLine($"[EDIT] Connector label updated: {connector.Label}");
+            };
+
+            // Handle Enter key to finish editing
+            textBox.KeyDown += (s, e) =>
+            {
+                if (e.Key == Windows.System.VirtualKey.Enter)
                 {
-                    prevHandles.start.Visibility = Visibility.Collapsed;
-                    prevHandles.end.Visibility = Visibility.Collapsed;
+                    connector.Label = textBox.Text;
+                    NodesCanvas.Children.Remove(textBox);
+                    _activeEditorTextBox = null;
+                    e.Handled = true;
+                    System.Diagnostics.Debug.WriteLine($"[EDIT] Connector label updated (Enter): {connector.Label}");
+                }
+                else if (e.Key == Windows.System.VirtualKey.Escape)
+                {
+                    // Cancel editing
+                    NodesCanvas.Children.Remove(textBox);
+                    _activeEditorTextBox = null;
+                    e.Handled = true;
+                    System.Diagnostics.Debug.WriteLine($"[EDIT] Connector label editing cancelled");
+                }
+            };
+
+            NodesCanvas.Children.Add(textBox);
+        }
+        
+        private void CloseActiveEditor()
+        {
+            if (_activeEditorTextBox != null)
+            {
+                // Check if it's in NodesCanvas (connector label editor)
+                if (NodesCanvas.Children.Contains(_activeEditorTextBox))
+                {
+                    NodesCanvas.Children.Remove(_activeEditorTextBox);
+                }
+                else
+                {
+                    // It might be a node label editor inside a Grid
+                    // Find the parent and remove it
+                    var parent = VisualTreeHelper.GetParent(_activeEditorTextBox);
+                    if (parent is Grid grid)
+                    {
+                        grid.Children.Remove(_activeEditorTextBox);
+                        
+                        // Restore the TextBlock visibility
+                        var textBlock = grid.Children.OfType<TextBlock>().FirstOrDefault();
+                        if (textBlock != null)
+                        {
+                            textBlock.Visibility = Visibility.Visible;
+                        }
+                    }
+                }
+                _activeEditorTextBox = null;
+            }
+        }
+        
+        private void SelectConnector(CanvasConnector connector, bool addToSelection = false)
+        {
+            if (!addToSelection)
+            {
+                // Deselect previous connector
+                if (_selectedConnector != null && _selectedConnector != connector)
+                {
+                    var prevLine = _connectorLines.FirstOrDefault(kvp => kvp.Value == _selectedConnector).Key;
+                    if (prevLine != null)
+                    {
+                        prevLine.Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black);
+                        prevLine.StrokeThickness = 2;
+                    }
+                    
+                    // Hide previous handles
+                    if (_connectorHandles.TryGetValue(_selectedConnector, out var prevHandles))
+                    {
+                        prevHandles.start.Visibility = Visibility.Collapsed;
+                        prevHandles.end.Visibility = Visibility.Collapsed;
+                    }
                 }
             }
             
             // Select new connector
             _selectedConnector = connector;
+            connector.IsSelected = true;
+            
+            // Update ViewModel to trigger properties panel update
+            ViewModel.SelectedConnector = connector;
+            
+            // Add to SelectedElements collection for multi-select support
+            if (!ViewModel.SelectedElements.Contains(connector))
+            {
+                ViewModel.SelectedElements.Add(connector);
+            }
+            
             var line = _connectorLines.FirstOrDefault(kvp => kvp.Value == connector).Key;
             if (line != null)
             {
@@ -1273,6 +1885,27 @@ namespace MermaidDiagramApp.Views
                 {
                     UpdateEndpointHandlePositions(connector);
                 }
+                
+                // Update label position if label exists
+                UpdateConnectorLabelPosition(connector, startPoint, endPoint);
+            }
+        }
+        
+        private void UpdateConnectorLabelPosition(CanvasConnector connector, Point startPoint, Point endPoint)
+        {
+            if (_connectorLabels.TryGetValue(connector, out var labelTextBlock))
+            {
+                // Find the parent Border of the TextBlock
+                var parent = VisualTreeHelper.GetParent(labelTextBlock);
+                if (parent is Border labelBorder)
+                {
+                    // Calculate midpoint
+                    var midPoint = new Point((startPoint.X + endPoint.X) / 2, (endPoint.Y + startPoint.Y) / 2);
+                    
+                    // Update position
+                    Canvas.SetLeft(labelBorder, midPoint.X - 30);
+                    Canvas.SetTop(labelBorder, midPoint.Y - 12);
+                }
             }
         }
 
@@ -1317,9 +1950,23 @@ namespace MermaidDiagramApp.Views
             if (sender is Border border && border.Tag is CanvasNode node)
             {
                 _manipulatedNode = node;
+                
+                // Cancel rubber-band selection if it was started
+                if (_isRubberBandSelecting)
+                {
+                    _isRubberBandSelecting = false;
+                    if (_rubberBandRectangle != null)
+                    {
+                        NodesCanvas.Children.Remove(_rubberBandRectangle);
+                        _rubberBandRectangle = null;
+                    }
+                }
+                
                 var currentPos = new Point(Canvas.GetLeft(border), Canvas.GetTop(border));
                 System.Diagnostics.Debug.WriteLine($"[MANIP START] Node: {node.Id}, Current Canvas Pos: ({currentPos.X}, {currentPos.Y}), Model Pos: ({node.PositionX}, {node.PositionY})");
                 System.Diagnostics.Debug.WriteLine($"[MANIP START] Border ManipulationMode: {border.ManipulationMode}, IsHitTestVisible: {border.IsHitTestVisible}");
+                
+                e.Handled = true;
             }
             else
             {

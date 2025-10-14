@@ -75,20 +75,89 @@
 
                 <!-- Connector Properties -->
                 <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.IsConnectorSelected, Mode=OneWay}">
-                    <TextBlock Text="Connector Properties" Style="{ThemeResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="Edge Properties" Style="{ThemeResource SubtitleTextBlockStyle}"/>
                     
                     <TextBox Header="ID" 
                              Text="{x:Bind ViewModel.SelectedConnector.Id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             IsReadOnly="True"/>
+                             IsReadOnly="True"
+                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     
                     <TextBox Header="Label" 
-                             Text="{x:Bind ViewModel.SelectedConnector.Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                             Text="{x:Bind ViewModel.SelectedConnector.Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             PlaceholderText="Enter edge label"/>
+                    
+                    <TextBlock Text="Connection" FontWeight="SemiBold" Margin="0,8,0,0"/>
                     
                     <TextBox Header="Start Node" 
-                             Text="{x:Bind ViewModel.SelectedConnector.StartNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                             Text="{x:Bind ViewModel.SelectedConnector.StartNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             IsReadOnly="True"
+                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    
+                    <ComboBox Header="Start Anchor" 
+                              SelectedItem="{x:Bind ViewModel.SelectedConnector.StartAnchor, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                        <x:String>top</x:String>
+                        <x:String>right</x:String>
+                        <x:String>bottom</x:String>
+                        <x:String>left</x:String>
+                        <x:String>center</x:String>
+                    </ComboBox>
                     
                     <TextBox Header="End Node" 
-                             Text="{x:Bind ViewModel.SelectedConnector.EndNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                             Text="{x:Bind ViewModel.SelectedConnector.EndNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             IsReadOnly="True"
+                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    
+                    <ComboBox Header="End Anchor" 
+                              SelectedItem="{x:Bind ViewModel.SelectedConnector.EndAnchor, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                        <x:String>top</x:String>
+                        <x:String>right</x:String>
+                        <x:String>bottom</x:String>
+                        <x:String>left</x:String>
+                        <x:String>center</x:String>
+                    </ComboBox>
+                    
+                    <TextBlock Text="Style" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                    
+                    <ComboBox Header="Line Style" 
+                              SelectedItem="{x:Bind ViewModel.SelectedConnector.LineStyle, Mode=TwoWay, Converter={StaticResource EnumToStringConverter}}"
+                              HorizontalAlignment="Stretch">
+                        <x:String>Solid</x:String>
+                        <x:String>Dashed</x:String>
+                        <x:String>Dotted</x:String>
+                        <x:String>Thick</x:String>
+                    </ComboBox>
+                    
+                    <NumberBox Header="Line Width" 
+                               Value="{x:Bind ViewModel.SelectedConnector.LineWidth, Mode=TwoWay}"
+                               Minimum="1"
+                               Maximum="10"
+                               SpinButtonPlacementMode="Compact"/>
+                    
+                    <TextBlock Text="Arrow Heads" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                    
+                    <ComboBox Header="Start Arrow" 
+                              SelectedItem="{x:Bind ViewModel.SelectedConnector.StartArrowType, Mode=TwoWay, Converter={StaticResource EnumToStringConverter}}"
+                              HorizontalAlignment="Stretch">
+                        <x:String>None</x:String>
+                        <x:String>Arrow</x:String>
+                        <x:String>OpenArrow</x:String>
+                        <x:String>Diamond</x:String>
+                        <x:String>Circle</x:String>
+                        <x:String>Cross</x:String>
+                    </ComboBox>
+                    
+                    <ComboBox Header="End Arrow" 
+                              SelectedItem="{x:Bind ViewModel.SelectedConnector.EndArrowType, Mode=TwoWay, Converter={StaticResource EnumToStringConverter}}"
+                              HorizontalAlignment="Stretch">
+                        <x:String>None</x:String>
+                        <x:String>Arrow</x:String>
+                        <x:String>OpenArrow</x:String>
+                        <x:String>Diamond</x:String>
+                        <x:String>Circle</x:String>
+                        <x:String>Cross</x:String>
+                    </ComboBox>
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>

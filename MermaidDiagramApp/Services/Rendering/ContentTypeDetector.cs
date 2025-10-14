@@ -82,14 +82,18 @@ public class ContentTypeDetector : IContentTypeDetector
         if (ContainsMermaidKeywords(content, checkFirst10Lines: true))
             return ContentType.Mermaid;
 
-        return ContentType.Unknown;
+        // Default to Markdown instead of Unknown
+        return ContentType.Markdown;
     }
 
     private ContentType AnalyzeMarkdownContent(string content)
     {
         // First, check if document contains Mermaid code blocks (```mermaid)
         // This takes priority as it's the most explicit indicator
-        if (ContainsMermaidCodeBlocks(content))
+        var hasMermaidBlocks = ContainsMermaidCodeBlocks(content);
+        System.Diagnostics.Debug.WriteLine($"[ContentDetector] Has Mermaid blocks: {hasMermaidBlocks}");
+        
+        if (hasMermaidBlocks)
         {
             return ContentType.MarkdownWithMermaid;
         }
@@ -168,8 +172,16 @@ public class ContentTypeDetector : IContentTypeDetector
     private bool ContainsMermaidCodeBlocks(string content)
     {
         // Look for ```mermaid code blocks
-        var pattern = @"```\s*mermaid\s*\n";
-        return Regex.IsMatch(content, pattern, RegexOptions.IgnoreCase);
+        // Match: ```mermaid (with optional whitespace and newline/end of string)
+        var pattern = @"```\s*mermaid\b";
+        var result = Regex.IsMatch(content, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        System.Diagnostics.Debug.WriteLine($"[ContentDetector] Mermaid block pattern match: {result}");
+        if (result)
+        {
+            var match = Regex.Match(content, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline);
+            System.Diagnostics.Debug.WriteLine($"[ContentDetector] Found at position: {match.Index}, matched text: '{match.Value}'");
+        }
+        return result;
     }
 
     public void RegisterDetectionRule(string extension, Func<string, ContentType> rule)
