@@ -4,7 +4,7 @@
 Transform the diagram creation experience by providing a professional drag-and-drop visual editor. Users can drag shapes from a categorized toolbox onto a canvas, connect them visually, and have the application automatically generate the corresponding Mermaid syntax. This eliminates the need to learn Mermaid syntax for basic diagram creation while maintaining the power of code-based editing for advanced users.
 
 ## Status: **PLANNED**
-**Completed Stories:** 0 of 15 (0%)  
+**Completed Stories:** 0 of 17 (0%)  
 **Target Implementation Date:** TBD  
 **Current State:** Basic flowchart builder exists but is disabled due to sync issues
 
@@ -269,13 +269,84 @@ Transform the diagram creation experience by providing a professional drag-and-d
 
 **Estimated Effort:** 8 story points
 
+### Story 16: Image and Animated Image Support
+**As a** user  
+**I want** to add static images and animated images (GIFs) to the canvas  
+**So that** I can enrich my diagrams with visual content and illustrations
+
+**Acceptance Criteria:**
+- [ ] "Insert Image" button in toolbar or toolbox
+- [ ] File picker supports common formats: PNG, JPG, JPEG, BMP, SVG, GIF, WEBP
+- [ ] Drag-and-drop image files directly onto canvas
+- [ ] Images can be moved, resized, and deleted like other nodes
+- [ ] Animated GIFs play automatically on canvas
+- [ ] Image properties panel shows: source path, size, opacity, rotation
+- [ ] Images maintain aspect ratio by default (with option to unlock)
+- [ ] Images can be layered (bring to front/send to back)
+- [ ] Image paths stored as relative or absolute in diagram metadata
+- [ ] Images export correctly when diagram is saved/exported
+- [ ] Placeholder shown if image file not found
+- [ ] Copy/paste images between diagrams
+- [ ] Performance: Handle 20+ images without lag
+
+**Estimated Effort:** 13 story points
+
+### Story 17: Diagram Builder File Format and Persistence
+**As a** user  
+**I want** to save and load my visual diagram work in a dedicated file format  
+**So that** I can preserve the full canvas state including positions, connections, and visual properties
+
+**Acceptance Criteria:**
+- [ ] New file extension for Diagram Builder files (e.g., `.mmdx`, `.mermaidx`, or `.vmd` for Visual Mermaid Diagram)
+- [ ] File format stores complete canvas state: nodes, edges, positions, sizes, styles, images
+- [ ] File format includes both visual data and generated Mermaid code
+- [ ] "Save As Diagram Builder File" option in File menu
+- [ ] "Open Diagram Builder File" recognizes and loads the custom format
+- [ ] File format is JSON-based for human readability and version control compatibility
+- [ ] Backward compatibility: Can import plain `.mmd` files and convert to builder format
+- [ ] Forward compatibility: Can export to plain `.mmd` format (loses visual metadata)
+- [ ] File format includes metadata: version, creation date, last modified, author
+- [ ] Auto-save functionality with configurable interval (default: 2 minutes)
+- [ ] Recovery from unsaved changes on crash or unexpected close
+- [ ] File format supports compression for large diagrams with images
+- [ ] Clear distinction in UI between "Mermaid Code File (.mmd)" and "Diagram Builder File (.mmdx)"
+- [ ] Recent files list shows file type indicator
+- [ ] File association registers custom extension with Windows
+
+**File Format Structure (JSON):**
+```json
+{
+  "version": "1.0",
+  "metadata": {
+    "created": "2025-01-01T00:00:00Z",
+    "modified": "2025-01-01T00:00:00Z",
+    "author": "User Name",
+    "diagramType": "flowchart"
+  },
+  "canvas": {
+    "nodes": [...],
+    "connectors": [...],
+    "images": [...],
+    "gridSize": 20,
+    "snapToGrid": true
+  },
+  "mermaidCode": "flowchart TD\n  A[Start]...",
+  "settings": {
+    "zoom": 1.0,
+    "panOffset": {"x": 0, "y": 0}
+  }
+}
+```
+
+**Estimated Effort:** 13 story points
+
 ## Technical Considerations
 
 ### Implementation Approach
 1. **Phase 1: Core Canvas Infrastructure** - Three-panel layout, canvas control, shape toolbox, drag-and-drop
 2. **Phase 2: Canvas Interactions** - Node selection/dragging/resizing, multi-select, connection drawing, properties panel
 3. **Phase 3: Code Synchronization** - Canvas → code generation, code → canvas parsing, conflict resolution, metadata format
-4. **Phase 4: Advanced Features** - Undo/redo system, zoom/pan, alignment tools, context menus
+4. **Phase 4: Advanced Features** - Undo/redo system, zoom/pan, alignment tools, context menus, file format and persistence
 5. **Phase 5: Multi-Diagram Support** - Diagram type switcher, type-specific libraries, type-specific generators, validation
 
 ### Technology Stack
@@ -285,12 +356,14 @@ Transform the diagram creation experience by providing a professional drag-and-d
 - **Undo/Redo**: Command pattern with history stack
 - **Code Generation**: Template-based generators per diagram type
 - **Parsing**: Regex + custom parser for Mermaid syntax
+- **File Format**: JSON-based with System.Text.Json serialization
+- **File Extension**: `.mmdx` or `.vmd` for Diagram Builder files
 
 ### File Structure
 See [DIAGRAM_BUILDER_DESIGN.md](../design/diagram-builder-design.md) for detailed architecture.
 
 ## Definition of Done
-- [ ] All 15 user stories implemented and tested
+- [ ] All 17 user stories implemented and tested
 - [ ] Unit tests for canvas operations (>80% coverage)
 - [ ] Integration tests for code generation and parsing
 - [ ] Performance: Handle 100+ nodes without lag

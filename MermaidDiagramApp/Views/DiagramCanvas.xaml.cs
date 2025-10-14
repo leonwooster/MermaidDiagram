@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Shapes;
 using Windows.Foundation;
 using MermaidDiagramApp.ViewModels;
 using MermaidDiagramApp.Models.Canvas;
+using MermaidDiagramApp.Models;
 using System.Linq;
 
 namespace MermaidDiagramApp.Views
@@ -24,6 +25,15 @@ namespace MermaidDiagramApp.Views
         private string? _hoveredTargetAnchor;
         private CanvasNode? _hoveredTargetNode;
         private Dictionary<Border, Grid> _nodeHandlesMap = new Dictionary<Border, Grid>();
+        private Dictionary<CanvasNode, Microsoft.UI.Xaml.Shapes.Rectangle> _nodeBoundingBoxes = new Dictionary<CanvasNode, Microsoft.UI.Xaml.Shapes.Rectangle>();
+        private Dictionary<CanvasNode, Grid> _nodeResizeHandles = new Dictionary<CanvasNode, Grid>();
+        private CanvasConnector? _selectedConnector;
+        private Dictionary<Line, CanvasConnector> _connectorLines = new Dictionary<Line, CanvasConnector>();
+        private Dictionary<CanvasConnector, (Ellipse start, Ellipse end)> _connectorHandles = new Dictionary<CanvasConnector, (Ellipse, Ellipse)>();
+        private bool _isDraggingConnectorEndpoint;
+        private Ellipse? _draggedEndpoint;
+        private CanvasConnector? _reconnectingConnector;
+        private bool _isStartPoint;
 
         public DiagramCanvas()
         {
@@ -31,6 +41,69 @@ namespace MermaidDiagramApp.Views
             ViewModel = new DiagramCanvasViewModel();
             
             Loaded += DiagramCanvas_Loaded;
+            
+            // Enable keyboard input
+            this.KeyDown += DiagramCanvas_KeyDown;
+        }
+
+        private void DiagramCanvas_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Delete)
+            {
+                DeleteSelectedNodes();
+                e.Handled = true;
+            }
+        }
+
+        private void DeleteSelectedNodes()
+        {
+            // Check if a connector is selected
+            if (_selectedConnector != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DELETE] Deleting connector: {_selectedConnector.Id}");
+                DeleteConnector(_selectedConnector);
+                return;
+            }
+            
+            // Otherwise delete selected nodes
+            var selectedNodes = ViewModel.Nodes.Where(n => n.IsSelected).ToList();
+            if (selectedNodes.Count == 0)
+                return;
+
+            System.Diagnostics.Debug.WriteLine($"[DELETE] Deleting {selectedNodes.Count} node(s)");
+            
+            foreach (var node in selectedNodes)
+            {
+                ViewModel.RemoveNode(node);
+                RemoveNodeVisual(node);
+            }
+        }
+        
+        private void DeleteConnector(CanvasConnector connector)
+        {
+            // Find and remove the line visual
+            var lineToRemove = _connectorLines.FirstOrDefault(kvp => kvp.Value == connector).Key;
+            if (lineToRemove != null)
+            {
+                NodesCanvas.Children.Remove(lineToRemove);
+                _connectorLines.Remove(lineToRemove);
+            }
+            
+            // Remove endpoint handles
+            if (_connectorHandles.TryGetValue(connector, out var handles))
+            {
+                NodesCanvas.Children.Remove(handles.start);
+                NodesCanvas.Children.Remove(handles.end);
+                _connectorHandles.Remove(connector);
+            }
+            
+            // Remove from view model
+            ViewModel.RemoveConnector(connector);
+            
+            // Clear selection
+            _selectedConnector = null;
+            
+            System.Diagnostics.Debug.WriteLine($"[DELETE] Connector deleted");
         }
 
         private void DiagramCanvas_Loaded(object sender, RoutedEventArgs e)
@@ -71,12 +144,14 @@ namespace MermaidDiagramApp.Views
                 Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
                 BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
                 BorderThickness = new Thickness(2),
-                CornerRadius = new CornerRadius(4),
                 ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY,
                 Tag = node
             };
             
-            System.Diagnostics.Debug.WriteLine($"[CREATE] Border created with ManipulationMode: {border.ManipulationMode}");
+            // Apply shape-specific styling
+            ApplyNodeShape(border, node.Shape);
+            
+            System.Diagnostics.Debug.WriteLine($"[CREATE] Border created with ManipulationMode: {border.ManipulationMode}, Shape: {node.Shape}");
 
             var grid = new Grid();
             
@@ -146,18 +221,77 @@ namespace MermaidDiagramApp.Views
                 {
                     var oldLeft = Canvas.GetLeft(border);
                     Canvas.SetLeft(border, node.PositionX);
+                    
+                    // Update bounding box and resize handles position
+                    var padding = 10.0;
+                    if (_nodeBoundingBoxes.TryGetValue(node, out var bbox))
+                    {
+                        Canvas.SetLeft(bbox, node.PositionX - padding);
+                    }
+                    if (_nodeResizeHandles.TryGetValue(node, out var handles))
+                    {
+                        Canvas.SetLeft(handles, node.PositionX - padding);
+                    }
+                    
                     System.Diagnostics.Debug.WriteLine($"[PROP CHANGE] PositionX changed: {oldLeft} -> {node.PositionX}");
                 }
                 else if (e.PropertyName == nameof(CanvasNode.PositionY))
                 {
                     var oldTop = Canvas.GetTop(border);
                     Canvas.SetTop(border, node.PositionY);
+                    
+                    // Update bounding box and resize handles position
+                    var padding = 10.0;
+                    if (_nodeBoundingBoxes.TryGetValue(node, out var bbox))
+                    {
+                        Canvas.SetTop(bbox, node.PositionY - padding);
+                    }
+                    if (_nodeResizeHandles.TryGetValue(node, out var handles))
+                    {
+                        Canvas.SetTop(handles, node.PositionY - padding);
+                    }
+                    
                     System.Diagnostics.Debug.WriteLine($"[PROP CHANGE] PositionY changed: {oldTop} -> {node.PositionY}");
                 }
                 else if (e.PropertyName == nameof(CanvasNode.IsSelected))
                 {
                     selectionBorder.Visibility = node.IsSelected ? Visibility.Visible : Visibility.Collapsed;
+                    
+                    // Update bounding box and resize handles visibility
+                    if (_nodeBoundingBoxes.TryGetValue(node, out var bbox))
+                    {
+                        bbox.Visibility = node.IsSelected ? Visibility.Visible : Visibility.Collapsed;
+                    }
+                    if (_nodeResizeHandles.TryGetValue(node, out var handles))
+                    {
+                        handles.Visibility = node.IsSelected ? Visibility.Visible : Visibility.Collapsed;
+                    }
+                    
                     System.Diagnostics.Debug.WriteLine($"[PROP CHANGE] IsSelected changed: {node.IsSelected}");
+                }
+                else if (e.PropertyName == nameof(CanvasNode.SizeWidth) || e.PropertyName == nameof(CanvasNode.SizeHeight))
+                {
+                    border.Width = node.SizeWidth;
+                    border.Height = node.SizeHeight;
+                    
+                    // Update bounding box and resize handles size/position
+                    var padding = 10.0;
+                    if (_nodeBoundingBoxes.TryGetValue(node, out var bbox))
+                    {
+                        bbox.Width = node.SizeWidth + (padding * 2);
+                        bbox.Height = node.SizeHeight + (padding * 2);
+                        Canvas.SetLeft(bbox, node.PositionX - padding);
+                        Canvas.SetTop(bbox, node.PositionY - padding);
+                    }
+                    if (_nodeResizeHandles.TryGetValue(node, out var handles))
+                    {
+                        handles.Width = node.SizeWidth + (padding * 2);
+                        handles.Height = node.SizeHeight + (padding * 2);
+                        Canvas.SetLeft(handles, node.PositionX - padding);
+                        Canvas.SetTop(handles, node.PositionY - padding);
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine($"[PROP CHANGE] Size changed: {node.SizeWidth}x{node.SizeHeight}");
                 }
                 else if (e.PropertyName == nameof(CanvasNode.Text))
                 {
@@ -168,6 +302,9 @@ namespace MermaidDiagramApp.Views
 
             NodesCanvas.Children.Add(border);
             System.Diagnostics.Debug.WriteLine($"[CREATE] Node visual added to canvas. Total nodes: {NodesCanvas.Children.Count}");
+
+            // Create bounding box and resize handles OUTSIDE the node, directly on canvas
+            CreateBoundingBoxAndHandles(node, border);
         }
 
         private void RemoveNodeVisual(CanvasNode node)
@@ -177,6 +314,277 @@ namespace MermaidDiagramApp.Views
             {
                 _nodeHandlesMap.Remove(borderToRemove);
                 NodesCanvas.Children.Remove(borderToRemove);
+            }
+
+            // Remove bounding box and resize handles
+            if (_nodeBoundingBoxes.TryGetValue(node, out var bbox))
+            {
+                NodesCanvas.Children.Remove(bbox);
+                _nodeBoundingBoxes.Remove(node);
+            }
+            if (_nodeResizeHandles.TryGetValue(node, out var handles))
+            {
+                NodesCanvas.Children.Remove(handles);
+                _nodeResizeHandles.Remove(node);
+            }
+        }
+
+        private void CreateBoundingBoxAndHandles(CanvasNode node, Border nodeBorder)
+        {
+            var padding = 10.0;
+
+            // Create bounding box as a separate Rectangle on the canvas
+            var boundingBox = new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Stroke = new SolidColorBrush(Microsoft.UI.Colors.Gray) { Opacity = 0.5 },
+                StrokeThickness = 1,
+                Fill = null,
+                Width = node.SizeWidth + (padding * 2),
+                Height = node.SizeHeight + (padding * 2),
+                Visibility = node.IsSelected ? Visibility.Visible : Visibility.Collapsed,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(boundingBox, node.PositionX - padding);
+            Canvas.SetTop(boundingBox, node.PositionY - padding);
+            Canvas.SetZIndex(boundingBox, 50);
+            NodesCanvas.Children.Add(boundingBox);
+            _nodeBoundingBoxes[node] = boundingBox;
+
+            // Create resize handles grid on the canvas
+            var resizeHandlesGrid = new Grid
+            {
+                Width = node.SizeWidth + (padding * 2),
+                Height = node.SizeHeight + (padding * 2),
+                Visibility = node.IsSelected ? Visibility.Visible : Visibility.Collapsed
+            };
+            Canvas.SetLeft(resizeHandlesGrid, node.PositionX - padding);
+            Canvas.SetTop(resizeHandlesGrid, node.PositionY - padding);
+            Canvas.SetZIndex(resizeHandlesGrid, 100);
+
+            // Create 4 corner resize handles
+            var handleSize = 12.0;
+            var positions = new[]
+            {
+                new { V = VerticalAlignment.Top, H = HorizontalAlignment.Left, Type = "nw", Cursor = Microsoft.UI.Input.InputSystemCursorShape.SizeNorthwestSoutheast },
+                new { V = VerticalAlignment.Top, H = HorizontalAlignment.Right, Type = "ne", Cursor = Microsoft.UI.Input.InputSystemCursorShape.SizeNortheastSouthwest },
+                new { V = VerticalAlignment.Bottom, H = HorizontalAlignment.Right, Type = "se", Cursor = Microsoft.UI.Input.InputSystemCursorShape.SizeNorthwestSoutheast },
+                new { V = VerticalAlignment.Bottom, H = HorizontalAlignment.Left, Type = "sw", Cursor = Microsoft.UI.Input.InputSystemCursorShape.SizeNortheastSouthwest }
+            };
+
+            foreach (var pos in positions)
+            {
+                var handle = new Microsoft.UI.Xaml.Shapes.Rectangle
+                {
+                    Width = handleSize,
+                    Height = handleSize,
+                    Fill = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                    Stroke = new SolidColorBrush(Microsoft.UI.Colors.White),
+                    StrokeThickness = 3,
+                    VerticalAlignment = pos.V,
+                    HorizontalAlignment = pos.H,
+                    Tag = pos.Type,
+                    IsHitTestVisible = true,
+                    RadiusX = 2,
+                    RadiusY = 2
+                };
+
+                // Set cursor for resize handle
+                handle.PointerEntered += (s, e) =>
+                {
+                    this.ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(pos.Cursor);
+                };
+                handle.PointerExited += (s, e) =>
+                {
+                    this.ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Arrow);
+                };
+
+                handle.PointerPressed += (s, e) => ResizeHandle_PointerPressed(s, e, node, nodeBorder, pos.Type);
+                handle.PointerMoved += ResizeHandle_PointerMoved;
+                handle.PointerReleased += ResizeHandle_PointerReleased;
+
+                resizeHandlesGrid.Children.Add(handle);
+            }
+
+            NodesCanvas.Children.Add(resizeHandlesGrid);
+            _nodeResizeHandles[node] = resizeHandlesGrid;
+
+            System.Diagnostics.Debug.WriteLine($"[CREATE] Bounding box and resize handles created on canvas for {node.Id}");
+        }
+
+        private void ApplyNodeShape(Border border, MermaidDiagramApp.Models.NodeShape shape)
+        {
+            // Remove any existing transform to avoid conflicts
+            border.RenderTransform = null;
+            
+            switch (shape)
+            {
+                case NodeShape.Rectangle:
+                    border.CornerRadius = new CornerRadius(0);
+                    break;
+                case NodeShape.RoundEdges:
+                case NodeShape.Stadium:
+                    border.CornerRadius = new CornerRadius(border.Height / 2);
+                    break;
+                case NodeShape.Circle:
+                    border.CornerRadius = new CornerRadius(Math.Min(border.Width, border.Height) / 2);
+                    break;
+                case NodeShape.Rhombus:
+                    // Rhombus shown as rounded rectangle for now (transform conflicts with handles)
+                    border.CornerRadius = new CornerRadius(8);
+                    break;
+                case NodeShape.Hexagon:
+                    border.CornerRadius = new CornerRadius(6);
+                    break;
+                case NodeShape.Parallelogram:
+                case NodeShape.ParallelogramAlt:
+                case NodeShape.Trapezoid:
+                case NodeShape.TrapezoidAlt:
+                    border.CornerRadius = new CornerRadius(4);
+                    break;
+                default:
+                    border.CornerRadius = new CornerRadius(4);
+                    break;
+            }
+        }
+
+        private Grid CreateResizeHandles(CanvasNode node, Border nodeBorder)
+        {
+            var handlesGrid = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Margin = new Thickness(-10, -10, -10, -10) // Align with bounding box
+            };
+            var handleSize = 12.0; // Larger for better visibility
+            var handleColor = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue); // Blue fill for high visibility
+            var handleBorder = new SolidColorBrush(Microsoft.UI.Colors.White); // White border for contrast
+
+            // Create 4 corner resize handles only (to avoid overlap with connection handles)
+            var positions = new[]
+            {
+                new { V = VerticalAlignment.Top, H = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 0), Type = "nw" },
+                new { V = VerticalAlignment.Top, H = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 0), Type = "ne" },
+                new { V = VerticalAlignment.Bottom, H = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 0), Type = "se" },
+                new { V = VerticalAlignment.Bottom, H = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 0), Type = "sw" }
+            };
+
+            foreach (var pos in positions)
+            {
+                var handle = new Rectangle
+                {
+                    Width = handleSize,
+                    Height = handleSize,
+                    Fill = handleColor,
+                    Stroke = handleBorder,
+                    StrokeThickness = 3, // Thicker border for visibility
+                    VerticalAlignment = pos.V,
+                    HorizontalAlignment = pos.H,
+                    Margin = pos.Margin,
+                    Tag = pos.Type,
+                    IsHitTestVisible = true,
+                    RadiusX = 2,
+                    RadiusY = 2 // Slightly rounded corners
+                };
+
+                // Wire up pointer events for resizing
+                handle.PointerPressed += (s, e) => ResizeHandle_PointerPressed(s, e, node, nodeBorder, pos.Type);
+                handle.PointerMoved += ResizeHandle_PointerMoved;
+                handle.PointerReleased += ResizeHandle_PointerReleased;
+
+                handlesGrid.Children.Add(handle);
+                System.Diagnostics.Debug.WriteLine($"[RESIZE HANDLE] Created {pos.Type} handle at {pos.V}, {pos.H}");
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[CREATE RESIZE HANDLES] Created {handlesGrid.Children.Count} handles for node {node.Id}");
+            return handlesGrid;
+        }
+
+        private Point _resizeStartPoint;
+        private Size _resizeStartSize;
+        private Point _resizeStartPosition;
+        private string? _resizeHandleType;
+        private CanvasNode? _resizingNode;
+
+        private void ResizeHandle_PointerPressed(object sender, PointerRoutedEventArgs e, CanvasNode node, Border nodeBorder, string handleType)
+        {
+            if (sender is Rectangle handle)
+            {
+                _resizingNode = node;
+                _resizeHandleType = handleType;
+                _resizeStartPoint = e.GetCurrentPoint(NodesCanvas).Position;
+                _resizeStartSize = new Size(node.SizeWidth, node.SizeHeight);
+                _resizeStartPosition = new Point(node.PositionX, node.PositionY);
+                handle.CapturePointer(e.Pointer);
+                System.Diagnostics.Debug.WriteLine($"[RESIZE] Started resizing {node.Id} from handle: {handleType}");
+                e.Handled = true;
+            }
+        }
+
+        private void ResizeHandle_PointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            if (_resizingNode != null && _resizeHandleType != null)
+            {
+                var currentPoint = e.GetCurrentPoint(NodesCanvas).Position;
+                var deltaX = currentPoint.X - _resizeStartPoint.X;
+                var deltaY = currentPoint.Y - _resizeStartPoint.Y;
+
+                var newWidth = _resizeStartSize.Width;
+                var newHeight = _resizeStartSize.Height;
+                var newX = _resizeStartPosition.X;
+                var newY = _resizeStartPosition.Y;
+
+                // Apply delta based on handle type (corners only)
+                switch (_resizeHandleType)
+                {
+                    case "nw":
+                        newWidth = Math.Max(50, _resizeStartSize.Width - deltaX);
+                        newHeight = Math.Max(30, _resizeStartSize.Height - deltaY);
+                        newX = _resizeStartPosition.X + (_resizeStartSize.Width - newWidth);
+                        newY = _resizeStartPosition.Y + (_resizeStartSize.Height - newHeight);
+                        break;
+                    case "ne":
+                        newWidth = Math.Max(50, _resizeStartSize.Width + deltaX);
+                        newHeight = Math.Max(30, _resizeStartSize.Height - deltaY);
+                        newY = _resizeStartPosition.Y + (_resizeStartSize.Height - newHeight);
+                        break;
+                    case "se":
+                        newWidth = Math.Max(50, _resizeStartSize.Width + deltaX);
+                        newHeight = Math.Max(30, _resizeStartSize.Height + deltaY);
+                        break;
+                    case "sw":
+                        newWidth = Math.Max(50, _resizeStartSize.Width - deltaX);
+                        newHeight = Math.Max(30, _resizeStartSize.Height + deltaY);
+                        newX = _resizeStartPosition.X + (_resizeStartSize.Width - newWidth);
+                        break;
+                }
+
+                // Apply snap to grid if enabled
+                if (ViewModel.SnapToGrid)
+                {
+                    newWidth = Math.Round(newWidth / ViewModel.GridSize) * ViewModel.GridSize;
+                    newHeight = Math.Round(newHeight / ViewModel.GridSize) * ViewModel.GridSize;
+                    newX = Math.Round(newX / ViewModel.GridSize) * ViewModel.GridSize;
+                    newY = Math.Round(newY / ViewModel.GridSize) * ViewModel.GridSize;
+                }
+
+                _resizingNode.SizeWidth = newWidth;
+                _resizingNode.SizeHeight = newHeight;
+                _resizingNode.PositionX = newX;
+                _resizingNode.PositionY = newY;
+
+                e.Handled = true;
+            }
+        }
+
+        private void ResizeHandle_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            if (_resizingNode != null && sender is Rectangle handle)
+            {
+                handle.ReleasePointerCapture(e.Pointer);
+                System.Diagnostics.Debug.WriteLine($"[RESIZE] Completed resizing {_resizingNode.Id} to {_resizingNode.SizeWidth}x{_resizingNode.SizeHeight}");
+                _resizingNode = null;
+                _resizeHandleType = null;
+                e.Handled = true;
             }
         }
 
@@ -212,12 +620,28 @@ namespace MermaidDiagramApp.Views
                 // Store anchor position in Tag
                 handle.Tag = pos.Anchor;
 
+                // Set cursor for connection handle
+                handle.PointerEntered += (s, e) =>
+                {
+                    if (!_isDrawingConnection)
+                    {
+                        this.ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Cross);
+                    }
+                    ConnectionHandle_PointerEntered(s, e, node, pos.Anchor);
+                };
+                handle.PointerExited += (s, e) =>
+                {
+                    if (!_isDrawingConnection)
+                    {
+                        this.ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Arrow);
+                    }
+                    ConnectionHandle_PointerExited(s, e);
+                };
+                
                 // Wire up pointer events for dragging connections
                 handle.PointerPressed += (s, e) => ConnectionHandle_PointerPressed(s, e, node, nodeBorder, pos.Anchor);
                 handle.PointerMoved += ConnectionHandle_PointerMoved;
                 handle.PointerReleased += ConnectionHandle_PointerReleased;
-                handle.PointerEntered += (s, e) => ConnectionHandle_PointerEntered(s, e, node, pos.Anchor);
-                handle.PointerExited += ConnectionHandle_PointerExited;
 
                 handlesGrid.Children.Add(handle);
             }
@@ -480,10 +904,30 @@ namespace MermaidDiagramApp.Views
 
         private void CanvasContainer_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            // Clear selection when clicking on empty canvas
-            if (ReferenceEquals(e.OriginalSource, CanvasContainer))
+            // Deselect all nodes when clicking on empty canvas
+            foreach (var node in ViewModel.Nodes)
             {
-                ViewModel.ClearSelection();
+                node.IsSelected = false;
+            }
+            
+            // Deselect connector
+            if (_selectedConnector != null)
+            {
+                var line = _connectorLines.FirstOrDefault(kvp => kvp.Value == _selectedConnector).Key;
+                if (line != null)
+                {
+                    line.Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black);
+                    line.StrokeThickness = 2;
+                }
+                
+                // Hide handles
+                if (_connectorHandles.TryGetValue(_selectedConnector, out var handles))
+                {
+                    handles.start.Visibility = Visibility.Collapsed;
+                    handles.end.Visibility = Visibility.Collapsed;
+                }
+                
+                _selectedConnector = null;
             }
         }
 
@@ -528,8 +972,52 @@ namespace MermaidDiagramApp.Views
             {
                 Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black),
                 StrokeThickness = 2,
-                Tag = connector
+                Tag = connector,
+                StrokeStartLineCap = Microsoft.UI.Xaml.Media.PenLineCap.Round,
+                StrokeEndLineCap = Microsoft.UI.Xaml.Media.PenLineCap.Round
             };
+            
+            // Make line selectable
+            line.PointerPressed += Connector_PointerPressed;
+            line.PointerEntered += (s, e) =>
+            {
+                this.ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Hand);
+                if (_selectedConnector != connector)
+                {
+                    line.StrokeThickness = 3; // Highlight on hover
+                }
+            };
+            line.PointerExited += (s, e) =>
+            {
+                this.ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Arrow);
+                if (_selectedConnector != connector)
+                {
+                    line.StrokeThickness = 2; // Normal thickness
+                }
+            };
+            
+            // Store connector-line mapping
+            _connectorLines[line] = connector;
+            
+            // Create drag handles at endpoints
+            var startHandle = CreateEndpointHandle();
+            var endHandle = CreateEndpointHandle();
+            _connectorHandles[connector] = (startHandle, endHandle);
+            
+            // Wire up drag events for reconnection
+            startHandle.PointerPressed += (s, e) => EndpointHandle_PointerPressed(s, e, connector, true);
+            startHandle.PointerMoved += EndpointHandle_PointerMoved;
+            startHandle.PointerReleased += EndpointHandle_PointerReleased;
+            
+            endHandle.PointerPressed += (s, e) => EndpointHandle_PointerPressed(s, e, connector, false);
+            endHandle.PointerMoved += EndpointHandle_PointerMoved;
+            endHandle.PointerReleased += EndpointHandle_PointerReleased;
+            
+            // Add handles to canvas (initially hidden)
+            NodesCanvas.Children.Add(startHandle);
+            NodesCanvas.Children.Add(endHandle);
+            startHandle.Visibility = Visibility.Collapsed;
+            endHandle.Visibility = Visibility.Collapsed;
             
             // Calculate line position
             UpdateConnectorLine(line, startNode, endNode);
@@ -555,6 +1043,218 @@ namespace MermaidDiagramApp.Views
             NodesCanvas.Children.Insert(0, line);
             System.Diagnostics.Debug.WriteLine($"[CONNECTOR] Connector visual added");
         }
+        
+        private void Connector_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            if (sender is Line line && line.Tag is CanvasConnector connector)
+            {
+                // Deselect all nodes
+                foreach (var node in ViewModel.Nodes)
+                {
+                    node.IsSelected = false;
+                }
+                
+                // Select this connector
+                SelectConnector(connector);
+                
+                System.Diagnostics.Debug.WriteLine($"[CONNECTOR] Selected connector: {connector.Id}");
+                e.Handled = true;
+            }
+        }
+        
+        private void SelectConnector(CanvasConnector connector)
+        {
+            // Deselect previous connector
+            if (_selectedConnector != null)
+            {
+                var prevLine = _connectorLines.FirstOrDefault(kvp => kvp.Value == _selectedConnector).Key;
+                if (prevLine != null)
+                {
+                    prevLine.Stroke = new SolidColorBrush(Microsoft.UI.Colors.Black);
+                    prevLine.StrokeThickness = 2;
+                }
+                
+                // Hide previous handles
+                if (_connectorHandles.TryGetValue(_selectedConnector, out var prevHandles))
+                {
+                    prevHandles.start.Visibility = Visibility.Collapsed;
+                    prevHandles.end.Visibility = Visibility.Collapsed;
+                }
+            }
+            
+            // Select new connector
+            _selectedConnector = connector;
+            var line = _connectorLines.FirstOrDefault(kvp => kvp.Value == connector).Key;
+            if (line != null)
+            {
+                line.Stroke = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue);
+                line.StrokeThickness = 3;
+            }
+            
+            // Show handles for selected connector
+            if (_connectorHandles.TryGetValue(connector, out var handles))
+            {
+                handles.start.Visibility = Visibility.Visible;
+                handles.end.Visibility = Visibility.Visible;
+                UpdateEndpointHandlePositions(connector);
+            }
+        }
+        
+        private Ellipse CreateEndpointHandle()
+        {
+            return new Ellipse
+            {
+                Width = 10,
+                Height = 10,
+                Fill = new SolidColorBrush(Microsoft.UI.Colors.White),
+                Stroke = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                StrokeThickness = 2,
+                IsHitTestVisible = true
+            };
+        }
+        
+        private void UpdateEndpointHandlePositions(CanvasConnector connector)
+        {
+            if (!_connectorHandles.TryGetValue(connector, out var handles))
+                return;
+                
+            var startNode = ViewModel.Nodes.FirstOrDefault(n => n.Id == connector.StartNodeId);
+            var endNode = ViewModel.Nodes.FirstOrDefault(n => n.Id == connector.EndNodeId);
+            
+            if (startNode == null || endNode == null)
+                return;
+                
+            var startPoint = GetAnchorPoint(startNode, connector.StartAnchor);
+            var endPoint = GetAnchorPoint(endNode, connector.EndAnchor);
+            
+            Canvas.SetLeft(handles.start, startPoint.X - 5);
+            Canvas.SetTop(handles.start, startPoint.Y - 5);
+            Canvas.SetZIndex(handles.start, 200);
+            
+            Canvas.SetLeft(handles.end, endPoint.X - 5);
+            Canvas.SetTop(handles.end, endPoint.Y - 5);
+            Canvas.SetZIndex(handles.end, 200);
+        }
+        
+        private void EndpointHandle_PointerPressed(object sender, PointerRoutedEventArgs e, CanvasConnector connector, bool isStartPoint)
+        {
+            if (sender is Ellipse handle)
+            {
+                _isDraggingConnectorEndpoint = true;
+                _draggedEndpoint = handle;
+                _reconnectingConnector = connector;
+                _isStartPoint = isStartPoint;
+                
+                handle.CapturePointer(e.Pointer);
+                
+                // Show connection handles on all nodes
+                foreach (var node in ViewModel.Nodes)
+                {
+                    if (_nodeHandlesMap.TryGetValue(NodesCanvas.Children.OfType<Border>().FirstOrDefault(b => b.Tag == node), out var handleGrid))
+                    {
+                        handleGrid.Visibility = Visibility.Visible;
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"[RECONNECT] Started dragging {(isStartPoint ? "start" : "end")} point of connector {connector.Id}");
+                e.Handled = true;
+            }
+        }
+        
+        private void EndpointHandle_PointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            if (_isDraggingConnectorEndpoint && _draggedEndpoint != null && _reconnectingConnector != null)
+            {
+                var currentPos = e.GetCurrentPoint(NodesCanvas).Position;
+                
+                // Move the handle
+                Canvas.SetLeft(_draggedEndpoint, currentPos.X - 5);
+                Canvas.SetTop(_draggedEndpoint, currentPos.Y - 5);
+                
+                // Update the line endpoint
+                var line = _connectorLines.FirstOrDefault(kvp => kvp.Value == _reconnectingConnector).Key;
+                if (line != null)
+                {
+                    if (_isStartPoint)
+                    {
+                        line.X1 = currentPos.X;
+                        line.Y1 = currentPos.Y;
+                    }
+                    else
+                    {
+                        line.X2 = currentPos.X;
+                        line.Y2 = currentPos.Y;
+                    }
+                }
+                
+                // Check if hovering over a connection handle
+                var hoveredNode = FindNodeAtPosition(currentPos);
+                if (hoveredNode != null)
+                {
+                    _hoveredTargetNode = hoveredNode;
+                }
+                
+                e.Handled = true;
+            }
+        }
+        
+        private void EndpointHandle_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            if (_isDraggingConnectorEndpoint && _draggedEndpoint != null && _reconnectingConnector != null)
+            {
+                var releasePos = e.GetCurrentPoint(NodesCanvas).Position;
+                var targetNode = FindNodeAtPosition(releasePos);
+                
+                if (targetNode != null)
+                {
+                    // Determine which anchor point to connect to
+                    var sourceNode = _isStartPoint 
+                        ? ViewModel.Nodes.FirstOrDefault(n => n.Id == _reconnectingConnector.EndNodeId)
+                        : ViewModel.Nodes.FirstOrDefault(n => n.Id == _reconnectingConnector.StartNodeId);
+                    
+                    if (sourceNode != null)
+                    {
+                        var targetAnchor = DetermineTargetAnchor(sourceNode, targetNode, releasePos);
+                        
+                        // Update the connector
+                        if (_isStartPoint)
+                        {
+                            _reconnectingConnector.StartNodeId = targetNode.Id;
+                            _reconnectingConnector.StartAnchor = targetAnchor;
+                        }
+                        else
+                        {
+                            _reconnectingConnector.EndNodeId = targetNode.Id;
+                            _reconnectingConnector.EndAnchor = targetAnchor;
+                        }
+                        
+                        System.Diagnostics.Debug.WriteLine($"[RECONNECT] Reconnected {(_isStartPoint ? "start" : "end")} to node {targetNode.Id}({targetAnchor})");
+                    }
+                }
+                
+                // Refresh the connector visual
+                var startNode = ViewModel.Nodes.FirstOrDefault(n => n.Id == _reconnectingConnector.StartNodeId);
+                var endNode = ViewModel.Nodes.FirstOrDefault(n => n.Id == _reconnectingConnector.EndNodeId);
+                var line = _connectorLines.FirstOrDefault(kvp => kvp.Value == _reconnectingConnector).Key;
+                
+                if (startNode != null && endNode != null && line != null)
+                {
+                    UpdateConnectorLine(line, startNode, endNode);
+                    UpdateEndpointHandlePositions(_reconnectingConnector);
+                }
+                
+                // Hide all connection handles
+                HideAllNodeHandles();
+                
+                _draggedEndpoint.ReleasePointerCapture(e.Pointer);
+                _isDraggingConnectorEndpoint = false;
+                _draggedEndpoint = null;
+                _reconnectingConnector = null;
+                _hoveredTargetNode = null;
+                
+                e.Handled = true;
+            }
+        }
 
         private void UpdateConnectorLine(Line line, CanvasNode startNode, CanvasNode endNode)
         {
@@ -567,6 +1267,12 @@ namespace MermaidDiagramApp.Views
                 line.Y1 = startPoint.Y;
                 line.X2 = endPoint.X;
                 line.Y2 = endPoint.Y;
+                
+                // Update endpoint handles if connector is selected
+                if (_selectedConnector == connector)
+                {
+                    UpdateEndpointHandlePositions(connector);
+                }
             }
         }
 

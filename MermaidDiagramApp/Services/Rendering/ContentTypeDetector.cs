@@ -94,35 +94,51 @@ public class ContentTypeDetector : IContentTypeDetector
             return ContentType.MarkdownWithMermaid;
         }
 
-        // Check first 5 lines for Mermaid keywords (not in code blocks)
-        // If file starts with raw Mermaid syntax, treat as pure Mermaid
-        var lines = content.Split('\n', StringSplitOptions.None).Take(5).ToArray();
-        var firstLines = string.Join('\n', lines);
+        // Check if content has Markdown indicators anywhere in the document
+        // If it has Markdown syntax, treat as Markdown (not Mermaid)
+        if (ContainsMarkdownIndicators(content))
+        {
+            return ContentType.Markdown;
+        }
 
-        // Only treat as pure Mermaid if it starts immediately with Mermaid syntax
-        // and doesn't have typical Markdown indicators (# headers, **, etc.)
-        if (ContainsMermaidKeywords(firstLines, checkFirst10Lines: false) && 
-            !ContainsMarkdownIndicators(firstLines))
+        // Check first 10 lines for Mermaid keywords
+        // Only treat as pure Mermaid if it starts with Mermaid syntax
+        // and has no Markdown indicators
+        if (ContainsMermaidKeywords(content, checkFirst10Lines: true))
         {
             return ContentType.Mermaid;
         }
 
-        // Otherwise, it's pure Markdown
+        // Default to Markdown for .md files
         return ContentType.Markdown;
     }
 
     private bool ContainsMarkdownIndicators(string content)
     {
-        // Check for common Markdown syntax
-        return content.Contains("# ") ||      // Headers
-               content.Contains("## ") ||
-               content.Contains("**") ||      // Bold
-               content.Contains("__") ||
-               content.Contains("- ") ||      // Lists
-               content.Contains("* ") ||
-               content.Contains("1. ") ||     // Ordered lists
-               content.Contains("[") ||       // Links
-               content.Contains("]");
+        if (string.IsNullOrWhiteSpace(content))
+            return false;
+
+        // Check for common Markdown syntax patterns
+        var patterns = new[]
+        {
+            @"^#{1,6}\s+",           // Headers (# ## ### etc at start of line)
+            @"\*\*[^*]+\*\*",       // Bold with **
+            @"__[^_]+__",            // Bold with __
+            @"^\s*[-*+]\s+",         // Unordered lists
+            @"^\s*\d+\.\s+",        // Ordered lists
+            @"\[.+\]\(.+\)",        // Links [text](url)
+            @"^>\s+",                // Blockquotes
+            @"^\s*```",              // Code blocks
+            @"\|.+\|",               // Tables
+        };
+
+        foreach (var pattern in patterns)
+        {
+            if (Regex.IsMatch(content, pattern, RegexOptions.Multiline))
+                return true;
+        }
+
+        return false;
     }
 
     private bool ContainsMermaidKeywords(string content, bool checkFirst10Lines)

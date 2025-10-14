@@ -913,6 +913,9 @@ namespace MermaidDiagramApp
 
         private void UpdateRenderModeIndicator(ContentType contentType)
         {
+            _currentContentType = contentType;
+            
+            // Update status bar indicator
             switch (contentType)
             {
                 case ContentType.Mermaid:
@@ -930,6 +933,32 @@ namespace MermaidDiagramApp
                 default:
                     RenderModeText.Text = "Unknown";
                     RenderModeIcon.Glyph = "\uE897"; // Warning icon
+                    break;
+            }
+            
+            // Update code editor content type indicator
+            UpdateContentTypeIndicator(contentType);
+        }
+        
+        private void UpdateContentTypeIndicator(ContentType contentType)
+        {
+            switch (contentType)
+            {
+                case ContentType.Mermaid:
+                    ContentTypeText.Text = "Mermaid";
+                    ContentTypeIcon.Glyph = "\uE8BC"; // Chart icon
+                    break;
+                case ContentType.Markdown:
+                    ContentTypeText.Text = "Markdown";
+                    ContentTypeIcon.Glyph = "\uE8A5"; // Document icon
+                    break;
+                case ContentType.MarkdownWithMermaid:
+                    ContentTypeText.Text = "Markdown + Mermaid";
+                    ContentTypeIcon.Glyph = "\uE8FD"; // Combined icon
+                    break;
+                default:
+                    ContentTypeText.Text = "Unknown";
+                    ContentTypeIcon.Glyph = "\uE9CE"; // Question icon
                     break;
             }
         }
