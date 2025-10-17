@@ -48,9 +48,28 @@ namespace MermaidDiagramApp.Views
             ViewModel = new DiagramCanvasViewModel();
             
             Loaded += DiagramCanvas_Loaded;
-            
-            // Enable keyboard input
-            this.KeyDown += DiagramCanvas_KeyDown;
+        }
+
+        /// <summary>
+        /// Show loading indicator
+        /// </summary>
+        public void ShowLoading()
+        {
+            if (LoadingOverlay != null)
+            {
+                LoadingOverlay.Visibility = Visibility.Visible;
+            }
+        }
+
+        /// <summary>
+        /// Hide loading indicator
+        /// </summary>
+        public void HideLoading()
+        {
+            if (LoadingOverlay != null)
+            {
+                LoadingOverlay.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void DiagramCanvas_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -72,6 +91,7 @@ namespace MermaidDiagramApp.Views
             // Add the currently selected connector
             if (_selectedConnector != null)
             {
+                System.Diagnostics.Debug.WriteLine($"[DELETE] Found _selectedConnector: {_selectedConnector.Id}, IsSelected={_selectedConnector.IsSelected}");
                 connectorsToDelete.Add(_selectedConnector);
             }
             
@@ -79,6 +99,8 @@ namespace MermaidDiagramApp.Views
             var selectedConnectors = ViewModel.SelectedElements
                 .OfType<CanvasConnector>()
                 .ToList();
+            
+            System.Diagnostics.Debug.WriteLine($"[DELETE] SelectedElements connectors count: {selectedConnectors.Count}");
             
             foreach (var connector in selectedConnectors)
             {
@@ -88,7 +110,19 @@ namespace MermaidDiagramApp.Views
                 }
             }
             
-            // Delete all selected nodes
+            // Also check for connectors marked as selected in the ViewModel
+            var viewModelSelectedConnectors = ViewModel.Connectors.Where(c => c.IsSelected).ToList();
+            System.Diagnostics.Debug.WriteLine($"[DELETE] ViewModel.Connectors with IsSelected=true: {viewModelSelectedConnectors.Count}");
+            
+            foreach (var connector in viewModelSelectedConnectors)
+            {
+                if (!connectorsToDelete.Contains(connector))
+                {
+                    connectorsToDelete.Add(connector);
+                }
+            }
+            
+            // Delete all selected nodes (this will also delete attached connectors via ViewModel.RemoveNode)
             var selectedNodes = ViewModel.Nodes.Where(n => n.IsSelected).ToList();
             if (selectedNodes.Count > 0)
             {
@@ -96,36 +130,64 @@ namespace MermaidDiagramApp.Views
                 
                 foreach (var node in selectedNodes)
                 {
+                    // Note: ViewModel.RemoveNode will call RemoveConnector for attached connectors
+                    // which triggers Connectors_CollectionChanged and calls DeleteConnector
                     ViewModel.RemoveNode(node);
                     RemoveNodeVisual(node);
                     deletedCount++;
                 }
             }
             
-            // Delete all collected connectors
-            foreach (var connector in connectorsToDelete)
+            // After node deletions, purge any connectors whose endpoints no longer exist
+            RemoveDanglingConnectors();
+
+            // Delete all collected connectors (standalone, not attached to deleted nodes)
+            if (connectorsToDelete.Count > 0)
             {
-                System.Diagnostics.Debug.WriteLine($"[DELETE] Deleting connector: {connector.Id}");
-                DeleteConnector(connector);
-                deletedCount++;
+                System.Diagnostics.Debug.WriteLine($"[DELETE] Deleting {connectorsToDelete.Count} standalone connector(s)");
             }
             
+            foreach (var connector in connectorsToDelete)
+            {
+                // Check if connector still exists (may have been deleted with node)
+                if (ViewModel.Connectors.Contains(connector))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DELETE] Deleting connector: {connector.Id}");
+                    DeleteConnector(connector);
+                    deletedCount++;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DELETE] Connector {connector.Id} already deleted (was attached to deleted node)");
+                }
+            }
+            
+            // Clear selected connector reference if it was removed
+            if (_selectedConnector != null && !ViewModel.Connectors.Contains(_selectedConnector))
+            {
+                _selectedConnector = null;
+            }
+
             if (deletedCount > 0)
             {
                 System.Diagnostics.Debug.WriteLine($"[DELETE] Total elements deleted: {deletedCount}");
             }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[DELETE] No elements to delete");
+            }
         }
         
-        private void DeleteConnector(CanvasConnector connector)
+        private void RemoveConnectorVisual(CanvasConnector connector)
         {
-            // Find and remove the line visual
+            // Remove line visual if present
             var lineToRemove = _connectorLines.FirstOrDefault(kvp => kvp.Value == connector).Key;
             if (lineToRemove != null)
             {
                 NodesCanvas.Children.Remove(lineToRemove);
                 _connectorLines.Remove(lineToRemove);
             }
-            
+
             // Remove endpoint handles
             if (_connectorHandles.TryGetValue(connector, out var handles))
             {
@@ -133,11 +195,10 @@ namespace MermaidDiagramApp.Views
                 NodesCanvas.Children.Remove(handles.end);
                 _connectorHandles.Remove(connector);
             }
-            
+
             // Remove label if exists
             if (_connectorLabels.TryGetValue(connector, out var labelTextBlock))
             {
-                // Find and remove the parent Border
                 var parent = VisualTreeHelper.GetParent(labelTextBlock);
                 if (parent is Border labelBorder)
                 {
@@ -145,6 +206,48 @@ namespace MermaidDiagramApp.Views
                 }
                 _connectorLabels.Remove(connector);
             }
+        }
+
+        private void RemoveDanglingConnectors()
+        {
+            var nodeIds = new HashSet<string>(ViewModel.Nodes.Select(n => n.Id));
+
+            // 1. Connectors that reference missing nodes
+            var danglingConnectors = ViewModel.Connectors
+                .Where(c => !nodeIds.Contains(c.StartNodeId) || !nodeIds.Contains(c.EndNodeId))
+                .ToList();
+
+            if (danglingConnectors.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DELETE] Removing {danglingConnectors.Count} dangling connector(s) with missing endpoints");
+
+                foreach (var connector in danglingConnectors)
+                {
+                    DeleteConnector(connector);
+                }
+            }
+
+            // 2. Visuals that still exist even though the connector is no longer in the ViewModel.
+            var orphanVisuals = _connectorLines
+                .Select(kvp => kvp.Value)
+                .Distinct()
+                .Where(connector => !ViewModel.Connectors.Contains(connector))
+                .ToList();
+
+            if (orphanVisuals.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DELETE] Removing {orphanVisuals.Count} orphaned connector visuals");
+
+                foreach (var connector in orphanVisuals)
+                {
+                    RemoveConnectorVisual(connector);
+                }
+            }
+        }
+
+        private void DeleteConnector(CanvasConnector connector)
+        {
+            RemoveConnectorVisual(connector);
             
             // Remove from view model
             ViewModel.RemoveConnector(connector);
@@ -165,8 +268,15 @@ namespace MermaidDiagramApp.Views
         {
             DrawGrid();
             
-            // Subscribe to collection changes to wire up events for new nodes
+            // Subscribe to collection changes to wire up events for new nodes and connectors
             ViewModel.Nodes.CollectionChanged += Nodes_CollectionChanged;
+            ViewModel.Connectors.CollectionChanged += Connectors_CollectionChanged;
+            
+            // Enable keyboard input for delete functionality
+            this.KeyDown += DiagramCanvas_KeyDown;
+            
+            // Set focus to enable keyboard input
+            this.Focus(FocusState.Programmatic);
         }
 
         private void Nodes_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -184,6 +294,25 @@ namespace MermaidDiagramApp.Views
                 foreach (CanvasNode node in e.OldItems)
                 {
                     RemoveNodeVisual(node);
+                }
+            }
+        }
+
+        private void Connectors_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            // When connectors are added, create visual elements
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add && e.NewItems != null)
+            {
+                foreach (CanvasConnector connector in e.NewItems)
+                {
+                    CreateConnectorVisual(connector);
+                }
+            }
+            else if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove && e.OldItems != null)
+            {
+                foreach (CanvasConnector connector in e.OldItems)
+                {
+                    RemoveConnectorVisual(connector);
                 }
             }
         }
@@ -365,11 +494,14 @@ namespace MermaidDiagramApp.Views
 
         private void RemoveNodeVisual(CanvasNode node)
         {
+            System.Diagnostics.Debug.WriteLine($"[REMOVE] Removing visual for node: {node.Id}");
+            
             var borderToRemove = NodesCanvas.Children.OfType<Border>().FirstOrDefault(b => b.Tag == node);
             if (borderToRemove != null)
             {
                 _nodeHandlesMap.Remove(borderToRemove);
                 NodesCanvas.Children.Remove(borderToRemove);
+                System.Diagnostics.Debug.WriteLine($"[REMOVE] Border removed for node: {node.Id}");
             }
 
             // Remove bounding box and resize handles
@@ -383,6 +515,27 @@ namespace MermaidDiagramApp.Views
                 NodesCanvas.Children.Remove(handles);
                 _nodeResizeHandles.Remove(node);
             }
+        }
+        
+        /// <summary>
+        /// Clear all visual elements from canvas
+        /// </summary>
+        public void ClearVisuals()
+        {
+            System.Diagnostics.Debug.WriteLine($"[CLEAR] Clearing all canvas visuals");
+            
+            NodesCanvas.Children.Clear();
+            _nodeHandlesMap.Clear();
+            _nodeBoundingBoxes.Clear();
+            _nodeResizeHandles.Clear();
+            _connectorLines.Clear();
+            _connectorHandles.Clear();
+            _connectorLabels.Clear();
+            
+            // Redraw grid
+            DrawGrid();
+            
+            System.Diagnostics.Debug.WriteLine($"[CLEAR] Canvas cleared");
         }
 
         private void CreateBoundingBoxAndHandles(CanvasNode node, Border nodeBorder)
@@ -1427,7 +1580,18 @@ namespace MermaidDiagramApp.Views
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(2),
                 Child = labelTextBlock,
-                IsHitTestVisible = false
+                Tag = connector
+            };
+            
+            // Make label clickable for editing
+            labelBorder.DoubleTapped += ConnectorLabel_DoubleTapped;
+            labelBorder.PointerEntered += (s, e) =>
+            {
+                this.ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.IBeam);
+            };
+            labelBorder.PointerExited += (s, e) =>
+            {
+                this.ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Arrow);
             };
             
             // Position at midpoint
@@ -1443,12 +1607,31 @@ namespace MermaidDiagramApp.Views
             _connectorLabels[connector] = labelTextBlock;
         }
         
+        private void ConnectorLabel_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            if (sender is Border labelBorder && labelBorder.Tag is CanvasConnector connector)
+            {
+                // Find the connector line to trigger the existing double-tap handler
+                var line = _connectorLines.FirstOrDefault(kvp => kvp.Value == connector).Key;
+                if (line != null)
+                {
+                    Connector_DoubleTapped(line, e);
+                }
+                e.Handled = true;
+            }
+        }
+        
         private void UpdateConnectorLabel(CanvasConnector connector, CanvasNode startNode, CanvasNode endNode)
         {
-            // Remove old label if exists
-            if (_connectorLabels.TryGetValue(connector, out var oldLabel))
+            // Remove old label Border (not just TextBlock) if exists
+            if (_connectorLabels.TryGetValue(connector, out var oldLabelTextBlock))
             {
-                NodesCanvas.Children.Remove(oldLabel);
+                // Find the parent Border and remove it
+                var parent = VisualTreeHelper.GetParent(oldLabelTextBlock);
+                if (parent is Border labelBorder)
+                {
+                    NodesCanvas.Children.Remove(labelBorder);
+                }
                 _connectorLabels.Remove(connector);
             }
             
@@ -1597,12 +1780,20 @@ namespace MermaidDiagramApp.Views
                 textBox.SelectAll();
             };
 
+            // Store original position for restoration
+            var editorLeft = Canvas.GetLeft(textBox);
+            var editorTop = Canvas.GetTop(textBox);
+
             // Handle text changes
             textBox.LostFocus += (s, e) =>
             {
                 connector.Label = textBox.Text;
                 NodesCanvas.Children.Remove(textBox);
                 _activeEditorTextBox = null;
+                
+                // Restore focus to canvas for keyboard input
+                this.Focus(FocusState.Programmatic);
+                
                 System.Diagnostics.Debug.WriteLine($"[EDIT] Connector label updated: {connector.Label}");
             };
 
@@ -1614,6 +1805,10 @@ namespace MermaidDiagramApp.Views
                     connector.Label = textBox.Text;
                     NodesCanvas.Children.Remove(textBox);
                     _activeEditorTextBox = null;
+                    
+                    // Restore focus to canvas for keyboard input
+                    this.Focus(FocusState.Programmatic);
+                    
                     e.Handled = true;
                     System.Diagnostics.Debug.WriteLine($"[EDIT] Connector label updated (Enter): {connector.Label}");
                 }
@@ -1622,6 +1817,10 @@ namespace MermaidDiagramApp.Views
                     // Cancel editing
                     NodesCanvas.Children.Remove(textBox);
                     _activeEditorTextBox = null;
+                    
+                    // Restore focus to canvas for keyboard input
+                    this.Focus(FocusState.Programmatic);
+                    
                     e.Handled = true;
                     System.Diagnostics.Debug.WriteLine($"[EDIT] Connector label editing cancelled");
                 }
@@ -1674,6 +1873,8 @@ namespace MermaidDiagramApp.Views
                         prevLine.StrokeThickness = 2;
                     }
                     
+                    _selectedConnector.IsSelected = false;
+                    
                     // Hide previous handles
                     if (_connectorHandles.TryGetValue(_selectedConnector, out var prevHandles))
                     {
@@ -1687,6 +1888,8 @@ namespace MermaidDiagramApp.Views
             _selectedConnector = connector;
             connector.IsSelected = true;
             
+            System.Diagnostics.Debug.WriteLine($"[SELECT] Connector selected: {connector.Id}, IsSelected={connector.IsSelected}");
+            
             // Update ViewModel to trigger properties panel update
             ViewModel.SelectedConnector = connector;
             
@@ -1694,6 +1897,7 @@ namespace MermaidDiagramApp.Views
             if (!ViewModel.SelectedElements.Contains(connector))
             {
                 ViewModel.SelectedElements.Add(connector);
+                System.Diagnostics.Debug.WriteLine($"[SELECT] Added connector to SelectedElements. Count={ViewModel.SelectedElements.Count}");
             }
             
             var line = _connectorLines.FirstOrDefault(kvp => kvp.Value == connector).Key;
@@ -1762,7 +1966,8 @@ namespace MermaidDiagramApp.Views
                 // Show connection handles on all nodes
                 foreach (var node in ViewModel.Nodes)
                 {
-                    if (_nodeHandlesMap.TryGetValue(NodesCanvas.Children.OfType<Border>().FirstOrDefault(b => b.Tag == node), out var handleGrid))
+                    var nodeBorder = NodesCanvas.Children.OfType<Border>().FirstOrDefault(b => b.Tag == node);
+                    if (nodeBorder != null && _nodeHandlesMap.TryGetValue(nodeBorder, out var handleGrid))
                     {
                         handleGrid.Visibility = Visibility.Visible;
                     }

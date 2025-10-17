@@ -1,0 +1,134 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "created": "2025-10-14T22:54:09.7496295+08:00",
+    "modified": "2025-10-14T22:54:09.7496296+08:00",
+    "author": "leonwoo",
+    "application": "Mermaid Diagram Builder"
+  },
+  "diagram": {
+    "type": "flowchart",
+    "settings": {
+      "showGrid": true,
+      "snapToGrid": true,
+      "gridSize": 20,
+      "zoomLevel": 1
+    },
+    "nodes": [
+      {
+        "id": "node7012be14",
+        "text": "Game1",
+        "shape": "Rectangle",
+        "position": {
+          "x": 580,
+          "y": 420
+        },
+        "size": {
+          "width": 120,
+          "height": 60
+        },
+        "style": {
+          "fillColor": "#ffffff",
+          "strokeColor": "#000000",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "node34d27276",
+        "text": "Game2",
+        "shape": "Circle",
+        "position": {
+          "x": 800,
+          "y": 620
+        },
+        "size": {
+          "width": 80,
+          "height": 80
+        },
+        "style": {
+          "fillColor": "#ffffff",
+          "strokeColor": "#000000",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "node64ad8af4",
+        "text": "Game3",
+        "shape": "Stadium",
+        "position": {
+          "x": 440,
+          "y": 620
+        },
+        "size": {
+          "width": 120,
+          "height": 60
+        },
+        "style": {
+          "fillColor": "#ffffff",
+          "strokeColor": "#000000",
+          "strokeWidth": 2
+        }
+      },
+      {
+        "id": "node62c20e76",
+        "text": "Action 1",
+        "shape": "Rhombus",
+        "position": {
+          "x": 440,
+          "y": 780
+        },
+        "size": {
+          "width": 100,
+          "height": 100
+        },
+        "style": {
+          "fillColor": "#ffffff",
+          "strokeColor": "#000000",
+          "strokeWidth": 2
+        }
+      }
+    ],
+    "connectors": [
+      {
+        "id": "connaac85946",
+        "startNodeId": "node7012be14",
+        "endNodeId": "node64ad8af4",
+        "label": "Interacting",
+        "startAnchor": "left",
+        "endAnchor": "top",
+        "lineStyle": "Solid",
+        "lineWidth": 2,
+        "startArrowType": "None",
+        "endArrowType": "Arrow",
+        "lineColor": "#000000"
+      },
+      {
+        "id": "conn932dce65",
+        "startNodeId": "node7012be14",
+        "endNodeId": "node34d27276",
+        "label": "Testing",
+        "startAnchor": "right",
+        "endAnchor": "top",
+        "lineStyle": "Solid",
+        "lineWidth": 2,
+        "startArrowType": "None",
+        "endArrowType": "Arrow",
+        "lineColor": "#000000"
+      },
+      {
+        "id": "conn55dca69a",
+        "startNodeId": "node64ad8af4",
+        "endNodeId": "node62c20e76",
+        "label": "Running",
+        "startAnchor": "bottom",
+        "endAnchor": "top",
+        "lineStyle": "Solid",
+        "lineWidth": 2,
+        "startArrowType": "None",
+        "endArrowType": "Arrow",
+        "lineColor": "#000000"
+      }
+    ]
+  },
+  "mermaidCode": "flowchart TD\r\n\r\n    node34d27276((\u0022Game2\u0022))\r\n    node62c20e76{\u0022Action 1\u0022}\r\n    node64ad8af4([\u0022Game3\u0022])\r\n    node7012be14[\u0022Game1\u0022]\r\n\r\n    node7012be14 --\u003E|\u0022Interacting\u0022| node64ad8af4\r\n    node7012be14 --\u003E|\u0022Testing\u0022| node34d27276\r\n    node64ad8af4 --\u003E|\u0022Running\u0022| node62c20e76\r\n\r\n%% Canvas Metadata\r\n%% node7012be14: pos=580,420 size=120,60\r\n%% node34d27276: pos=800,620 size=80,80\r\n%% node64ad8af4: pos=440,620 size=120,60\r\n%% node62c20e76: pos=440,780 size=100,100\r\n"
+}

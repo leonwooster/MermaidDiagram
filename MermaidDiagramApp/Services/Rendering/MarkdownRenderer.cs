@@ -31,7 +31,7 @@ public class MarkdownRenderer : IContentRenderer
         return type == ContentType.Markdown || type == ContentType.MarkdownWithMermaid;
     }
 
-    public async Task<RenderingResult> RenderAsync(string content, IRenderingContext context)
+    public Task<RenderingResult> RenderAsync(string content, IRenderingContext context)
     {
         var stopwatch = Stopwatch.StartNew();
 
@@ -39,13 +39,13 @@ public class MarkdownRenderer : IContentRenderer
         {
             if (string.IsNullOrWhiteSpace(content))
             {
-                return RenderingResult.ErrorResult("Content is empty", ContentType.Markdown);
+                return Task.FromResult(RenderingResult.ErrorResult("Content is empty", ContentType.Markdown));
             }
 
             // Validate content size
             if (content.Length > 10_000_000) // 10MB limit
             {
-                return RenderingResult.ErrorResult("Content is too large (>10MB)", ContentType.Markdown);
+                return Task.FromResult(RenderingResult.ErrorResult("Content is too large (>10MB)", ContentType.Markdown));
             }
 
             // The actual rendering will be done by JavaScript in WebView2
@@ -55,12 +55,12 @@ public class MarkdownRenderer : IContentRenderer
             result.Metadata["EnableMermaidInMarkdown"] = context.EnableMermaidInMarkdown;
             result.Metadata["Theme"] = context.Theme.ToString();
 
-            return result;
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
-            return RenderingResult.ErrorResult($"Markdown rendering failed: {ex.Message}", ContentType.Markdown);
+            return Task.FromResult(RenderingResult.ErrorResult($"Markdown rendering failed: {ex.Message}", ContentType.Markdown));
         }
     }
 

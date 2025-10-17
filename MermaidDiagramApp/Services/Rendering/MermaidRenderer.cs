@@ -38,7 +38,7 @@ public class MermaidRenderer : IContentRenderer
         return type == ContentType.Mermaid;
     }
 
-    public async Task<RenderingResult> RenderAsync(string content, IRenderingContext context)
+    public Task<RenderingResult> RenderAsync(string content, IRenderingContext context)
     {
         var stopwatch = Stopwatch.StartNew();
 
@@ -46,13 +46,13 @@ public class MermaidRenderer : IContentRenderer
         {
             if (string.IsNullOrWhiteSpace(content))
             {
-                return RenderingResult.ErrorResult("Content is empty", ContentType.Mermaid);
+                return Task.FromResult(RenderingResult.ErrorResult("Content is empty", ContentType.Mermaid));
             }
 
             // Basic validation - check for Mermaid keywords
             if (!ContainsMermaidKeywords(content))
             {
-                return RenderingResult.ErrorResult("Content does not appear to be a valid Mermaid diagram", ContentType.Mermaid);
+                return Task.FromResult(RenderingResult.ErrorResult("Content does not appear to be a valid Mermaid diagram", ContentType.Mermaid));
             }
 
             // The actual rendering will be done by JavaScript in WebView2
@@ -60,12 +60,12 @@ public class MermaidRenderer : IContentRenderer
             result.RenderDuration = stopwatch.Elapsed;
             result.Metadata["Theme"] = context.Theme.ToString();
 
-            return result;
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
-            return RenderingResult.ErrorResult($"Mermaid rendering failed: {ex.Message}", ContentType.Mermaid);
+            return Task.FromResult(RenderingResult.ErrorResult($"Mermaid rendering failed: {ex.Message}", ContentType.Mermaid));
         }
     }
 

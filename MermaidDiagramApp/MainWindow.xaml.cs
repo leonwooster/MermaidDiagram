@@ -63,6 +63,7 @@ namespace MermaidDiagramApp
         private ContentType _currentContentType = ContentType.Unknown;
         private string _currentFilePath = string.Empty;
         private readonly MarkdownStyleSettingsService _styleSettingsService;
+        private readonly DiagramFileService _diagramFileService;
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -84,6 +85,9 @@ namespace MermaidDiagramApp
             
             // Initialize style settings service
             _styleSettingsService = new MarkdownStyleSettingsService();
+            
+            // Initialize diagram file service
+            _diagramFileService = new DiagramFileService();
 
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
@@ -1727,9 +1731,27 @@ namespace MermaidDiagramApp
 
         private async void Open_Click(object sender, RoutedEventArgs e)
         {
+            // Check for unsaved changes in builder before opening
+            if (_isBuilderVisible && DiagramCanvasControl != null && DiagramCanvasControl.ViewModel.HasUnsavedChanges)
+            {
+                var result = await ShowUnsavedChangesDialog();
+                if (result == ContentDialogResult.None) // Cancel
+                {
+                    return;
+                }
+                else if (result == ContentDialogResult.Primary) // Save
+                {
+                    Save_Click(this, new RoutedEventArgs());
+                    // Wait a bit for save to complete
+                    await Task.Delay(100);
+                }
+                // Secondary = Discard, continue with open
+            }
+            
             var openPicker = new FileOpenPicker();
             WinRT_InterOp.InitializeWithWindow(openPicker, this);
 
+            openPicker.FileTypeFilter.Add(".mmdx");
             openPicker.FileTypeFilter.Add(".mmd");
             openPicker.FileTypeFilter.Add(".md");
             openPicker.FileTypeFilter.Add(".markdown");
@@ -1738,9 +1760,75 @@ namespace MermaidDiagramApp
             if (file != null)
             {
                 _currentFilePath = file.Path;
-                CodeEditor.Text = await FileIO.ReadTextAsync(file);
-                await UpdatePreview();
-                UpdateWindowTitle();
+                
+                // Check if opening .mmdx (Diagram Builder File)
+                if (file.FileType.ToLower() == ".mmdx")
+                {
+                    var diagramFile = await _diagramFileService.LoadDiagramAsync(file.Path);
+                    if (diagramFile != null)
+                    {
+                        // Show builder if not already visible
+                        if (!_isBuilderVisible)
+                        {
+                            _isBuilderVisible = true;
+                            BuilderTool.IsChecked = true;
+                            UpdateBuilderVisibility();
+                        }
+                        
+                        // Restore diagram to canvas
+                        if (DiagramCanvasControl != null)
+                        {
+                            // Show loading indicator
+                            DiagramCanvasControl.ShowLoading();
+                            
+                            // Clear existing canvas visuals AND data for new session
+                            DiagramCanvasControl.ClearVisuals();
+                            DiagramCanvasControl.ViewModel.ClearCanvas();
+                            
+                            // Small delay to ensure clearing is complete
+                            await Task.Delay(50);
+                            
+                            // Restore diagram data
+                            _diagramFileService.RestoreDiagram(diagramFile, DiagramCanvasControl.ViewModel);
+                            
+                            // Mark as saved since we just loaded from file
+                            DiagramCanvasControl.ViewModel.MarkAsSaved();
+                            
+                            // Wait for UI to process collection changes and create visuals
+                            await Task.Delay(150);
+                            
+                            // Hide loading indicator and set focus for keyboard input
+                            DiagramCanvasControl.HideLoading();
+                            DiagramCanvasControl.Focus(FocusState.Programmatic);
+                            
+                            // Update code editor with generated Mermaid code
+                            CodeEditor.Text = diagramFile.MermaidCode;
+                            await UpdatePreview();
+                        }
+                        
+                        _logger.LogInformation($"Diagram Builder file loaded: {file.Path}");
+                        UpdateWindowTitle();
+                    }
+                    else
+                    {
+                        _logger.LogError($"Failed to load Diagram Builder file: {file.Path}");
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Open Error",
+                            Content = "Failed to load the diagram file. The file may be corrupted or in an unsupported format.",
+                            CloseButtonText = "OK",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                    }
+                }
+                else
+                {
+                    // Open as plain text file
+                    CodeEditor.Text = await FileIO.ReadTextAsync(file);
+                    await UpdatePreview();
+                    UpdateWindowTitle();
+                }
             }
         }
 
@@ -1764,8 +1852,15 @@ namespace MermaidDiagramApp
 
             savePicker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
             
-            // Add file type options based on current content type
-            if (_currentContentType == ContentType.Markdown || _currentContentType == ContentType.MarkdownWithMermaid)
+            // Add file type options based on current content type and builder visibility
+            if (_isBuilderVisible && DiagramCanvasControl != null)
+            {
+                // If builder is visible, offer .mmdx as primary option
+                savePicker.FileTypeChoices.Add("Diagram Builder File", new List<string>() { ".mmdx" });
+                savePicker.FileTypeChoices.Add("Mermaid Diagram", new List<string>() { ".mmd" });
+                savePicker.SuggestedFileName = "NewDiagram";
+            }
+            else if (_currentContentType == ContentType.Markdown || _currentContentType == ContentType.MarkdownWithMermaid)
             {
                 savePicker.FileTypeChoices.Add("Markdown Document", new List<string>() { ".md" });
                 savePicker.FileTypeChoices.Add("Markdown", new List<string>() { ".markdown" });
@@ -1782,10 +1877,38 @@ namespace MermaidDiagramApp
             var file = await savePicker.PickSaveFileAsync();
             if (file != null)
             {
-                await FileIO.WriteTextAsync(file, CodeEditor.Text);
-                _currentFilePath = file.Path;
-                _logger.LogInformation($"File saved: {file.Path}");
-                UpdateWindowTitle();
+                // Check if saving as .mmdx (Diagram Builder File)
+                if (file.FileType.ToLower() == ".mmdx" && DiagramCanvasControl != null)
+                {
+                    var success = await _diagramFileService.SaveDiagramAsync(file.Path, DiagramCanvasControl.ViewModel);
+                    if (success)
+                    {
+                        _currentFilePath = file.Path;
+                        DiagramCanvasControl.ViewModel.MarkAsSaved();
+                        _logger.LogInformation($"Diagram Builder file saved: {file.Path}");
+                        UpdateWindowTitle();
+                    }
+                    else
+                    {
+                        _logger.LogError($"Failed to save Diagram Builder file: {file.Path}");
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Save Error",
+                            Content = "Failed to save the diagram file. Please try again.",
+                            CloseButtonText = "OK",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                    }
+                }
+                else
+                {
+                    // Save as plain text (.mmd or .md)
+                    await FileIO.WriteTextAsync(file, CodeEditor.Text);
+                    _currentFilePath = file.Path;
+                    _logger.LogInformation($"File saved: {file.Path}");
+                    UpdateWindowTitle();
+                }
             }
         }
 
@@ -1919,6 +2042,26 @@ namespace MermaidDiagramApp
             }
 
             await dialog.ShowAsync();
+        }
+
+        private async Task<ContentDialogResult> ShowUnsavedChangesDialog()
+        {
+            var dialog = new ContentDialog
+            {
+                Title = "Unsaved Changes",
+                Content = "You have unsaved changes in the Diagram Builder. Do you want to save them?",
+                PrimaryButtonText = "Save",
+                SecondaryButtonText = "Discard",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            if (this.Content is FrameworkElement rootElement)
+            {
+                dialog.XamlRoot = rootElement.XamlRoot;
+            }
+
+            return await dialog.ShowAsync();
         }
 
         private void DiagramBuilderViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

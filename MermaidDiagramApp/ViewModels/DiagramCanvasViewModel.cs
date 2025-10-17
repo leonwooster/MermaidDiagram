@@ -26,10 +26,17 @@ namespace MermaidDiagramApp.ViewModels
         private CanvasConnector? _selectedConnector;
         private bool _isDrawingConnection;
         private string _generatedMermaidCode;
+        private bool _hasUnsavedChanges;
 
         public ObservableCollection<CanvasNode> Nodes { get; }
         public ObservableCollection<CanvasConnector> Connectors { get; }
         public ObservableCollection<object> SelectedElements { get; }
+
+        public bool HasUnsavedChanges
+        {
+            get => _hasUnsavedChanges;
+            set => SetProperty(ref _hasUnsavedChanges, value);
+        }
 
         public DiagramType DiagramType
         {
@@ -105,9 +112,10 @@ namespace MermaidDiagramApp.ViewModels
             _gridSize = 20;
             _isDrawingConnection = false;
             _generatedMermaidCode = string.Empty;
+            _hasUnsavedChanges = false;
 
-            Nodes.CollectionChanged += (s, e) => RegenerateMermaidCode();
-            Connectors.CollectionChanged += (s, e) => RegenerateMermaidCode();
+            Nodes.CollectionChanged += (s, e) => { RegenerateMermaidCode(); HasUnsavedChanges = true; };
+            Connectors.CollectionChanged += (s, e) => { RegenerateMermaidCode(); HasUnsavedChanges = true; };
         }
 
         public void AddNode(CanvasNode node)
@@ -231,11 +239,34 @@ namespace MermaidDiagramApp.ViewModels
         private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             RegenerateMermaidCode();
+            HasUnsavedChanges = true;
         }
 
         private void OnConnectorPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             RegenerateMermaidCode();
+            HasUnsavedChanges = true;
+        }
+
+        /// <summary>
+        /// Mark the canvas as saved (no unsaved changes)
+        /// </summary>
+        public void MarkAsSaved()
+        {
+            HasUnsavedChanges = false;
+        }
+
+        /// <summary>
+        /// Clear all canvas content for a new session
+        /// </summary>
+        public void ClearCanvas()
+        {
+            Nodes.Clear();
+            Connectors.Clear();
+            SelectedElements.Clear();
+            SelectedNode = null;
+            SelectedConnector = null;
+            HasUnsavedChanges = false;
         }
 
         private void RegenerateMermaidCode()
