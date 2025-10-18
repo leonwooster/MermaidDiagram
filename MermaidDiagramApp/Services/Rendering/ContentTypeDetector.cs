@@ -68,21 +68,68 @@ public class ContentTypeDetector : IContentTypeDetector
 
     private ContentType DetectContentTypeInternal(string content, string fileExtension)
     {
-        // .mmd files are always Mermaid
-        if (fileExtension == "mmd")
-            return ContentType.Mermaid;
-
-        // .md files need content analysis
-        if (fileExtension == "md" || fileExtension == "markdown")
+        // CONTENT-FIRST DETECTION: Analyze content patterns before considering file extension
+        // This ensures pasted content is correctly detected regardless of file type
+        
+        var hasMermaidBlocks = ContainsMermaidCodeBlocks(content);
+        var hasMarkdownIndicators = ContainsMarkdownIndicators(content);
+        var hasMermaidKeywords = ContainsMermaidKeywords(content, checkFirst10Lines: true);
+        
+        System.Diagnostics.Debug.WriteLine($"[ContentDetector] Analysis - MermaidBlocks: {hasMermaidBlocks}, MarkdownIndicators: {hasMarkdownIndicators}, MermaidKeywords: {hasMermaidKeywords}, Extension: '{fileExtension}'");
+        
+        // Priority 1: Mermaid code blocks (```mermaid) = MarkdownWithMermaid
+        // This is the strongest indicator - explicit Mermaid blocks in markdown
+        if (hasMermaidBlocks)
         {
-            return AnalyzeMarkdownContent(content);
+            System.Diagnostics.Debug.WriteLine($"[ContentDetector] Detected MarkdownWithMermaid (explicit mermaid code blocks)");
+            return ContentType.MarkdownWithMermaid;
         }
-
-        // For unknown extensions, try to detect from content
-        if (ContainsMermaidKeywords(content, checkFirst10Lines: true))
+        
+        // Priority 2: Markdown indicators = Markdown or MarkdownWithMermaid
+        // If content has markdown syntax (headers, lists, tables, etc.)
+        if (hasMarkdownIndicators)
+        {
+            // Check if there are also Mermaid keywords in the content
+            // This handles cases where Mermaid diagrams are mixed with markdown but not in code blocks
+            if (hasMermaidKeywords)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ContentDetector] Detected MarkdownWithMermaid (markdown + mermaid keywords)");
+                return ContentType.MarkdownWithMermaid;
+            }
+            
+            System.Diagnostics.Debug.WriteLine($"[ContentDetector] Detected Markdown (has markdown indicators)");
+            return ContentType.Markdown;
+        }
+        
+        // Priority 3: Pure Mermaid keywords at start of content
+        // If content starts with Mermaid diagram syntax (no markdown formatting)
+        if (hasMermaidKeywords)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ContentDetector] Detected Mermaid (pure mermaid syntax)");
             return ContentType.Mermaid;
-
-        // Default to Markdown instead of Unknown
+        }
+        
+        // Priority 4: File extension hints (only as fallback)
+        // Use file extension only when content analysis is inconclusive
+        if (!string.IsNullOrEmpty(fileExtension))
+        {
+            if (fileExtension == "mmd")
+            {
+                System.Diagnostics.Debug.WriteLine($"[ContentDetector] Defaulting to Mermaid (mmd extension, no clear content indicators)");
+                return ContentType.Mermaid;
+            }
+            
+            if (fileExtension == "md" || fileExtension == "markdown")
+            {
+                System.Diagnostics.Debug.WriteLine($"[ContentDetector] Defaulting to Markdown (md extension, no clear content indicators)");
+                return ContentType.Markdown;
+            }
+        }
+        
+        // Priority 5: Final fallback
+        // When pasting content with no file extension and no clear indicators, default to Markdown
+        // Markdown is more forgiving and can still render plain text
+        System.Diagnostics.Debug.WriteLine($"[ContentDetector] Defaulting to Markdown (no clear indicators)");
         return ContentType.Markdown;
     }
 
