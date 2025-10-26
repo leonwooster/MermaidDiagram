@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="MermaidDiagramApp.Views.AiDiagramGeneratorPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MermaidDiagramApp.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Padding="12" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" 
+                   Text="AI Diagram Generator" 
+                   Style="{ThemeResource TitleTextBlockStyle}" />
+
+        <!-- Provider Settings -->
+        <StackPanel Grid.Row="1" Spacing="8">
+            <TextBlock Text="AI Provider Settings" Style="{ThemeResource SubtitleTextBlockStyle}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="12">
+                <TextBlock Grid.Column="0" 
+                           Text="Provider:" 
+                           VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1" 
+                          ItemsSource="{Binding Providers}" 
+                          SelectedItem="{Binding SelectedProvider, Mode=TwoWay}" />
+                
+                <TextBlock Grid.Column="2" 
+                           Text="Model:" 
+                           VerticalAlignment="Center" />
+                <ComboBox Grid.Column="3" 
+                          ItemsSource="{Binding Models}" 
+                          SelectedItem="{Binding SelectedModel, Mode=TwoWay}" />
+            </Grid>
+            
+            <Slider Header="Temperature" 
+                    Minimum="0.0" 
+                    Maximum="1.0" 
+                    StepFrequency="0.1" 
+                    Value="{Binding Temperature, Mode=TwoWay}" />
+        </StackPanel>
+
+        <!-- Prompt Input -->
+        <StackPanel Grid.Row="2" Spacing="8">
+            <TextBlock Text="Describe your diagram:" Style="{ThemeResource SubtitleTextBlockStyle}" />
+            <TextBox x:Name="PromptTextBox" 
+                     Text="{Binding UserPrompt, Mode=TwoWay}" 
+                     PlaceholderText="e.g., Create a flowchart showing the authentication process for a web application" 
+                     TextWrapping="Wrap" 
+                     AcceptsReturn="True" 
+                     Height="100" />
+        </StackPanel>
+
+        <!-- Action Buttons -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
+            <Button Content="Generate Diagram" 
+                    Click="GenerateButton_Click" 
+                    IsEnabled="{Binding IsGenerating, Converter={StaticResource InverseBooleanConverter}}" />
+            <Button Content="Suggest Diagram Type" 
+                    Click="SuggestTypeButton_Click" 
+                    IsEnabled="{Binding IsGenerating, Converter={StaticResource InverseBooleanConverter}}" />
+            <ProgressRing IsActive="{Binding IsGenerating}" 
+                          Width="20" 
+                          Height="20" 
+                          Visibility="{Binding IsGenerating, Converter={StaticResource BoolToVisibilityConverter}}" />
+        </StackPanel>
+
+        <!-- Status Message -->
+        <InfoBar Grid.Row="4" 
+                 IsOpen="{Binding StatusMessage, Converter={StaticResource StringToBoolConverter}}"
+                 Message="{Binding StatusMessage}"
+                 Severity="Informational" />
+
+        <!-- Generated Code Preview -->
+        <Grid Grid.Row="5">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            
+            <TextBlock Grid.Row="0" 
+                       Text="Generated Mermaid Code:" 
+                       Style="{ThemeResource SubtitleTextBlockStyle}" 
+                       Margin="0,12,0,8" />
+            
+            <ScrollViewer Grid.Row="1" 
+                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                          BorderThickness="1" 
+                          CornerRadius="4">
+                <TextBox x:Name="GeneratedCodeTextBox" 
+                         Text="{Binding GeneratedCode, Mode=TwoWay}" 
+                         IsReadOnly="False" 
+                         TextWrapping="Wrap" 
+                         AcceptsReturn="True" 
+                         FontFamily="Consolas" 
+                         Padding="8" />
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Action Buttons -->
+        <StackPanel Grid.Row="6" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right" 
+                    Spacing="8" 
+                    Margin="0,12,0,0">
+            <Button Content="Insert into Editor" 
+                    Click="InsertButton_Click" 
+                    Style="{ThemeResource AccentButtonStyle}" />
+            <Button Content="Import to Canvas" 
+                    Click="ImportToCanvasButton_Click" />
+            <Button Content="Copy to Clipboard" 
+                    Click="CopyButton_Click" />
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -68,4 +68,7 @@
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="MainWindow.xaml.cs.backup" />
+  </ItemGroup>
 </Project>

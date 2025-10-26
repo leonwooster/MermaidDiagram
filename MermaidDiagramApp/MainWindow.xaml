@@ -100,6 +100,7 @@
             </MenuBarItem>
             <MenuBarItem Title="View">
                 <ToggleMenuFlyoutItem x:Name="BuilderTool" Text="Diagram Builder" Click="BuilderTool_Click"/>
+                <ToggleMenuFlyoutItem x:Name="AiPanelTool" Text="AI Diagram Generator" Click="AiPanelTool_Click"/>
                 <ToggleMenuFlyoutItem x:Name="PanTool" Text="Pan Tool" Click="PanTool_Click"/>
                 <MenuFlyoutItem Text="Full Screen Preview" Click="ToggleFullScreen_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
@@ -121,6 +122,7 @@
                 </MenuFlyoutItem>
             </MenuBarItem>
             <MenuBarItem Title="Help">
+                <MenuFlyoutItem Text="AI Settings" Click="AiSettings_Click"/>
                 <MenuFlyoutItem Text="About" Click="About_Click"/>
                 <MenuFlyoutSubItem Text="Diagnostics">
                     <MenuFlyoutItem Text="Open Log File" Click="OpenLogFile_Click"/>
@@ -141,6 +143,8 @@
                 <ColumnDefinition x:Name="PropertiesSplitterColumn" Width="Auto"/>
                 <ColumnDefinition x:Name="PropertiesColumn" Width="Auto" MinWidth="0" MaxWidth="400"/>
             </Grid.ColumnDefinitions>
+
+            <!-- Removed old left AI panel; floating prompt is used instead -->
 
             <!-- Shape Toolbox (New Visual Builder) -->
             <Border x:Name="ToolboxPanel" Grid.Column="0" Visibility="Collapsed">
@@ -265,6 +269,8 @@
                                    VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
+
+                <!-- Floating AI Prompt moved to OverlayCanvas at root level -->
             </Grid>
 
             <ctk:GridSplitter x:Name="EditorPreviewSplitter"
@@ -303,6 +309,19 @@
             <Border x:Name="PropertiesPanel" Grid.Column="8" Visibility="Collapsed">
                 <views:PropertiesPanel x:Name="PropertiesPanelControl"/>
             </Border>
+            <!-- Overlay for floating panels (topmost within editor area) -->
+            <Canvas x:Name="OverlayCanvas"
+                    Grid.Column="4"
+                    Grid.ColumnSpan="3"
+                    Canvas.ZIndex="1000"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    IsHitTestVisible="True">
+                <views:FloatingAiPrompt x:Name="FloatingAiPromptControl"
+                                         Canvas.Left="24"
+                                         Canvas.Top="24"
+                                         Visibility="Collapsed"/>
+            </Canvas>
         </Grid>
 
         <!-- Status Bar -->

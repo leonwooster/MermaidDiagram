@@ -34,7 +34,6 @@ using MermaidDiagramApp.Models;
 using Microsoft.UI.Windowing;
 using Microsoft.UI;
 using Microsoft.Windows.AppLifecycle;
-using Windows.Graphics;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -65,9 +64,6 @@ namespace MermaidDiagramApp
         private string _currentFilePath = string.Empty;
         private readonly MarkdownStyleSettingsService _styleSettingsService;
         private readonly DiagramFileService _diagramFileService;
-        private MermaidDiagramApp.Services.AI.IAiService? _aiService;
-        private MermaidDiagramApp.Services.AI.AiConfiguration? _aiConfig;
-        private Window? _aiPromptWindow;
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -93,9 +89,6 @@ namespace MermaidDiagramApp
             // Initialize diagram file service
             _diagramFileService = new DiagramFileService();
 
-            // Initialize AI services
-            InitializeAiServices();
-
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
             if (this.Content is FrameworkElement content)
@@ -117,21 +110,6 @@ namespace MermaidDiagramApp
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             await InitializeWebViewAsync();
-            // Load saved AI configuration (if any) and reinitialize service
-            try
-            {
-                var saved = await Services.AI.AiConfigStorageService.LoadAsync();
-                if (saved != null)
-                {
-                    _aiConfig = saved;
-                    _aiService = Services.AI.AiServiceFactory.CreateAiService(_aiConfig);
-                    _logger.LogInformation("Loaded saved AI configuration");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to load AI configuration: {ex.Message}", ex);
-            }
             
             // Wire up visual builder components
             if (DiagramCanvasControl != null && PropertiesPanelControl != null && ShapeToolboxControl != null)
@@ -157,200 +135,6 @@ namespace MermaidDiagramApp
                 {
                     CodeEditor.Text = code;
                 };
-            }
-            
-            // Prefer the floating AI prompt
-            if (FloatingAiPromptControl != null && _aiService != null)
-            {
-                var vm = new MermaidDiagramApp.ViewModels.AiDiagramGeneratorViewModel(_aiService);
-                // Initialize from config if available
-                if (_aiConfig != null)
-                {
-                    vm.SelectedProvider = _aiConfig.ProviderType;
-                    vm.SelectedModel = _aiConfig.ModelName;
-                    vm.Temperature = _aiConfig.Temperature;
-                }
-                FloatingAiPromptControl.DataContext = vm;
-                FloatingAiPromptControl.Visibility = Visibility.Visible;
-
-                FloatingAiPromptControl.InsertRequested += (s, code) =>
-                {
-                    CodeEditor.Text = code;
-                    _ = UpdatePreview();
-                };
-
-                FloatingAiPromptControl.ImportToCanvasRequested += async (s, code) =>
-                {
-                    await ImportCodeToCanvasAsync(code);
-                };
-
-                FloatingAiPromptControl.ConfigureRequested += async (s, e2) =>
-                {
-                    await OpenAiSettingsAndRefreshVmAsync();
-                };
-                FloatingAiPromptControl.PopOutRequested += (s, e2) =>
-                {
-                    PopOutFloatingPrompt();
-                };
-                // Reflect state in the View menu toggle
-                if (AiPanelTool != null) AiPanelTool.IsChecked = true;
-            }
-        }
-
-        private void PopOutFloatingPrompt()
-        {
-            try
-            {
-                if (_aiPromptWindow != null)
-                {
-                    _aiPromptWindow.Activate();
-                    return;
-                }
-
-                if (FloatingAiPromptControl == null)
-                {
-                    _logger.LogWarning("PopOut requested but FloatingAiPromptControl is null");
-                    return;
-                }
-
-                // Reuse existing ViewModel
-                var vm = FloatingAiPromptControl.DataContext;
-
-                var prompt = new Views.FloatingAiPrompt();
-                prompt.DataContext = vm;
-                prompt.InsertRequested += (s, code) =>
-                {
-                    CodeEditor.Text = code;
-                    _ = UpdatePreview();
-                };
-                prompt.ImportToCanvasRequested += async (s, code) =>
-                {
-                    await ImportCodeToCanvasAsync(code);
-                };
-                prompt.ConfigureRequested += async (s, e2) =>
-                {
-                    await OpenAiSettingsAndRefreshVmAsync();
-                };
-
-                var win = new Window();
-                win.Title = "AI Diagram Assistant";
-                // Switch prompt UI to standalone mode and support docking back
-                prompt.SetIsStandalone(true);
-                prompt.PopOutRequested += (s, e2) =>
-                {
-                    // In standalone mode, "Pop out" acts as "Dock"
-                    win.Close();
-                };
-                win.Content = prompt;
-                _aiPromptWindow = win;
-
-                // Size and position near the main window
-                try
-                {
-                    // Compute a size that fits content, with a reasonable minimum and padding
-                    var minSize = new SizeInt32(820, 640); // ensure full UI is visible on first pop-out
-                    void ResizeToContent()
-                    {
-                        try
-                        {
-                            // Measure desired size of the prompt
-                            prompt.UpdateLayout();
-                            double desiredW = prompt.ActualWidth;
-                            double desiredH = prompt.ActualHeight;
-
-                            if (desiredW <= 0 || desiredH <= 0)
-                            {
-                                // Force a measure pass if Actual sizes are not ready
-                                prompt.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
-                                var ds = prompt.DesiredSize;
-                                desiredW = ds.Width;
-                                desiredH = ds.Height;
-                            }
-
-                            // Add chrome/padding allowance
-                            int width = (int)Math.Ceiling(desiredW + 48);
-                            int height = (int)Math.Ceiling(desiredH + 72);
-
-                            // Apply minimums
-                            width = Math.Max(minSize.Width, width);
-                            height = Math.Max(minSize.Height, height);
-
-                            var target = new SizeInt32(width, height);
-                            win.AppWindow.Resize(target);
-                        }
-                        catch (Exception sizeEx)
-                        {
-                            _logger.LogDebug($"Falling back to minimum pop-out size: {sizeEx.Message}");
-                            win.AppWindow.Resize(minSize);
-                        }
-                    }
-
-                    // Size once content is loaded
-                    prompt.Loaded += (s, e3) => ResizeToContent();
-
-                    // Also do an initial conservative size in case Loaded has already fired
-                    win.AppWindow.Resize(minSize);
-
-                    // Position near the main window
-                    var mainPos = this.AppWindow.Position;
-                    var dest = new PointInt32(mainPos.X + 60, mainPos.Y + 60);
-                    win.AppWindow.Move(dest);
-                }
-                catch (Exception posEx)
-                {
-                    _logger.LogDebug($"Unable to set pop-out window position/size: {posEx.Message}");
-                }
-
-                win.Closed += (s, e) =>
-                {
-                    _aiPromptWindow = null;
-                    // Restore docked prompt
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        if (FloatingAiPromptControl != null)
-                        {
-                            FloatingAiPromptControl.Visibility = Visibility.Visible;
-                            // Reset UI to docked mode label
-                            FloatingAiPromptControl.SetIsStandalone(false);
-                        }
-                    });
-                };
-
-                // Hide docked control and show window
-                FloatingAiPromptControl.Visibility = Visibility.Collapsed;
-                win.Activate();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to pop out Floating AI Prompt: {ex.Message}", ex);
-            }
-        }
-
-        private void InitializeAiServices()
-        {
-            try
-            {
-                // Initialize AI configuration with default values
-                _aiConfig = new MermaidDiagramApp.Services.AI.AiConfiguration
-                {
-                    ProviderType = "OpenAI",
-                    ApiKey = string.Empty, // Will be set by user in settings
-                    BaseUrl = "http://localhost:11434", // Default Ollama URL
-                    ModelName = "gpt-3.5-turbo",
-                    TimeoutSeconds = 30,
-                    MaxTokens = 2048,
-                    Temperature = 0.7
-                };
-
-                // Create AI service instance
-                _aiService = MermaidDiagramApp.Services.AI.AiServiceFactory.CreateAiService(_aiConfig);
-
-                // Old docked AI panel removed; floating prompt is initialized on load
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to initialize AI services: {ex.Message}", ex);
-                // Continue without AI features if initialization fails
             }
         }
 
@@ -1588,16 +1372,6 @@ namespace MermaidDiagramApp
             UpdateBuilderVisibility();
         }
 
-        private void AiPanelTool_Click(object sender, RoutedEventArgs e)
-        {
-            var isVisible = AiPanelTool.IsChecked;
-            // Show/hide floating AI prompt instead of the left docked panel
-            if (FloatingAiPromptControl != null)
-            {
-                FloatingAiPromptControl.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
-            }
-        }
-
         private void UpdateBuilderVisibility()
         {
             if (_isBuilderVisible)
@@ -1791,63 +1565,6 @@ namespace MermaidDiagramApp
             catch
             {
                 return false;
-            }
-        }
-
-        private async Task OpenAiSettingsAndRefreshVmAsync()
-        {
-            if (_aiConfig == null)
-            {
-                _aiConfig = new Services.AI.AiConfiguration();
-            }
-
-            var dialog = new Views.AiSettingsDialog(_aiConfig)
-            {
-                XamlRoot = this.Content.XamlRoot
-            };
-
-            var result = await dialog.ShowAsync();
-            if (result == ContentDialogResult.Primary)
-            {
-                // Update AI configuration from dialog
-                var updatedConfig = dialog.GetUpdatedConfiguration();
-                _aiConfig.ProviderType = updatedConfig.ProviderType;
-                _aiConfig.ApiKey = updatedConfig.ApiKey;
-                _aiConfig.BaseUrl = updatedConfig.BaseUrl;
-                _aiConfig.ModelName = updatedConfig.ModelName;
-                _aiConfig.Temperature = updatedConfig.Temperature;
-                _aiConfig.MaxTokens = updatedConfig.MaxTokens;
-                _aiConfig.TimeoutSeconds = updatedConfig.TimeoutSeconds;
-
-                // Persist to disk
-                try { await Services.AI.AiConfigStorageService.SaveAsync(_aiConfig); } catch { /* ignore */ }
-
-                // Recreate AI service
-                _aiService = Services.AI.AiServiceFactory.CreateAiService(_aiConfig);
-
-                // Refresh floating prompt VM if present
-                if (FloatingAiPromptControl != null)
-                {
-                    var vm = new ViewModels.AiDiagramGeneratorViewModel(_aiService);
-                    vm.SelectedProvider = _aiConfig.ProviderType;
-                    vm.SelectedModel = _aiConfig.ModelName;
-                    vm.Temperature = _aiConfig.Temperature;
-                    FloatingAiPromptControl.DataContext = vm;
-                }
-
-                _logger.LogInformation("AI settings updated and saved.");
-            }
-        }
-
-        private async void AiSettings_Click(object sender, RoutedEventArgs e)
-        {
-            if (_aiConfig != null)
-            {
-                await OpenAiSettingsAndRefreshVmAsync();
-            }
-            else
-            {
-                await ShowMessageAsync("AI Not Available", "AI services are not initialized.");
             }
         }
 
@@ -2359,63 +2076,6 @@ namespace MermaidDiagramApp
                 }
             }
             */
-        }
-
-        private async Task ImportCodeToCanvasAsync(string mermaidCode)
-        {
-            try
-            {
-                // Show builder if not already visible
-                if (!_isBuilderVisible)
-                {
-                    _isBuilderVisible = true;
-                    BuilderTool.IsChecked = true;
-                    UpdateBuilderVisibility();
-                }
-
-                // Show loading indicator
-                if (DiagramCanvasControl != null)
-                {
-                    DiagramCanvasControl.ShowLoading();
-                    
-                    // Clear existing canvas visuals AND data for new session
-                    DiagramCanvasControl.ClearVisuals();
-                    DiagramCanvasControl.ViewModel.ClearCanvas();
-                    
-                    // Small delay to ensure clearing is complete
-                    await Task.Delay(50);
-                    
-                    // For now, we'll just update the code editor with the generated code
-                    // A full implementation would parse the Mermaid code and create canvas elements
-                    CodeEditor.Text = mermaidCode;
-                    await UpdatePreview();
-                    
-                    // Hide loading indicator
-                    DiagramCanvasControl.HideLoading();
-                    
-                    _logger.LogInformation("AI-generated code imported to canvas");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to import code to canvas: {ex.Message}", ex);
-                
-                // Hide loading indicator if it was shown
-                if (DiagramCanvasControl != null)
-                {
-                    DiagramCanvasControl.HideLoading();
-                }
-                
-                // Show error message to user
-                var dialog = new ContentDialog
-                {
-                    Title = "Import Error",
-                    Content = $"Failed to import diagram to canvas: {ex.Message}",
-                    CloseButtonText = "OK",
-                    XamlRoot = this.Content.XamlRoot
-                };
-                await dialog.ShowAsync();
-            }
         }
 
         private async void UpdateMermaid_Click(object sender, RoutedEventArgs e)

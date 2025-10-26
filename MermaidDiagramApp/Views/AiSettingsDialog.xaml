@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="MermaidDiagramApp.Views.AiSettingsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MermaidDiagramApp.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="AI Settings"
+    PrimaryButtonText="Save"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary">
+
+    <ScrollViewer>
+        <StackPanel Spacing="12" Width="400">
+            <TextBlock Text="Configure your AI provider settings for diagram generation." 
+                       TextWrapping="Wrap" />
+            
+            <!-- Provider Selection -->
+            <ComboBox x:Name="ProviderComboBox" 
+                      Header="AI Provider" 
+                      SelectionChanged="ProviderComboBox_SelectionChanged" />
+            
+            <!-- API Key -->
+            <PasswordBox x:Name="ApiKeyPasswordBox" 
+                         Header="API Key" 
+                         PlaceholderText="Enter your API key" />
+            
+            <!-- Base URL (for local providers) -->
+            <TextBox x:Name="BaseUrlTextBox" 
+                     Header="Base URL" 
+                     PlaceholderText="e.g., http://localhost:11434" />
+            
+            <!-- Model Selection -->
+            <ComboBox x:Name="ModelComboBox" 
+                      Header="Model" />
+            
+            <!-- Temperature -->
+            <Slider x:Name="TemperatureSlider" 
+                    Header="Temperature" 
+                    Minimum="0.0" 
+                    Maximum="1.0" 
+                    StepFrequency="0.1" 
+                    TickFrequency="0.1" />
+            
+            <!-- Max Tokens -->
+            <NumberBox x:Name="MaxTokensNumberBox" 
+                       Header="Max Tokens" 
+                       Minimum="1" 
+                       Maximum="4096" 
+                       SpinButtonPlacementMode="Compact" />
+            
+            <!-- Timeout -->
+            <NumberBox x:Name="TimeoutNumberBox" 
+                       Header="Timeout (seconds)" 
+                       Minimum="1" 
+                       Maximum="300" 
+                       SpinButtonPlacementMode="Compact" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

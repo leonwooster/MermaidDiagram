@@ -17,6 +17,9 @@
             <converters:ZoomLevelConverter x:Key="ZoomLevelConverter"/>
             <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
             <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter"/>
+            <converters:StringToBoolConverter x:Key="StringToBoolConverter"/>
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <converters:DoubleToStringFormatConverter x:Key="DoubleToStringFormatConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
