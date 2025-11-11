@@ -241,34 +241,9 @@
             </Border>
 
             <Grid Grid.Column="4">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                
                 <tcb:TextControlBox
                     x:Name="CodeEditor"
-                    Grid.Row="0"
                     ShowLineNumbers="True"/>
-                
-                <!-- Content Type Indicator -->
-                <Border Grid.Row="1"
-                        Background="{ThemeResource LayerFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="0,1,0,0"
-                        Padding="8,4">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon x:Name="ContentTypeIcon"
-                                  Glyph="&#xE8A5;"
-                                  FontSize="12"
-                                  Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-                        <TextBlock x:Name="ContentTypeText"
-                                   Text="Unknown"
-                                   FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Border>
 
                 <!-- Floating AI Prompt moved to OverlayCanvas at root level -->
             </Grid>
@@ -288,7 +263,7 @@
                         Height="36"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Top"
-                        Margin="16"
+                        Margin="16,80,16,16"
                         Background="#99000000"
                         Foreground="White"
                         FontSize="18"

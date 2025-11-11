@@ -171,7 +171,7 @@ namespace MermaidDiagramApp
                     vm.Temperature = _aiConfig.Temperature;
                 }
                 FloatingAiPromptControl.DataContext = vm;
-                FloatingAiPromptControl.Visibility = Visibility.Visible;
+                FloatingAiPromptControl.Visibility = Visibility.Collapsed; // Hidden by default
 
                 FloatingAiPromptControl.InsertRequested += (s, code) =>
                 {
@@ -193,7 +193,7 @@ namespace MermaidDiagramApp
                     PopOutFloatingPrompt();
                 };
                 // Reflect state in the View menu toggle
-                if (AiPanelTool != null) AiPanelTool.IsChecked = true;
+                if (AiPanelTool != null) AiPanelTool.IsChecked = false; // Unchecked by default
             }
         }
 
@@ -1159,32 +1159,6 @@ namespace MermaidDiagramApp
                     RenderModeIcon.Glyph = "\uE897"; // Warning icon
                     break;
             }
-            
-            // Update code editor content type indicator
-            UpdateContentTypeIndicator(contentType);
-        }
-        
-        private void UpdateContentTypeIndicator(ContentType contentType)
-        {
-            switch (contentType)
-            {
-                case ContentType.Mermaid:
-                    ContentTypeText.Text = "Mermaid";
-                    ContentTypeIcon.Glyph = "\uE8BC"; // Chart icon
-                    break;
-                case ContentType.Markdown:
-                    ContentTypeText.Text = "Markdown";
-                    ContentTypeIcon.Glyph = "\uE8A5"; // Document icon
-                    break;
-                case ContentType.MarkdownWithMermaid:
-                    ContentTypeText.Text = "Hybrid";
-                    ContentTypeIcon.Glyph = "\uE8FD"; // Combined icon
-                    break;
-                default:
-                    ContentTypeText.Text = "Unknown";
-                    ContentTypeIcon.Glyph = "\uE9CE"; // Question icon
-                    break;
-            }
         }
 
         private void RenderModeOverride_Click(object sender, RoutedEventArgs e)
@@ -1594,7 +1568,59 @@ namespace MermaidDiagramApp
             // Show/hide floating AI prompt instead of the left docked panel
             if (FloatingAiPromptControl != null)
             {
-                FloatingAiPromptControl.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+                if (isVisible)
+                {
+                    // Position at bottom center when showing
+                    PositionAiPromptAtBottomCenter();
+                    FloatingAiPromptControl.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    FloatingAiPromptControl.Visibility = Visibility.Collapsed;
+                }
+            }
+        }
+
+        private void PositionAiPromptAtBottomCenter()
+        {
+            if (FloatingAiPromptControl == null || OverlayCanvas == null) return;
+
+            try
+            {
+                // Ensure the control has been measured
+                FloatingAiPromptControl.UpdateLayout();
+
+                // Get the canvas dimensions
+                var canvasWidth = OverlayCanvas.ActualWidth;
+                var canvasHeight = OverlayCanvas.ActualHeight;
+
+                // Get the control dimensions
+                var controlWidth = FloatingAiPromptControl.ActualWidth;
+                var controlHeight = FloatingAiPromptControl.ActualHeight;
+
+                // If dimensions aren't available yet, use reasonable defaults
+                if (controlWidth == 0) controlWidth = 400;
+                if (controlHeight == 0) controlHeight = 500;
+
+                // Calculate bottom center position
+                var left = (canvasWidth - controlWidth) / 2;
+                var top = canvasHeight - controlHeight - 40; // 40px margin from bottom
+
+                // Ensure it stays within bounds
+                left = Math.Max(20, Math.Min(left, canvasWidth - controlWidth - 20));
+                top = Math.Max(20, Math.Min(top, canvasHeight - controlHeight - 20));
+
+                Canvas.SetLeft(FloatingAiPromptControl, left);
+                Canvas.SetTop(FloatingAiPromptControl, top);
+
+                _logger.LogDebug($"Positioned AI prompt at bottom center: Left={left}, Top={top}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to position AI prompt: {ex.Message}", ex);
+                // Fallback to default position
+                Canvas.SetLeft(FloatingAiPromptControl, 24);
+                Canvas.SetTop(FloatingAiPromptControl, 24);
             }
         }
 
