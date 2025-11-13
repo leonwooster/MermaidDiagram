@@ -257,19 +257,167 @@
 
             <Grid Grid.Column="6">
                 <WebView2 x:Name="PreviewBrowser"/>
+                
+                <!-- Refresh Button (always visible) -->
                 <Button x:Name="FloatingRefreshButton"
                         Content="⟳"
-                        Width="36"
-                        Height="36"
+                        Width="40"
+                        Height="40"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Top"
                         Margin="16,80,16,16"
-                        Background="#99000000"
+                        Background="#CC000000"
                         Foreground="White"
-                        FontSize="18"
-                        CornerRadius="18"
+                        FontSize="20"
+                        CornerRadius="20"
+                        BorderThickness="0"
                         ToolTipService.ToolTip="Refresh Preview"
-                        Click="RefreshPreview_Click"/>
+                        Click="RefreshPreview_Click">
+                    <Button.Shadow>
+                        <ThemeShadow />
+                    </Button.Shadow>
+                </Button>
+                
+                <!-- Zoom Controls (visible in full-screen mode) -->
+                <StackPanel x:Name="ZoomControlsPanel"
+                            Orientation="Vertical"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="20"
+                            Spacing="12"
+                            Visibility="Collapsed">
+                    <!-- Refresh Button in Zoom Panel -->
+                    <Button Width="48"
+                            Height="48"
+                            Background="#CC000000"
+                            Foreground="White"
+                            CornerRadius="24"
+                            BorderThickness="0"
+                            Padding="0"
+                            ToolTipService.ToolTip="Refresh Preview"
+                            Click="RefreshPreview_Click">
+                        <Button.Shadow>
+                            <ThemeShadow />
+                        </Button.Shadow>
+                        <TextBlock Text="⟳"
+                                   FontSize="22"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Center"
+                                   Margin="0,-2,0,0"/>
+                    </Button>
+                    
+                    <!-- Zoom In -->
+                    <Button x:Name="ZoomInButton"
+                            Width="48"
+                            Height="48"
+                            Background="#CC000000"
+                            Foreground="White"
+                            CornerRadius="24"
+                            BorderThickness="0"
+                            Padding="0"
+                            ToolTipService.ToolTip="Zoom In"
+                            Click="ZoomIn_Click">
+                        <Button.Shadow>
+                            <ThemeShadow />
+                        </Button.Shadow>
+                        <TextBlock Text="+"
+                                   FontSize="28"
+                                   FontWeight="Normal"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Center"
+                                   Margin="0,-3,0,0"/>
+                    </Button>
+                    
+                    <!-- Zoom Level Display -->
+                    <Border Background="#CC000000"
+                            CornerRadius="24"
+                            Padding="12,10"
+                            BorderThickness="0">
+                        <Border.Shadow>
+                            <ThemeShadow />
+                        </Border.Shadow>
+                        <TextBlock x:Name="ZoomLevelText"
+                                   Text="100%"
+                                   Foreground="White"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Center"
+                                   MinWidth="55"
+                                   TextAlignment="Center"/>
+                    </Border>
+                    
+                    <!-- Zoom Out -->
+                    <Button x:Name="ZoomOutButton"
+                            Content="−"
+                            Width="48"
+                            Height="48"
+                            Background="#CC000000"
+                            Foreground="White"
+                            FontSize="28"
+                            FontWeight="Normal"
+                            CornerRadius="24"
+                            BorderThickness="0"
+                            Padding="0"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            ToolTipService.ToolTip="Zoom Out"
+                            Click="ZoomOut_Click">
+                        <Button.Shadow>
+                            <ThemeShadow />
+                        </Button.Shadow>
+                    </Button>
+                    
+                    <!-- Reset Zoom -->
+                    <Button x:Name="ZoomResetButton"
+                            Content="⊙"
+                            Width="48"
+                            Height="48"
+                            Background="#CC000000"
+                            Foreground="White"
+                            FontSize="22"
+                            CornerRadius="24"
+                            BorderThickness="0"
+                            Padding="0"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            ToolTipService.ToolTip="Reset Zoom (100%)"
+                            Click="ZoomReset_Click">
+                        <Button.Shadow>
+                            <ThemeShadow />
+                        </Button.Shadow>
+                    </Button>
+                    
+                    <!-- Separator -->
+                    <Border Height="2" 
+                            Background="#44FFFFFF" 
+                            Margin="8,4"/>
+                    
+                    <!-- Drag/Select Mode Toggle -->
+                    <ToggleButton x:Name="DragModeToggle"
+                                  Width="48"
+                                  Height="48"
+                                  Background="#CC000000"
+                                  Foreground="White"
+                                  CornerRadius="24"
+                                  BorderThickness="0"
+                                  Padding="0"
+                                  HorizontalContentAlignment="Center"
+                                  VerticalContentAlignment="Center"
+                                  ToolTipService.ToolTip="Toggle Drag/Select Mode"
+                                  Click="DragModeToggle_Click">
+                        <ToggleButton.Shadow>
+                            <ThemeShadow />
+                        </ToggleButton.Shadow>
+                        <FontIcon x:Name="DragModeIcon" 
+                                  Glyph="&#xE7C2;" 
+                                  FontSize="20"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"/>
+                    </ToggleButton>
+                </StackPanel>
             </Grid>
 
             <!-- Properties Panel (New Visual Builder) -->

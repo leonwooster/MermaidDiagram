@@ -55,6 +55,8 @@ namespace MermaidDiagramApp
         private bool _isBuilderVisible = false;
         private MermaidLinter _linter;
         private Version? _mermaidVersion;
+        private double _previewZoomLevel = 1.0;
+        private bool _isPreviewDragMode = false;
         private readonly ILogger _logger = LoggingService.Instance.GetLogger<MainWindow>();
         
         // Rendering orchestration components
@@ -659,6 +661,8 @@ namespace MermaidDiagramApp
                 coreWebView2.Settings.AreDevToolsEnabled = true;
                 coreWebView2.Settings.AreDefaultContextMenusEnabled = true;
                 coreWebView2.Settings.IsWebMessageEnabled = true;
+                
+                // This handler is set up later in the main WebMessageReceived handler
 
                 // Map the packaged Assets folder into a virtual host so scripts/css can be loaded
                 const string virtualHost = "appassets";
@@ -686,6 +690,14 @@ namespace MermaidDiagramApp
                 coreWebView2.WebMessageReceived += (s, e) =>
                 {
                     var message = e.TryGetWebMessageAsString();
+                    
+                    // Handle console messages first (they're plain strings)
+                    if (!string.IsNullOrEmpty(message) && message.StartsWith("[CONSOLE]"))
+                    {
+                        _logger.LogDebug($"[WebView2 Message] {message}");
+                        return; // Don't try to parse as JSON
+                    }
+                    
                     _logger.LogDebug($"[WebView2 Message] {message}");
 
                     // Try to parse as JSON for structured messages
@@ -736,6 +748,26 @@ namespace MermaidDiagramApp
                                 if (root.TryGetProperty("message", out var msgElement))
                                 {
                                     _logger.LogDebug($"[WebView Log] {msgElement.GetString()}");
+                                }
+                            }
+                            else if (messageType == "ctrlWheel")
+                            {
+                                _logger.LogInformation("Received ctrlWheel message from WebView");
+                                if (root.TryGetProperty("delta", out var deltaElement))
+                                {
+                                    var delta = deltaElement.GetDouble();
+                                    _logger.LogInformation($"ctrlWheel delta: {delta}, current zoom: {_previewZoomLevel}");
+                                    DispatcherQueue.TryEnqueue(() =>
+                                    {
+                                        var oldZoom = _previewZoomLevel;
+                                        _previewZoomLevel = Math.Max(0.5, Math.Min(3.0, _previewZoomLevel + delta));
+                                        _logger.LogInformation($"Zoom changed from {oldZoom} to {_previewZoomLevel}");
+                                        ApplyPreviewZoom();
+                                    });
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("ctrlWheel message missing delta property");
                                 }
                             }
                         }
@@ -832,6 +864,7 @@ namespace MermaidDiagramApp
                             _logger.LogInformation("Renderers are ready!");
                             _isWebViewReady = true;
                             await UpdatePreview(); // Initial render
+                            await SetupCtrlWheelZoom(); // Setup Ctrl+Wheel zoom
                         }
                         else
                         {
@@ -1062,6 +1095,9 @@ namespace MermaidDiagramApp
                 await ExecuteRenderingScript(code, renderResult.DetectedContentType, context);
 
                 _lastPreviewedCode = code;
+                
+                // Re-setup Ctrl+Wheel zoom after content update
+                await SetupCtrlWheelZoom();
             }
             catch (Exception ex)
             {
@@ -1546,6 +1582,12 @@ namespace MermaidDiagramApp
                 PropertiesColumn.Width = new GridLength(0);
                 PropertiesPanel.Visibility = Visibility.Collapsed;
                 PropertiesSplitter.Visibility = Visibility.Collapsed;
+                
+                // Show zoom controls in full-screen mode
+                if (ZoomControlsPanel != null)
+                {
+                    ZoomControlsPanel.Visibility = Visibility.Visible;
+                }
             }
             else
             {
@@ -1553,6 +1595,12 @@ namespace MermaidDiagramApp
                 EditorColumn.Width = new GridLength(1, GridUnitType.Star);
                 EditorPreviewSplitter.Visibility = Visibility.Visible;
                 UpdateBuilderVisibility(); // Restore builder visibility based on its state
+                
+                // Hide zoom controls when exiting full-screen
+                if (ZoomControlsPanel != null)
+                {
+                    ZoomControlsPanel.Visibility = Visibility.Collapsed;
+                }
             }
         }
 
@@ -2351,6 +2399,341 @@ namespace MermaidDiagramApp
             }
 
             await dialog.ShowAsync();
+        }
+
+        private void ZoomIn_Click(object sender, RoutedEventArgs e)
+        {
+            _previewZoomLevel = Math.Min(_previewZoomLevel + 0.1, 3.0); // Max 300%
+            ApplyPreviewZoom();
+        }
+
+        private void ZoomOut_Click(object sender, RoutedEventArgs e)
+        {
+            _previewZoomLevel = Math.Max(_previewZoomLevel - 0.1, 0.5); // Min 50%
+            ApplyPreviewZoom();
+        }
+
+        private void ZoomReset_Click(object sender, RoutedEventArgs e)
+        {
+            _previewZoomLevel = 1.0;
+            ApplyPreviewZoom();
+        }
+
+        private async void DragModeToggle_Click(object sender, RoutedEventArgs e)
+        {
+            _isPreviewDragMode = DragModeToggle.IsChecked == true;
+            _logger.LogInformation($"Drag mode toggled: {_isPreviewDragMode}");
+            await UpdatePreviewInteractionMode();
+            
+            // Update icon and tooltip
+            if (DragModeIcon != null)
+            {
+                DragModeIcon.Glyph = _isPreviewDragMode ? "\xE8AB" : "\xE7C2"; // Hand vs Cursor
+                _logger.LogDebug($"Icon updated to: {(_isPreviewDragMode ? "Hand" : "Cursor")}");
+            }
+            
+            if (DragModeToggle != null)
+            {
+                ToolTipService.SetToolTip(DragModeToggle, _isPreviewDragMode ? "Drag Mode (Click to Select)" : "Select Mode (Click to Drag)");
+            }
+        }
+
+        private async Task UpdatePreviewInteractionMode()
+        {
+            try
+            {
+                if (PreviewBrowser?.CoreWebView2 != null && _isWebViewReady)
+                {
+                    var modeScript = $@"
+                        (function() {{
+                            const isDragMode = {(_isPreviewDragMode ? "true" : "false")};
+                            const body = document.body;
+                            const html = document.documentElement;
+                            
+                            if (isDragMode) {{
+                                // Enable drag mode with aggressive cursor styling
+                                body.style.userSelect = 'none';
+                                body.style.webkitUserSelect = 'none';
+                                body.style.mozUserSelect = 'none';
+                                body.style.msUserSelect = 'none';
+                                
+                                // Function to apply cursor to all elements
+                                const applyCursor = (cursorType) => {{
+                                    const logMsg = '[CONSOLE] Applying cursor: ' + cursorType;
+                                    if (window.chrome && window.chrome.webview) {{
+                                        window.chrome.webview.postMessage(logMsg);
+                                    }}
+                                    
+                                    // Update via style element with highest priority
+                                    let styleEl = document.getElementById('drag-cursor-style');
+                                    if (!styleEl) {{
+                                        styleEl = document.createElement('style');
+                                        styleEl.id = 'drag-cursor-style';
+                                        document.head.appendChild(styleEl);
+                                    }}
+                                    
+                                    // Map cursor types to ensure browser compatibility
+                                    // Use 'all-scroll' for grab (shows hand) and 'grabbing' for grabbing (shows closed hand)
+                                    const cursorValue = cursorType === 'grab' ? 'all-scroll' : (cursorType === 'grabbing' ? 'grabbing' : cursorType);
+                                    
+                                    // Use very specific CSS to override everything
+                                    styleEl.textContent = `
+                                        * {{
+                                            cursor: ${{cursorValue}} !important;
+                                            -webkit-user-select: none !important;
+                                            user-select: none !important;
+                                        }}
+                                    `;
+                                    
+                                    // Also set directly on body and html as backup
+                                    document.body.style.cursor = cursorValue;
+                                    document.documentElement.style.cursor = cursorValue;
+                                    
+                                    const countMsg = '[CONSOLE] Cursor style updated in CSS';
+                                    if (window.chrome && window.chrome.webview) {{
+                                        window.chrome.webview.postMessage(countMsg);
+                                    }}
+                                }};
+                                
+                                // Initial grab cursor
+                                applyCursor('grab');
+                                
+                                let isDown = false;
+                                let startX, startY, scrollLeft, scrollTop;
+                                
+                                const mouseDownHandler = (e) => {{
+                                    const downMsg = '[CONSOLE] Mouse down detected in drag mode';
+                                    if (window.chrome && window.chrome.webview) {{
+                                        window.chrome.webview.postMessage(downMsg);
+                                    }}
+                                    isDown = true;
+                                    applyCursor('grabbing');
+                                    
+                                    startX = e.clientX;
+                                    startY = e.clientY;
+                                    scrollLeft = window.scrollX;
+                                    scrollTop = window.scrollY;
+                                    
+                                    e.preventDefault();
+                                }};
+                                
+                                const mouseUpHandler = (e) => {{
+                                    if (isDown) {{
+                                        const upMsg = '[CONSOLE] Mouse up detected, resetting cursor';
+                                        if (window.chrome && window.chrome.webview) {{
+                                            window.chrome.webview.postMessage(upMsg);
+                                        }}
+                                        isDown = false;
+                                        applyCursor('grab');
+                                    }}
+                                }};
+                                
+                                const mouseMoveHandler = (e) => {{
+                                    if (!isDown) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    
+                                    const x = e.clientX;
+                                    const y = e.clientY;
+                                    const walkX = x - startX;
+                                    const walkY = y - startY;
+                                    
+                                    window.scrollTo(scrollLeft - walkX, scrollTop - walkY);
+                                }};
+                                
+                                // Store handlers for cleanup
+                                window.dragHandlers = {{ mouseDownHandler, mouseUpHandler, mouseMoveHandler }};
+                                
+                                // Attach to window for smooth dragging (won't trigger leave events)
+                                window.addEventListener('mousedown', mouseDownHandler, {{ capture: true, passive: false }});
+                                window.addEventListener('mouseup', mouseUpHandler, {{ capture: true, passive: false }});
+                                window.addEventListener('mousemove', mouseMoveHandler, {{ capture: true, passive: false }});
+                            }} else {{
+                                // Disable drag mode
+                                body.style.cursor = 'default';
+                                html.style.cursor = 'default';
+                                body.style.userSelect = 'auto';
+                                
+                                // Remove cursor style
+                                const styleEl = document.getElementById('drag-cursor-style');
+                                if (styleEl) {{
+                                    styleEl.remove();
+                                }}
+                                
+                                if (window.dragHandlers) {{
+                                    window.removeEventListener('mousedown', window.dragHandlers.mouseDownHandler, {{ capture: true }});
+                                    window.removeEventListener('mouseup', window.dragHandlers.mouseUpHandler, {{ capture: true }});
+                                    window.removeEventListener('mousemove', window.dragHandlers.mouseMoveHandler, {{ capture: true }});
+                                    window.dragHandlers = null;
+                                }}
+                            }}
+                        }})();
+                    ";
+                    await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(modeScript);
+                    _logger.LogDebug($"Preview interaction mode: {(_isPreviewDragMode ? "Drag" : "Select")}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to update preview interaction mode: {ex.Message}", ex);
+            }
+        }
+
+        private async Task SetupCtrlWheelZoom()
+        {
+            try
+            {
+                if (PreviewBrowser?.CoreWebView2 != null)
+                {
+                    var wheelZoomScript = @"
+                        (function() {
+                            // Remove existing listener if any
+                            if (window.ctrlWheelHandler) {
+                                document.removeEventListener('wheel', window.ctrlWheelHandler, { passive: false });
+                                window.removeEventListener('wheel', window.ctrlWheelHandler);
+                            }
+                            
+                            // Create and store the handler
+                            window.ctrlWheelHandler = function(e) {
+                                // Log every wheel event for debugging
+                                const logMsg = '[CONSOLE] Wheel event: ctrlKey=' + e.ctrlKey + ', deltaY=' + e.deltaY;
+                                if (window.chrome && window.chrome.webview) {
+                                    window.chrome.webview.postMessage(logMsg);
+                                }
+                                
+                                if (e.ctrlKey) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    
+                                    // Determine zoom direction (deltaY > 0 means scroll down = zoom out)
+                                    // 0.1 = 10% zoom change per scroll
+                                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                                    
+                                    // Log for debugging
+                                    console.log('Ctrl+Wheel detected, deltaY:', e.deltaY, 'delta:', delta);
+                                    const ctrlWheelLog = '[CONSOLE] Ctrl+Wheel detected, deltaY: ' + e.deltaY + ', delta: ' + delta;
+                                    if (window.chrome && window.chrome.webview) {
+                                        window.chrome.webview.postMessage(ctrlWheelLog);
+                                    }
+                                    
+                                    // Send message to C# to handle zoom
+                                    if (window.chrome && window.chrome.webview) {
+                                        // Must stringify the JSON object for WebView2
+                                        const message = JSON.stringify({
+                                            type: 'ctrlWheel',
+                                            delta: delta
+                                        });
+                                        window.chrome.webview.postMessage(message);
+                                        const sentLog = '[CONSOLE] Sent ctrlWheel JSON: ' + message;
+                                        window.chrome.webview.postMessage(sentLog);
+                                    } else {
+                                        console.error('WebView messaging not available');
+                                        const errorLog = '[CONSOLE] ERROR: WebView messaging not available';
+                                        if (window.chrome && window.chrome.webview) {
+                                            window.chrome.webview.postMessage(errorLog);
+                                        }
+                                    }
+                                }
+                            };
+                            
+                            // Add the listener to both document and window
+                            document.addEventListener('wheel', window.ctrlWheelHandler, { passive: false, capture: true });
+                            window.addEventListener('wheel', window.ctrlWheelHandler, { passive: false, capture: true });
+                            
+                            console.log('Ctrl+Wheel zoom handler installed on document and window');
+                        })();
+                    ";
+                    await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(wheelZoomScript);
+                    _logger.LogInformation("Ctrl+Wheel zoom handler installed successfully");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to setup Ctrl+Wheel zoom: {ex.Message}", ex);
+            }
+        }
+
+        private async void ApplyPreviewZoom()
+        {
+            try
+            {
+                if (PreviewBrowser?.CoreWebView2 != null && _isWebViewReady)
+                {
+                    var scale = _previewZoomLevel.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    
+                    // Apply zoom using transform with a wrapper approach for proper scrolling
+                    var zoomScript = $@"
+                        (function() {{
+                            const scale = {scale};
+                            const container = document.getElementById('content-container');
+                            
+                            if (!container) return;
+                            
+                            // If scale is 1.0, remove wrapper and reset to original
+                            if (scale === 1.0) {{
+                                const wrapper = document.getElementById('zoom-wrapper');
+                                if (wrapper) {{
+                                    const parent = wrapper.parentNode;
+                                    parent.insertBefore(container, wrapper);
+                                    wrapper.remove();
+                                    
+                                    // Reset body styles
+                                    document.body.style.width = '';
+                                    document.body.style.height = '';
+                                    document.body.style.overflow = '';
+                                }}
+                                return;
+                            }}
+                            
+                            // Create or get zoom wrapper
+                            let wrapper = document.getElementById('zoom-wrapper');
+                            if (!wrapper) {{
+                                wrapper = document.createElement('div');
+                                wrapper.id = 'zoom-wrapper';
+                                wrapper.style.transformOrigin = '0 0';
+                                wrapper.style.display = 'inline-block';
+                                wrapper.style.minWidth = '100%';
+                                wrapper.style.minHeight = '100%';
+                                
+                                // Wrap the container
+                                const parent = container.parentNode;
+                                parent.insertBefore(wrapper, container);
+                                wrapper.appendChild(container);
+                                
+                                // Adjust body for scrolling
+                                document.body.style.overflow = 'auto';
+                                document.body.style.margin = '0';
+                                document.body.style.padding = '0';
+                            }}
+                            
+                            // Apply transform scale
+                            wrapper.style.transform = 'scale(' + scale + ')';
+                            
+                            // Adjust wrapper size to create proper scroll area
+                            const rect = container.getBoundingClientRect();
+                            wrapper.style.width = (rect.width / scale) + 'px';
+                            wrapper.style.height = (rect.height / scale) + 'px';
+                            
+                            // Force body to accommodate scaled content
+                            document.body.style.width = (rect.width) + 'px';
+                            document.body.style.height = (rect.height) + 'px';
+                        }})();
+                    ";
+                    await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(zoomScript);
+                    
+                    // Update zoom level display
+                    if (ZoomLevelText != null)
+                    {
+                        ZoomLevelText.Text = $"{(_previewZoomLevel * 100):F0}%";
+                    }
+                    
+                    _logger.LogDebug($"Applied preview zoom: {_previewZoomLevel * 100:F0}%");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to apply preview zoom: {ex.Message}", ex);
+            }
         }
 
         private async Task<ContentDialogResult> ShowUnsavedChangesDialog()
