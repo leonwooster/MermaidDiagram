@@ -20,7 +20,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid RowDefinitions="Auto, Auto, Auto, *, Auto" KeyDown="MainWindow_KeyDown">
+    <Grid RowDefinitions="Auto, Auto, Auto, *, Auto" KeyDown="MainWindow_KeyDown" PreviewKeyDown="MainWindow_PreviewKeyDown">
         <ContentDialog x:Name="PngExportDialog"
                        Title="Export PNG Options"
                        PrimaryButtonText="Export"
@@ -69,6 +69,12 @@
             <!-- Action button is set dynamically from code-behind -->
         </InfoBar>
 
+        <InfoBar x:Name="KeyboardShortcutTipBar" Grid.Row="1" IsOpen="False" Severity="Informational" Margin="12,0,12,0" Title="Keyboard Shortcut Tip">
+            <InfoBar.ActionButton>
+                <Button Content="Don't show again" Click="DismissKeyboardTip_Click"/>
+            </InfoBar.ActionButton>
+        </InfoBar>
+
         <MenuBar x:Name="MainMenuBar" Grid.Row="2">
             <MenuBarItem Title="File">
                 <MenuFlyoutSubItem Text="New">
@@ -102,9 +108,10 @@
                 <ToggleMenuFlyoutItem x:Name="BuilderTool" Text="Diagram Builder" Click="BuilderTool_Click"/>
                 <ToggleMenuFlyoutItem x:Name="AiPanelTool" Text="AI Diagram Generator" Click="AiPanelTool_Click"/>
                 <ToggleMenuFlyoutItem x:Name="PanTool" Text="Pan Tool" Click="PanTool_Click"/>
-                <MenuFlyoutItem Text="Full Screen Preview" Click="ToggleFullScreen_Click">
+                <MenuFlyoutItem Text="Full Screen Preview (F11 or Ctrl+F11)" Click="ToggleFullScreen_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="F11"/>
+                        <KeyboardAccelerator Key="F11" Modifiers="Control"/>
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutItem Text="Presentation Mode" Click="PresentationMode_Click">

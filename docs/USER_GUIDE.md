@@ -250,14 +250,97 @@ The app records diagnostic information to rotating log files so you can troubles
 
 ## 11. Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+S` | Save current file |
-| `Ctrl+O` | Open file |
-| `F5` | Presentation mode |
-| `F7` | Check & Fix Mermaid Syntax |
-| `F11` | Full screen preview |
-| `Ctrl+F5` | Refresh preview |
+The application provides several keyboard shortcuts to improve your workflow. These shortcuts work regardless of whether the code editor or preview panel has focus.
+
+### Available Keyboard Shortcuts
+
+| Shortcut | Action | Description |
+|----------|--------|-------------|
+| `Ctrl+S` | Save current file | Saves the current diagram or document to disk |
+| `Ctrl+O` | Open file | Opens the file picker to load a diagram or document |
+| `Ctrl+N` | New file | Creates a new blank diagram |
+| `F5` | Presentation mode | Enters distraction-free presentation mode |
+| `Escape` | Exit full-screen/presentation | Exits full-screen preview or presentation mode |
+| `F7` | Check & Fix Mermaid Syntax | Opens the syntax checker dialog (Mermaid files only) |
+| `F11` | Full-screen preview | Toggles full-screen preview mode (may be intercepted by Windows) |
+| `Ctrl+F11` | Full-screen preview (alternative) | Reliable alternative to F11 that works in all contexts |
+| `Ctrl+F5` | Refresh preview | Forces the preview panel to re-render |
+
+### Understanding F11 vs Ctrl+F11
+
+The application supports two keyboard shortcuts for toggling full-screen preview mode:
+
+**F11 (Primary shortcut)**
+- Standard full-screen shortcut used by many applications
+- **May not work** on some systems because Windows intercepts F11 for system functions (like volume mute)
+- If F11 doesn't respond, use Ctrl+F11 instead
+
+**Ctrl+F11 (Reliable alternative)**
+- Always works regardless of Windows system settings
+- Not intercepted by the operating system
+- Recommended if you experience issues with F11
+
+**Both shortcuts do the same thing:** Toggle between normal view and full-screen preview mode where only the diagram/document preview is visible.
+
+### Keyboard Shortcuts from Any Focus Location
+
+All keyboard shortcuts work consistently whether you're focused on:
+- The code editor (left panel)
+- The preview panel (right panel)
+- Menu items or other UI elements
+
+This means you don't need to click back to the editor to use shortcuts like `F7` or `Ctrl+F11` - they work from anywhere in the application.
+
+### First-Time Tip
+
+When you first use the application, you may see a helpful tip about using `Ctrl+F11` if `F11` doesn't work on your system. You can dismiss this tip and choose not to see it again.
+
+### Troubleshooting Keyboard Shortcuts
+
+**Problem: F11 doesn't toggle full-screen mode**
+
+*Cause:* Windows is intercepting the F11 key before it reaches the application. This is common on systems where F11 is mapped to system functions like volume control or other hardware features.
+
+*Solution:* Use `Ctrl+F11` instead. This alternative shortcut is not intercepted by Windows and provides the same functionality.
+
+**Problem: Keyboard shortcuts don't work when preview has focus**
+
+*Cause:* This should not happen in the current version. The application intercepts keyboard events from the preview panel (WebView2) and forwards them to the shortcut handler.
+
+*Solution:* If you experience this issue:
+1. Try clicking on the code editor and using the shortcut
+2. Use the menu items as an alternative (e.g., View > Full Screen Preview)
+3. Check the application logs (Help > Diagnostics) for any errors
+4. Restart the application
+
+**Problem: F7 syntax checker doesn't open**
+
+*Cause:* The syntax checker only works with Mermaid diagram files (`.mmd`), not Markdown files.
+
+*Solution:* 
+1. Verify you're working with a `.mmd` file (check the window title)
+2. If working with Markdown, the syntax checker is not available
+3. Try using the menu: Edit > Check & Fix Mermaid Syntax
+
+**Problem: Shortcuts work inconsistently**
+
+*Cause:* Another application or system utility may be intercepting certain key combinations.
+
+*Solution:*
+1. Check for other running applications that use global hotkeys
+2. Try the alternative shortcuts (e.g., use Ctrl+F11 instead of F11)
+3. Use menu items as a fallback
+4. Restart the application to reset the keyboard event handlers
+
+**Problem: Escape doesn't exit full-screen mode**
+
+*Cause:* The application may not be in full-screen or presentation mode, or focus may be on a dialog.
+
+*Solution:*
+1. Verify you're actually in full-screen or presentation mode
+2. If a dialog is open, Escape will close the dialog instead
+3. Try pressing Escape again after closing any dialogs
+4. Use the View menu to exit full-screen mode manually
 
 ## 12. Visual Diagram Builder
 

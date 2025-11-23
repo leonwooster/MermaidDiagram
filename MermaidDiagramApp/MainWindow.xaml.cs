@@ -59,6 +59,10 @@ namespace MermaidDiagramApp
         private bool _isPreviewDragMode = false;
         private readonly ILogger _logger = LoggingService.Instance.GetLogger<MainWindow>();
         
+        // Keyboard shortcut management
+        private readonly KeyboardShortcutManager _keyboardShortcutManager;
+        private readonly ShortcutPreferencesService _shortcutPreferencesService;
+        
         // Rendering orchestration components
         private readonly RenderingOrchestrator _renderingOrchestrator;
         private readonly IContentTypeDetector _contentTypeDetector;
@@ -82,6 +86,11 @@ namespace MermaidDiagramApp
             BuilderViewModel.PropertyChanged += DiagramBuilderViewModel_PropertyChanged;
 
             _linter = new MermaidLinter();
+            
+            // Initialize keyboard shortcut management
+            _shortcutPreferencesService = new ShortcutPreferencesService();
+            _keyboardShortcutManager = new KeyboardShortcutManager(_logger, _shortcutPreferencesService);
+            RegisterKeyboardShortcuts();
             
             // Initialize rendering orchestration
             _contentTypeDetector = new ContentTypeDetector();
@@ -114,6 +123,62 @@ namespace MermaidDiagramApp
             
             // Restore window state on startup
             _ = RestoreWindowStateAsync();
+        }
+
+        /// <summary>
+        /// Registers all keyboard shortcuts with the KeyboardShortcutManager.
+        /// </summary>
+        private void RegisterKeyboardShortcuts()
+        {
+            // F11 - Toggle Full Screen
+            _keyboardShortcutManager.RegisterShortcut(
+                VirtualKey.F11, 
+                VirtualKeyModifiers.None, 
+                () => ToggleFullScreen_Click(this, new RoutedEventArgs()));
+
+            // Ctrl+F11 - Toggle Full Screen (alternative)
+            _keyboardShortcutManager.RegisterShortcut(
+                VirtualKey.F11, 
+                VirtualKeyModifiers.Control, 
+                () => ToggleFullScreen_Click(this, new RoutedEventArgs()));
+
+            // Escape - Exit Full Screen or Presentation Mode
+            _keyboardShortcutManager.RegisterShortcut(
+                VirtualKey.Escape, 
+                VirtualKeyModifiers.None, 
+                () => {
+                    if (_isFullScreen)
+                    {
+                        ToggleFullScreen_Click(this, new RoutedEventArgs());
+                    }
+                    else if (_isPresentationMode)
+                    {
+                        PresentationMode_Click(this, new RoutedEventArgs());
+                    }
+                });
+
+            // F7 - Check Syntax
+            _keyboardShortcutManager.RegisterShortcut(
+                VirtualKey.F7, 
+                VirtualKeyModifiers.None, 
+                () => CheckSyntax_Click(this, new RoutedEventArgs()));
+
+            // F5 - Presentation Mode
+            _keyboardShortcutManager.RegisterShortcut(
+                VirtualKey.F5, 
+                VirtualKeyModifiers.None, 
+                () => PresentationMode_Click(this, new RoutedEventArgs()));
+
+            // Ctrl+F5 - Refresh Preview
+            _keyboardShortcutManager.RegisterShortcut(
+                VirtualKey.F5, 
+                VirtualKeyModifiers.Control, 
+                async () => {
+                    _lastPreviewedCode = null;
+                    await UpdatePreview();
+                });
+
+            _logger.Log(LogLevel.Information, "Keyboard shortcuts registered");
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -722,6 +787,9 @@ namespace MermaidDiagramApp
                                     {
                                         _lastPreviewedCode = null;
                                         await UpdatePreview();
+                                        
+                                        // Show keyboard shortcut tip on first WebView ready
+                                        ShowKeyboardShortcutTip();
                                     }
                                     catch (Exception updateEx)
                                     {
@@ -748,6 +816,40 @@ namespace MermaidDiagramApp
                                 if (root.TryGetProperty("message", out var msgElement))
                                 {
                                     _logger.LogDebug($"[WebView Log] {msgElement.GetString()}");
+                                }
+                            }
+                            else if (messageType == "keypress")
+                            {
+                                // Handle keyboard events from WebView2
+                                try
+                                {
+                                    var keyboardEvent = JsonSerializer.Deserialize<KeyboardEventMessage>(message);
+                                    if (keyboardEvent != null)
+                                    {
+                                        _logger.LogDebug($"Received keyboard event from WebView: Key={keyboardEvent.Key}, Ctrl={keyboardEvent.CtrlKey}, Shift={keyboardEvent.ShiftKey}, Alt={keyboardEvent.AltKey}");
+                                        
+                                        DispatcherQueue.TryEnqueue(() =>
+                                        {
+                                            var handled = _keyboardShortcutManager.HandleWebViewKeyEvent(
+                                                keyboardEvent.Key,
+                                                keyboardEvent.CtrlKey,
+                                                keyboardEvent.ShiftKey,
+                                                keyboardEvent.AltKey);
+                                            
+                                            if (handled)
+                                            {
+                                                _logger.LogDebug($"Keyboard shortcut handled: {keyboardEvent.Key}");
+                                            }
+                                            else
+                                            {
+                                                _logger.LogDebug($"Keyboard shortcut not handled: {keyboardEvent.Key}");
+                                            }
+                                        });
+                                    }
+                                }
+                                catch (Exception keyEx)
+                                {
+                                    _logger.LogError($"Error parsing keyboard event: {keyEx.Message}", keyEx);
                                 }
                             }
                             else if (messageType == "ctrlWheel")
@@ -1350,43 +1452,23 @@ namespace MermaidDiagramApp
             WindowStateManager.SaveWindowState(appWindow);
         }
 
+        private void MainWindow_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            // Use KeyboardShortcutManager to handle all keyboard shortcuts in preview phase
+            // This ensures shortcuts work even when focus is on child controls
+            _keyboardShortcutManager.HandleKeyDown(e);
+        }
+
         private void MainWindow_KeyDown(object sender, KeyRoutedEventArgs e)
         {
-            if (e.Key == Windows.System.VirtualKey.Escape)
-            {
-                if (_isFullScreen)
-                {
-                    ToggleFullScreen_Click(this, new RoutedEventArgs());
-                }
-                if (_isPresentationMode)
-                {
-                    PresentationMode_Click(this, new RoutedEventArgs());
-                }
-            }
+            // Use KeyboardShortcutManager to handle all keyboard shortcuts
+            _keyboardShortcutManager.HandleKeyDown(e);
         }
 
         private void PreviewBrowser_KeyDown(object sender, KeyRoutedEventArgs e)
         {
-            // Handle Escape key when WebView has focus (e.g., immediately after entering full screen)
-            if (e.Key == Windows.System.VirtualKey.Escape)
-            {
-                if (_isFullScreen)
-                {
-                    ToggleFullScreen_Click(this, new RoutedEventArgs());
-                    e.Handled = true;
-                }
-                else if (_isPresentationMode)
-                {
-                    PresentationMode_Click(this, new RoutedEventArgs());
-                    e.Handled = true;
-                }
-            }
-            // Handle F11 key for full screen toggle when WebView has focus
-            else if (e.Key == Windows.System.VirtualKey.F11)
-            {
-                ToggleFullScreen_Click(this, new RoutedEventArgs());
-                e.Handled = true;
-            }
+            // Use KeyboardShortcutManager to handle all keyboard shortcuts
+            _keyboardShortcutManager.HandleKeyDown(e);
         }
 
         private void PanTool_Click(object sender, RoutedEventArgs e)
@@ -2936,6 +3018,58 @@ namespace MermaidDiagramApp
             }
         }
     
+
+        /// <summary>
+        /// Shows a keyboard shortcut tip to the user about using Ctrl+F11 as an alternative to F11.
+        /// Only shows if the user hasn't dismissed it before.
+        /// </summary>
+        private void ShowKeyboardShortcutTip()
+        {
+            try
+            {
+                // Check if user wants to see tips
+                if (!_shortcutPreferencesService.GetShowTips())
+                {
+                    _logger.LogDebug("Keyboard shortcut tip suppressed by user preference");
+                    return;
+                }
+
+                // Show the tip
+                KeyboardShortcutTipBar.Message = "If F11 doesn't work for full-screen preview (it may be captured by Windows), use Ctrl+F11 instead. Both shortcuts are available in the View menu.";
+                KeyboardShortcutTipBar.IsOpen = true;
+                
+                _logger.LogInformation("Displayed keyboard shortcut tip to user");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error showing keyboard shortcut tip: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Handles the "Don't show again" button click on the keyboard shortcut tip.
+        /// Saves the user's preference to not show the tip again.
+        /// </summary>
+        private void DismissKeyboardTip_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Save preference to not show tips again
+                _shortcutPreferencesService.SetShowTips(false);
+                
+                // Close the tip bar
+                KeyboardShortcutTipBar.IsOpen = false;
+                
+                _logger.LogInformation("User dismissed keyboard shortcut tip, preference saved");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error dismissing keyboard shortcut tip: {ex.Message}", ex);
+                
+                // Still close the tip bar even if saving preference failed
+                KeyboardShortcutTipBar.IsOpen = false;
+            }
+        }
 
         [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         public interface IInitializeWithWindow

@@ -204,7 +204,6 @@
         };
         
         // Toggle debug panel with Ctrl+Shift+D
-        // Also handle F11 and Escape for full screen mode
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.shiftKey && e.key === 'D') {
                 const debugInfo = document.getElementById('debug-info');
@@ -212,23 +211,71 @@
                     debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
                 }
             }
-            
-            // Send F11 key press to host application
+        });
+        
+        // Intercept keyboard shortcuts for the host application
+        // Use capture phase (third parameter = true) to intercept before other handlers
+        document.addEventListener('keydown', (e) => {
+            // Handle F11 (with or without Ctrl)
             if (e.key === 'F11') {
                 e.preventDefault();
                 if (window.chrome && window.chrome.webview) {
-                    window.chrome.webview.postMessage('F11_PRESSED');
+                    window.chrome.webview.postMessage({
+                        type: 'keypress',
+                        key: 'F11',
+                        ctrlKey: e.ctrlKey,
+                        shiftKey: e.shiftKey,
+                        altKey: e.altKey
+                    });
                 }
+                return false;
             }
             
-            // Send Escape key press to host application
+            // Handle Escape
             if (e.key === 'Escape') {
                 e.preventDefault();
                 if (window.chrome && window.chrome.webview) {
-                    window.chrome.webview.postMessage('ESCAPE_PRESSED');
+                    window.chrome.webview.postMessage({
+                        type: 'keypress',
+                        key: 'Escape',
+                        ctrlKey: e.ctrlKey,
+                        shiftKey: e.shiftKey,
+                        altKey: e.altKey
+                    });
                 }
+                return false;
             }
-        });
+            
+            // Handle F7
+            if (e.key === 'F7') {
+                e.preventDefault();
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'keypress',
+                        key: 'F7',
+                        ctrlKey: e.ctrlKey,
+                        shiftKey: e.shiftKey,
+                        altKey: e.altKey
+                    });
+                }
+                return false;
+            }
+            
+            // Handle F5 (Presentation Mode and Refresh Preview)
+            if (e.key === 'F5') {
+                e.preventDefault();
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'keypress',
+                        key: 'F5',
+                        ctrlKey: e.ctrlKey,
+                        shiftKey: e.shiftKey,
+                        altKey: e.altKey
+                    });
+                }
+                return false;
+            }
+        }, true); // Use capture phase to intercept before browser handles them
 
         // Load libraries
         async function loadLibraries() {
