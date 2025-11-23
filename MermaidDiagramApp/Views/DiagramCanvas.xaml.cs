@@ -1570,15 +1570,16 @@ namespace MermaidDiagramApp.Views
             {
                 Text = connector.Label,
                 Padding = new Thickness(4, 2, 4, 2),
-                FontSize = 12
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)
             };
             
             var labelBorder = new Border
             {
                 Background = new SolidColorBrush(Microsoft.UI.Colors.White),
-                BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.LightGray),
+                BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(2),
+                CornerRadius = new CornerRadius(3),
                 Child = labelTextBlock,
                 Tag = connector
             };

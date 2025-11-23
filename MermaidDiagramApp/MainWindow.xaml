@@ -107,7 +107,6 @@
             <MenuBarItem Title="View">
                 <ToggleMenuFlyoutItem x:Name="BuilderTool" Text="Diagram Builder" Click="BuilderTool_Click"/>
                 <ToggleMenuFlyoutItem x:Name="AiPanelTool" Text="AI Diagram Generator" Click="AiPanelTool_Click"/>
-                <ToggleMenuFlyoutItem x:Name="PanTool" Text="Pan Tool" Click="PanTool_Click"/>
                 <MenuFlyoutItem Text="Full Screen Preview (F11 or Ctrl+F11)" Click="ToggleFullScreen_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="F11"/>

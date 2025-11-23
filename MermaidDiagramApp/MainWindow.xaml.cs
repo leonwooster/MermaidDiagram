@@ -51,7 +51,6 @@ namespace MermaidDiagramApp
         private string? _lastPreviewedCode = "";
         private bool _isFullScreen = false;
         private bool _isPresentationMode = false;
-        private bool _isPanModeEnabled = false;
         private bool _isBuilderVisible = false;
         private MermaidLinter _linter;
         private Version? _mermaidVersion;
@@ -1469,76 +1468,6 @@ namespace MermaidDiagramApp
         {
             // Use KeyboardShortcutManager to handle all keyboard shortcuts
             _keyboardShortcutManager.HandleKeyDown(e);
-        }
-
-        private void PanTool_Click(object sender, RoutedEventArgs e)
-        {
-            _isPanModeEnabled = PanTool.IsChecked;
-            UpdatePanMode();
-        }
-
-        private async void UpdatePanMode()
-        {
-            if (!_isWebViewReady || PreviewBrowser?.CoreWebView2 == null) return;
-
-            if (_isPanModeEnabled)
-            {
-                await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(@"
-                    const body = document.body;
-                    body.style.cursor = 'grab';
-
-                    let isDown = false;
-                    let startX, startY, scrollLeft, scrollTop;
-
-                    const mouseDownHandler = (e) => {
-                        isDown = true;
-                        body.style.cursor = 'grabbing';
-                        startX = e.pageX;
-                        startY = e.pageY;
-                        scrollLeft = window.scrollX;
-                        scrollTop = window.scrollY;
-                    };
-
-                    const mouseLeaveHandler = () => {
-                        isDown = false;
-                        body.style.cursor = 'grab';
-                    };
-
-                    const mouseUpHandler = () => {
-                        isDown = false;
-                        body.style.cursor = 'grab';
-                    };
-
-                    const mouseMoveHandler = (e) => {
-                        if (!isDown) return;
-                        e.preventDefault();
-                        const x = e.pageX;
-                        const y = e.pageY;
-                        const walkX = x - startX;
-                        const walkY = y - startY;
-                        window.scrollTo(scrollLeft - walkX, scrollTop - walkY);
-                    };
-
-                    window.panHandlers = { mouseDownHandler, mouseLeaveHandler, mouseUpHandler, mouseMoveHandler };
-                    document.addEventListener('mousedown', mouseDownHandler, true);
-                    document.addEventListener('mouseleave', mouseLeaveHandler, true);
-                    document.addEventListener('mouseup', mouseUpHandler, true);
-                    document.addEventListener('mousemove', mouseMoveHandler, true);
-                ");
-            }
-            else
-            {
-                await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(@"
-                    document.body.style.cursor = 'default';
-                    if (window.panHandlers) {
-                        document.removeEventListener('mousedown', window.panHandlers.mouseDownHandler, true);
-                        document.removeEventListener('mouseleave', window.panHandlers.mouseLeaveHandler, true);
-                        document.removeEventListener('mouseup', window.panHandlers.mouseUpHandler, true);
-                        document.removeEventListener('mousemove', window.panHandlers.mouseMoveHandler, true);
-                        window.panHandlers = null;
-                    }
-                ");
-            }
         }
 
         private AppWindow GetAppWindowForCurrentWindow()
