@@ -89,6 +89,8 @@
                     <MenuFlyoutItem Text="Git Graph" Click="NewGitGraph_Click"/>
                 </MenuFlyoutSubItem>
                 <MenuFlyoutItem Text="Open" Click="Open_Click"/>
+                <MenuFlyoutItem Text="Close" Click="Close_Click"/>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Save" Click="Save_Click"/>
                 <MenuFlyoutSubItem Text="Export">
                     <MenuFlyoutItem Text="as SVG" Click="ExportSvg_Click"/>

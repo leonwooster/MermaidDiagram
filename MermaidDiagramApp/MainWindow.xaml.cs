@@ -73,6 +73,8 @@ namespace MermaidDiagramApp
         private MermaidDiagramApp.Services.AI.IAiService? _aiService;
         private MermaidDiagramApp.Services.AI.AiConfiguration? _aiConfig;
         private Window? _aiPromptWindow;
+        private FileSystemWatcher? _fileWatcher;
+        private DateTime _lastFileChangeTime = DateTime.MinValue;
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -1446,6 +1448,9 @@ namespace MermaidDiagramApp
         {
             _timer?.Stop();
             
+            // Stop file watcher
+            StopFileWatcher();
+            
             // Save window state before closing
             var appWindow = GetAppWindowForCurrentWindow();
             WindowStateManager.SaveWindowState(appWindow);
@@ -2128,6 +2133,7 @@ namespace MermaidDiagramApp
             if (file != null)
             {
                 _currentFilePath = file.Path;
+                SetupFileWatcher(file.Path);
                 
                 // Check if opening .mmdx (Diagram Builder File)
                 if (file.FileType.ToLower() == ".mmdx")
@@ -2213,6 +2219,62 @@ namespace MermaidDiagramApp
             }
         }
 
+        private async void Close_Click(object sender, RoutedEventArgs e)
+        {
+            // Check for unsaved changes in builder before closing
+            if (_isBuilderVisible && DiagramCanvasControl != null && DiagramCanvasControl.ViewModel.HasUnsavedChanges)
+            {
+                var result = await ShowUnsavedChangesDialog();
+                if (result == ContentDialogResult.None) // Cancel
+                {
+                    return;
+                }
+                else if (result == ContentDialogResult.Primary) // Save
+                {
+                    Save_Click(this, new RoutedEventArgs());
+                    // Wait a bit for save to complete
+                    await Task.Delay(100);
+                }
+                // Secondary = Discard, continue with close
+            }
+
+            // Stop file watcher
+            StopFileWatcher();
+
+            // Clear the current file path
+            _currentFilePath = string.Empty;
+
+            // Clear the code editor
+            CodeEditor.Text = string.Empty;
+
+            // Clear the diagram builder canvas if visible
+            if (_isBuilderVisible && DiagramCanvasControl != null)
+            {
+                DiagramCanvasControl.ClearVisuals();
+                DiagramCanvasControl.ViewModel.ClearCanvas();
+                DiagramCanvasControl.ViewModel.MarkAsSaved();
+            }
+
+            // Hide the builder panels if visible
+            if (_isBuilderVisible)
+            {
+                _isBuilderVisible = false;
+                if (BuilderTool != null)
+                {
+                    BuilderTool.IsChecked = false;
+                }
+                UpdateBuilderVisibility();
+            }
+
+            // Clear the preview
+            await UpdatePreview();
+
+            // Update window title
+            UpdateWindowTitle();
+
+            _logger.LogInformation("Document closed");
+        }
+
         private async void Save_Click(object sender, RoutedEventArgs e)
         {
             var savePicker = new FileSavePicker();
@@ -2245,37 +2307,65 @@ namespace MermaidDiagramApp
             var file = await savePicker.PickSaveFileAsync();
             if (file != null)
             {
-                // Check if saving as .mmdx (Diagram Builder File)
-                if (file.FileType.ToLower() == ".mmdx" && DiagramCanvasControl != null)
+                // Temporarily disable file watcher to avoid triggering reload on our own save
+                var wasWatching = _fileWatcher?.EnableRaisingEvents ?? false;
+                if (_fileWatcher != null)
                 {
-                    var success = await _diagramFileService.SaveDiagramAsync(file.Path, DiagramCanvasControl.ViewModel);
-                    if (success)
+                    _fileWatcher.EnableRaisingEvents = false;
+                }
+
+                try
+                {
+                    // Check if saving as .mmdx (Diagram Builder File)
+                    if (file.FileType.ToLower() == ".mmdx" && DiagramCanvasControl != null)
                     {
-                        _currentFilePath = file.Path;
-                        DiagramCanvasControl.ViewModel.MarkAsSaved();
-                        _logger.LogInformation($"Diagram Builder file saved: {file.Path}");
-                        UpdateWindowTitle();
+                        var success = await _diagramFileService.SaveDiagramAsync(file.Path, DiagramCanvasControl.ViewModel);
+                        if (success)
+                        {
+                            _currentFilePath = file.Path;
+                            DiagramCanvasControl.ViewModel.MarkAsSaved();
+                            _logger.LogInformation($"Diagram Builder file saved: {file.Path}");
+                            UpdateWindowTitle();
+                            
+                            // Setup watcher for new file if path changed
+                            SetupFileWatcher(file.Path);
+                        }
+                        else
+                        {
+                            _logger.LogError($"Failed to save Diagram Builder file: {file.Path}");
+                            var errorDialog = new ContentDialog
+                            {
+                                Title = "Save Error",
+                                Content = "Failed to save the diagram file. Please try again.",
+                                CloseButtonText = "OK",
+                                XamlRoot = this.Content.XamlRoot
+                            };
+                            await errorDialog.ShowAsync();
+                        }
                     }
                     else
                     {
-                        _logger.LogError($"Failed to save Diagram Builder file: {file.Path}");
-                        var errorDialog = new ContentDialog
-                        {
-                            Title = "Save Error",
-                            Content = "Failed to save the diagram file. Please try again.",
-                            CloseButtonText = "OK",
-                            XamlRoot = this.Content.XamlRoot
-                        };
-                        await errorDialog.ShowAsync();
+                        // Save as plain text (.mmd or .md)
+                        await FileIO.WriteTextAsync(file, CodeEditor.Text);
+                        _currentFilePath = file.Path;
+                        _logger.LogInformation($"File saved: {file.Path}");
+                        UpdateWindowTitle();
+                        
+                        // Setup watcher for new file if path changed
+                        SetupFileWatcher(file.Path);
                     }
                 }
-                else
+                finally
                 {
-                    // Save as plain text (.mmd or .md)
-                    await FileIO.WriteTextAsync(file, CodeEditor.Text);
-                    _currentFilePath = file.Path;
-                    _logger.LogInformation($"File saved: {file.Path}");
-                    UpdateWindowTitle();
+                    // Re-enable file watcher after a short delay
+                    if (wasWatching && _fileWatcher != null)
+                    {
+                        await Task.Delay(500); // Wait to avoid detecting our own write
+                        if (_fileWatcher != null)
+                        {
+                            _fileWatcher.EnableRaisingEvents = true;
+                        }
+                    }
                 }
             }
         }
@@ -3015,6 +3105,138 @@ namespace MermaidDiagramApp
                 initializeWithWindow.Initialize(window_hwnd);
             }
 
+        }
+
+        private void SetupFileWatcher(string filePath)
+        {
+            // Dispose existing watcher if any
+            _fileWatcher?.Dispose();
+            _fileWatcher = null;
+
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+                return;
+
+            try
+            {
+                var directory = Path.GetDirectoryName(filePath);
+                var fileName = Path.GetFileName(filePath);
+
+                if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName))
+                    return;
+
+                _fileWatcher = new FileSystemWatcher(directory)
+                {
+                    Filter = fileName,
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
+                    EnableRaisingEvents = true
+                };
+
+                _fileWatcher.Changed += OnFileChanged;
+                _logger.LogInformation($"File watcher enabled for: {filePath}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to setup file watcher: {ex.Message}");
+            }
+        }
+
+        private async void OnFileChanged(object sender, FileSystemEventArgs e)
+        {
+            // Debounce: Ignore rapid successive changes (some editors trigger multiple events)
+            var now = DateTime.Now;
+            if ((now - _lastFileChangeTime).TotalMilliseconds < 500)
+                return;
+
+            _lastFileChangeTime = now;
+
+            // Wait a bit to ensure file is fully written
+            await Task.Delay(100);
+
+            // Dispatch to UI thread
+            DispatcherQueue.TryEnqueue(async () =>
+            {
+                try
+                {
+                    await ReloadCurrentFile();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error reloading file: {ex.Message}");
+                }
+            });
+        }
+
+        private async Task ReloadCurrentFile()
+        {
+            if (string.IsNullOrEmpty(_currentFilePath) || !File.Exists(_currentFilePath))
+                return;
+
+            _logger.LogInformation($"Reloading file: {_currentFilePath}");
+
+            var extension = Path.GetExtension(_currentFilePath).ToLower();
+
+            try
+            {
+                if (extension == ".mmdx")
+                {
+                    // Reload Diagram Builder file
+                    var diagramFile = await _diagramFileService.LoadDiagramAsync(_currentFilePath);
+                    if (diagramFile != null && DiagramCanvasControl != null)
+                    {
+                        // Show loading indicator
+                        DiagramCanvasControl.ShowLoading();
+
+                        // Clear existing canvas
+                        DiagramCanvasControl.ClearVisuals();
+                        DiagramCanvasControl.ViewModel.ClearCanvas();
+
+                        await Task.Delay(50);
+
+                        // Restore diagram data
+                        _diagramFileService.RestoreDiagram(diagramFile, DiagramCanvasControl.ViewModel);
+
+                        // Mark as saved since we just loaded from file
+                        DiagramCanvasControl.ViewModel.MarkAsSaved();
+
+                        await Task.Delay(150);
+
+                        // Hide loading indicator
+                        DiagramCanvasControl.HideLoading();
+                        DiagramCanvasControl.Focus(FocusState.Programmatic);
+
+                        // Update code editor
+                        CodeEditor.Text = diagramFile.MermaidCode;
+                        await UpdatePreview();
+
+                        _logger.LogInformation("Diagram Builder file reloaded successfully");
+                    }
+                }
+                else if (extension == ".mmd" || extension == ".md" || extension == ".markdown")
+                {
+                    // Reload plain text file
+                    var content = await File.ReadAllTextAsync(_currentFilePath);
+                    CodeEditor.Text = content;
+                    await UpdatePreview();
+
+                    _logger.LogInformation("Text file reloaded successfully");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to reload file: {ex.Message}");
+            }
+        }
+
+        private void StopFileWatcher()
+        {
+            if (_fileWatcher != null)
+            {
+                _fileWatcher.EnableRaisingEvents = false;
+                _fileWatcher.Changed -= OnFileChanged;
+                _fileWatcher.Dispose();
+                _fileWatcher = null;
+                _logger.LogInformation("File watcher stopped");
+            }
         }
     }
 }
