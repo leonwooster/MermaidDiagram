@@ -59,6 +59,21 @@
             </StackPanel>
         </ContentDialog>
 
+        <ContentDialog x:Name="ExportProgressDialog"
+                       Title="Exporting to Word"
+                       CloseButtonText="Cancel"
+                       DefaultButton="Close">
+            <StackPanel Spacing="12">
+                <TextBlock x:Name="ExportProgressMessage" Text="Preparing export..." TextWrapping="Wrap"/>
+                <ProgressBar x:Name="ExportProgressBar" 
+                             Minimum="0" 
+                             Maximum="100" 
+                             Value="0"
+                             IsIndeterminate="False"/>
+                <TextBlock x:Name="ExportProgressPercentage" Text="0%" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </ContentDialog>
+
         <InfoBar x:Name="UpdateInfoBar" Grid.Row="0" IsOpen="False" Severity="Informational" Margin="12,12,12,0">
             <InfoBar.ActionButton>
                 <Button Content="Update" Click="UpdateMermaid_Click"/>
@@ -89,12 +104,14 @@
                     <MenuFlyoutItem Text="Git Graph" Click="NewGitGraph_Click"/>
                 </MenuFlyoutSubItem>
                 <MenuFlyoutItem Text="Open" Click="Open_Click"/>
+                <MenuFlyoutItem Text="Open Markdown File" Click="OpenMarkdownFile_Click"/>
                 <MenuFlyoutItem Text="Close" Click="Close_Click"/>
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Save" Click="Save_Click"/>
                 <MenuFlyoutSubItem Text="Export">
                     <MenuFlyoutItem Text="as SVG" Click="ExportSvg_Click"/>
                     <MenuFlyoutItem Text="as PNG" Click="ExportPng_Click"/>
+                    <MenuFlyoutItem x:Name="ExportToWordMenuItem" Text="to Word" Click="ExportToWord_Click" IsEnabled="False"/>
                 </MenuFlyoutSubItem>
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Exit" Click="Exit_Click"/>

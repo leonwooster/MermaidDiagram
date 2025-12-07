@@ -263,6 +263,9 @@ namespace MermaidDiagramApp
                 // Reflect state in the View menu toggle
                 if (AiPanelTool != null) AiPanelTool.IsChecked = false; // Unchecked by default
             }
+            
+            // Initialize Markdown to Word export after WebView is ready
+            InitializeMarkdownToWordExport();
         }
 
         private void PopOutFloatingPrompt()
