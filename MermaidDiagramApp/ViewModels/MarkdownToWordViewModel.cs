@@ -62,6 +62,13 @@ namespace MermaidDiagramApp.ViewModels
                 if (_markdownFilePath != value)
                 {
                     _markdownFilePath = value;
+                    
+                    // Clear content when file path is cleared
+                    if (string.IsNullOrWhiteSpace(value))
+                    {
+                        _markdownContent = null;
+                    }
+                    
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(CanExport));
                     RaiseCanExecuteChanged();
@@ -236,6 +243,8 @@ namespace MermaidDiagramApp.ViewModels
                 _cancellationTokenSource = new CancellationTokenSource();
 
                 _logger.Log(LogLevel.Information, $"Starting export to {OutputPath}");
+                _logger.Log(LogLevel.Debug, $"Exporting content length: {_markdownContent?.Length ?? 0} characters");
+                _logger.Log(LogLevel.Debug, $"Content preview: {(_markdownContent?.Length > 100 ? _markdownContent.Substring(0, 100) + "..." : _markdownContent ?? "null")}");
 
                 // Create progress reporter
                 var progress = new Progress<ExportProgress>(p =>
@@ -244,7 +253,7 @@ namespace MermaidDiagramApp.ViewModels
                     ProgressMessage = p.CurrentOperation;
                 });
 
-                // Perform export
+                // Perform export using current content
                 var result = await _exportService.ExportToWordAsync(
                     _markdownContent!,
                     MarkdownFilePath!,
@@ -296,18 +305,54 @@ namespace MermaidDiagramApp.ViewModels
         #region Helper Methods
 
         /// <summary>
-        /// Loads a Markdown file from the specified path.
+        /// Loads a Markdown file from the specified path and content.
         /// </summary>
         /// <param name="filePath">The path to the Markdown file.</param>
-        public async Task LoadMarkdownFileAsync(string filePath)
+        /// <param name="content">The content of the file (optional, will read from file if not provided).</param>
+        public async Task LoadMarkdownFileAsync(string filePath, string? content = null)
         {
             if (string.IsNullOrWhiteSpace(filePath))
             {
                 throw new ArgumentException("File path cannot be empty", nameof(filePath));
             }
 
+            // Clear previous content first
+            _markdownContent = null;
+            
+            // Set the new file path
             MarkdownFilePath = filePath;
-            await OpenMarkdownFileAsync();
+            
+            if (content != null)
+            {
+                // Use provided content instead of reading from file
+                _markdownContent = content;
+                _logger.Log(LogLevel.Information, "Markdown content loaded from provided text");
+                
+                // Notify that CanExport may have changed
+                OnPropertyChanged(nameof(CanExport));
+                RaiseCanExecuteChanged();
+            }
+            else
+            {
+                // Read from file as before
+                await OpenMarkdownFileAsync();
+            }
+        }
+
+        /// <summary>
+        /// Updates the markdown content without changing the file path.
+        /// Useful when the editor content changes but we want to keep the same file reference.
+        /// </summary>
+        /// <param name="content">The updated markdown content.</param>
+        public void UpdateMarkdownContent(string content)
+        {
+            if (content != _markdownContent)
+            {
+                _markdownContent = content;
+                _logger.Log(LogLevel.Debug, $"Markdown content updated, length: {content?.Length ?? 0}");
+                OnPropertyChanged(nameof(CanExport));
+                RaiseCanExecuteChanged();
+            }
         }
 
         /// <summary>

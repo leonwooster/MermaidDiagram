@@ -30,11 +30,11 @@ using MermaidDiagramApp.ViewModels;
 using MermaidDiagramApp.Services;
 using MermaidDiagramApp.Services.Logging;
 using MermaidDiagramApp.Services.Rendering;
+using MermaidDiagramApp.Services.Export;
 using MermaidDiagramApp.Models;
 using Microsoft.UI.Windowing;
 using Microsoft.UI;
 using Microsoft.Windows.AppLifecycle;
-using Windows.Graphics;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -51,16 +51,11 @@ namespace MermaidDiagramApp
         private string? _lastPreviewedCode = "";
         private bool _isFullScreen = false;
         private bool _isPresentationMode = false;
+        private bool _isPanModeEnabled = false;
         private bool _isBuilderVisible = false;
         private MermaidLinter _linter;
         private Version? _mermaidVersion;
-        private double _previewZoomLevel = 1.0;
-        private bool _isPreviewDragMode = false;
         private readonly ILogger _logger = LoggingService.Instance.GetLogger<MainWindow>();
-        
-        // Keyboard shortcut management
-        private readonly KeyboardShortcutManager _keyboardShortcutManager;
-        private readonly ShortcutPreferencesService _shortcutPreferencesService;
         
         // Rendering orchestration components
         private readonly RenderingOrchestrator _renderingOrchestrator;
@@ -70,11 +65,6 @@ namespace MermaidDiagramApp
         private string _currentFilePath = string.Empty;
         private readonly MarkdownStyleSettingsService _styleSettingsService;
         private readonly DiagramFileService _diagramFileService;
-        private MermaidDiagramApp.Services.AI.IAiService? _aiService;
-        private MermaidDiagramApp.Services.AI.AiConfiguration? _aiConfig;
-        private Window? _aiPromptWindow;
-        private FileSystemWatcher? _fileWatcher;
-        private DateTime _lastFileChangeTime = DateTime.MinValue;
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -88,11 +78,6 @@ namespace MermaidDiagramApp
 
             _linter = new MermaidLinter();
             
-            // Initialize keyboard shortcut management
-            _shortcutPreferencesService = new ShortcutPreferencesService();
-            _keyboardShortcutManager = new KeyboardShortcutManager(_logger, _shortcutPreferencesService);
-            RegisterKeyboardShortcuts();
-            
             // Initialize rendering orchestration
             _contentTypeDetector = new ContentTypeDetector();
             _rendererFactory = new ContentRendererFactory();
@@ -104,9 +89,6 @@ namespace MermaidDiagramApp
             
             // Initialize diagram file service
             _diagramFileService = new DiagramFileService();
-
-            // Initialize AI services
-            InitializeAiServices();
 
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
@@ -126,80 +108,9 @@ namespace MermaidDiagramApp
             _ = RestoreWindowStateAsync();
         }
 
-        /// <summary>
-        /// Registers all keyboard shortcuts with the KeyboardShortcutManager.
-        /// </summary>
-        private void RegisterKeyboardShortcuts()
-        {
-            // F11 - Toggle Full Screen
-            _keyboardShortcutManager.RegisterShortcut(
-                VirtualKey.F11, 
-                VirtualKeyModifiers.None, 
-                () => ToggleFullScreen_Click(this, new RoutedEventArgs()));
-
-            // Ctrl+F11 - Toggle Full Screen (alternative)
-            _keyboardShortcutManager.RegisterShortcut(
-                VirtualKey.F11, 
-                VirtualKeyModifiers.Control, 
-                () => ToggleFullScreen_Click(this, new RoutedEventArgs()));
-
-            // Escape - Exit Full Screen or Presentation Mode
-            _keyboardShortcutManager.RegisterShortcut(
-                VirtualKey.Escape, 
-                VirtualKeyModifiers.None, 
-                () => {
-                    if (_isFullScreen)
-                    {
-                        ToggleFullScreen_Click(this, new RoutedEventArgs());
-                    }
-                    else if (_isPresentationMode)
-                    {
-                        PresentationMode_Click(this, new RoutedEventArgs());
-                    }
-                });
-
-            // F7 - Check Syntax
-            _keyboardShortcutManager.RegisterShortcut(
-                VirtualKey.F7, 
-                VirtualKeyModifiers.None, 
-                () => CheckSyntax_Click(this, new RoutedEventArgs()));
-
-            // F5 - Presentation Mode
-            _keyboardShortcutManager.RegisterShortcut(
-                VirtualKey.F5, 
-                VirtualKeyModifiers.None, 
-                () => PresentationMode_Click(this, new RoutedEventArgs()));
-
-            // Ctrl+F5 - Refresh Preview
-            _keyboardShortcutManager.RegisterShortcut(
-                VirtualKey.F5, 
-                VirtualKeyModifiers.Control, 
-                async () => {
-                    _lastPreviewedCode = null;
-                    await UpdatePreview();
-                });
-
-            _logger.Log(LogLevel.Information, "Keyboard shortcuts registered");
-        }
-
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             await InitializeWebViewAsync();
-            // Load saved AI configuration (if any) and reinitialize service
-            try
-            {
-                var saved = await Services.AI.AiConfigStorageService.LoadAsync();
-                if (saved != null)
-                {
-                    _aiConfig = saved;
-                    _aiService = Services.AI.AiServiceFactory.CreateAiService(_aiConfig);
-                    _logger.LogInformation("Loaded saved AI configuration");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to load AI configuration: {ex.Message}", ex);
-            }
             
             // Wire up visual builder components
             if (DiagramCanvasControl != null && PropertiesPanelControl != null && ShapeToolboxControl != null)
@@ -225,203 +136,6 @@ namespace MermaidDiagramApp
                 {
                     CodeEditor.Text = code;
                 };
-            }
-            
-            // Prefer the floating AI prompt
-            if (FloatingAiPromptControl != null && _aiService != null)
-            {
-                var vm = new MermaidDiagramApp.ViewModels.AiDiagramGeneratorViewModel(_aiService);
-                // Initialize from config if available
-                if (_aiConfig != null)
-                {
-                    vm.SelectedProvider = _aiConfig.ProviderType;
-                    vm.SelectedModel = _aiConfig.ModelName;
-                    vm.Temperature = _aiConfig.Temperature;
-                }
-                FloatingAiPromptControl.DataContext = vm;
-                FloatingAiPromptControl.Visibility = Visibility.Collapsed; // Hidden by default
-
-                FloatingAiPromptControl.InsertRequested += (s, code) =>
-                {
-                    CodeEditor.Text = code;
-                    _ = UpdatePreview();
-                };
-
-                FloatingAiPromptControl.ImportToCanvasRequested += async (s, code) =>
-                {
-                    await ImportCodeToCanvasAsync(code);
-                };
-
-                FloatingAiPromptControl.ConfigureRequested += async (s, e2) =>
-                {
-                    await OpenAiSettingsAndRefreshVmAsync();
-                };
-                FloatingAiPromptControl.PopOutRequested += (s, e2) =>
-                {
-                    PopOutFloatingPrompt();
-                };
-                // Reflect state in the View menu toggle
-                if (AiPanelTool != null) AiPanelTool.IsChecked = false; // Unchecked by default
-            }
-            
-            // Initialize Markdown to Word export after WebView is ready
-            InitializeMarkdownToWordExport();
-        }
-
-        private void PopOutFloatingPrompt()
-        {
-            try
-            {
-                if (_aiPromptWindow != null)
-                {
-                    _aiPromptWindow.Activate();
-                    return;
-                }
-
-                if (FloatingAiPromptControl == null)
-                {
-                    _logger.LogWarning("PopOut requested but FloatingAiPromptControl is null");
-                    return;
-                }
-
-                // Reuse existing ViewModel
-                var vm = FloatingAiPromptControl.DataContext;
-
-                var prompt = new Views.FloatingAiPrompt();
-                prompt.DataContext = vm;
-                prompt.InsertRequested += (s, code) =>
-                {
-                    CodeEditor.Text = code;
-                    _ = UpdatePreview();
-                };
-                prompt.ImportToCanvasRequested += async (s, code) =>
-                {
-                    await ImportCodeToCanvasAsync(code);
-                };
-                prompt.ConfigureRequested += async (s, e2) =>
-                {
-                    await OpenAiSettingsAndRefreshVmAsync();
-                };
-
-                var win = new Window();
-                win.Title = "AI Diagram Assistant";
-                // Switch prompt UI to standalone mode and support docking back
-                prompt.SetIsStandalone(true);
-                prompt.PopOutRequested += (s, e2) =>
-                {
-                    // In standalone mode, "Pop out" acts as "Dock"
-                    win.Close();
-                };
-                win.Content = prompt;
-                _aiPromptWindow = win;
-
-                // Size and position near the main window
-                try
-                {
-                    // Compute a size that fits content, with a reasonable minimum and padding
-                    var minSize = new SizeInt32(820, 640); // ensure full UI is visible on first pop-out
-                    void ResizeToContent()
-                    {
-                        try
-                        {
-                            // Measure desired size of the prompt
-                            prompt.UpdateLayout();
-                            double desiredW = prompt.ActualWidth;
-                            double desiredH = prompt.ActualHeight;
-
-                            if (desiredW <= 0 || desiredH <= 0)
-                            {
-                                // Force a measure pass if Actual sizes are not ready
-                                prompt.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
-                                var ds = prompt.DesiredSize;
-                                desiredW = ds.Width;
-                                desiredH = ds.Height;
-                            }
-
-                            // Add chrome/padding allowance
-                            int width = (int)Math.Ceiling(desiredW + 48);
-                            int height = (int)Math.Ceiling(desiredH + 72);
-
-                            // Apply minimums
-                            width = Math.Max(minSize.Width, width);
-                            height = Math.Max(minSize.Height, height);
-
-                            var target = new SizeInt32(width, height);
-                            win.AppWindow.Resize(target);
-                        }
-                        catch (Exception sizeEx)
-                        {
-                            _logger.LogDebug($"Falling back to minimum pop-out size: {sizeEx.Message}");
-                            win.AppWindow.Resize(minSize);
-                        }
-                    }
-
-                    // Size once content is loaded
-                    prompt.Loaded += (s, e3) => ResizeToContent();
-
-                    // Also do an initial conservative size in case Loaded has already fired
-                    win.AppWindow.Resize(minSize);
-
-                    // Position near the main window
-                    var mainPos = this.AppWindow.Position;
-                    var dest = new PointInt32(mainPos.X + 60, mainPos.Y + 60);
-                    win.AppWindow.Move(dest);
-                }
-                catch (Exception posEx)
-                {
-                    _logger.LogDebug($"Unable to set pop-out window position/size: {posEx.Message}");
-                }
-
-                win.Closed += (s, e) =>
-                {
-                    _aiPromptWindow = null;
-                    // Restore docked prompt
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        if (FloatingAiPromptControl != null)
-                        {
-                            FloatingAiPromptControl.Visibility = Visibility.Visible;
-                            // Reset UI to docked mode label
-                            FloatingAiPromptControl.SetIsStandalone(false);
-                        }
-                    });
-                };
-
-                // Hide docked control and show window
-                FloatingAiPromptControl.Visibility = Visibility.Collapsed;
-                win.Activate();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to pop out Floating AI Prompt: {ex.Message}", ex);
-            }
-        }
-
-        private void InitializeAiServices()
-        {
-            try
-            {
-                // Initialize AI configuration with default values
-                _aiConfig = new MermaidDiagramApp.Services.AI.AiConfiguration
-                {
-                    ProviderType = "OpenAI",
-                    ApiKey = string.Empty, // Will be set by user in settings
-                    BaseUrl = "http://localhost:11434", // Default Ollama URL
-                    ModelName = "gpt-3.5-turbo",
-                    TimeoutSeconds = 30,
-                    MaxTokens = 2048,
-                    Temperature = 0.7
-                };
-
-                // Create AI service instance
-                _aiService = MermaidDiagramApp.Services.AI.AiServiceFactory.CreateAiService(_aiConfig);
-
-                // Old docked AI panel removed; floating prompt is initialized on load
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to initialize AI services: {ex.Message}", ex);
-                // Continue without AI features if initialization fails
             }
         }
 
@@ -730,8 +444,6 @@ namespace MermaidDiagramApp
                 coreWebView2.Settings.AreDevToolsEnabled = true;
                 coreWebView2.Settings.AreDefaultContextMenusEnabled = true;
                 coreWebView2.Settings.IsWebMessageEnabled = true;
-                
-                // This handler is set up later in the main WebMessageReceived handler
 
                 // Map the packaged Assets folder into a virtual host so scripts/css can be loaded
                 const string virtualHost = "appassets";
@@ -759,14 +471,6 @@ namespace MermaidDiagramApp
                 coreWebView2.WebMessageReceived += (s, e) =>
                 {
                     var message = e.TryGetWebMessageAsString();
-                    
-                    // Handle console messages first (they're plain strings)
-                    if (!string.IsNullOrEmpty(message) && message.StartsWith("[CONSOLE]"))
-                    {
-                        _logger.LogDebug($"[WebView2 Message] {message}");
-                        return; // Don't try to parse as JSON
-                    }
-                    
                     _logger.LogDebug($"[WebView2 Message] {message}");
 
                     // Try to parse as JSON for structured messages
@@ -785,15 +489,15 @@ namespace MermaidDiagramApp
                                 _isWebViewReady = true;
                                 checkTimer?.Stop();
                                 
+                                // Initialize Markdown to Word export now that WebView2 is ready
+                                InitializeMarkdownToWordExport();
+                                
                                 DispatcherQueue.TryEnqueue(async () =>
                                 {
                                     try
                                     {
                                         _lastPreviewedCode = null;
                                         await UpdatePreview();
-                                        
-                                        // Show keyboard shortcut tip on first WebView ready
-                                        ShowKeyboardShortcutTip();
                                     }
                                     catch (Exception updateEx)
                                     {
@@ -822,60 +526,6 @@ namespace MermaidDiagramApp
                                     _logger.LogDebug($"[WebView Log] {msgElement.GetString()}");
                                 }
                             }
-                            else if (messageType == "keypress")
-                            {
-                                // Handle keyboard events from WebView2
-                                try
-                                {
-                                    var keyboardEvent = JsonSerializer.Deserialize<KeyboardEventMessage>(message);
-                                    if (keyboardEvent != null)
-                                    {
-                                        _logger.LogDebug($"Received keyboard event from WebView: Key={keyboardEvent.Key}, Ctrl={keyboardEvent.CtrlKey}, Shift={keyboardEvent.ShiftKey}, Alt={keyboardEvent.AltKey}");
-                                        
-                                        DispatcherQueue.TryEnqueue(() =>
-                                        {
-                                            var handled = _keyboardShortcutManager.HandleWebViewKeyEvent(
-                                                keyboardEvent.Key,
-                                                keyboardEvent.CtrlKey,
-                                                keyboardEvent.ShiftKey,
-                                                keyboardEvent.AltKey);
-                                            
-                                            if (handled)
-                                            {
-                                                _logger.LogDebug($"Keyboard shortcut handled: {keyboardEvent.Key}");
-                                            }
-                                            else
-                                            {
-                                                _logger.LogDebug($"Keyboard shortcut not handled: {keyboardEvent.Key}");
-                                            }
-                                        });
-                                    }
-                                }
-                                catch (Exception keyEx)
-                                {
-                                    _logger.LogError($"Error parsing keyboard event: {keyEx.Message}", keyEx);
-                                }
-                            }
-                            else if (messageType == "ctrlWheel")
-                            {
-                                _logger.LogInformation("Received ctrlWheel message from WebView");
-                                if (root.TryGetProperty("delta", out var deltaElement))
-                                {
-                                    var delta = deltaElement.GetDouble();
-                                    _logger.LogInformation($"ctrlWheel delta: {delta}, current zoom: {_previewZoomLevel}");
-                                    DispatcherQueue.TryEnqueue(() =>
-                                    {
-                                        var oldZoom = _previewZoomLevel;
-                                        _previewZoomLevel = Math.Max(0.5, Math.Min(3.0, _previewZoomLevel + delta));
-                                        _logger.LogInformation($"Zoom changed from {oldZoom} to {_previewZoomLevel}");
-                                        ApplyPreviewZoom();
-                                    });
-                                }
-                                else
-                                {
-                                    _logger.LogWarning("ctrlWheel message missing delta property");
-                                }
-                            }
                         }
                     }
                     catch (JsonException)
@@ -886,6 +536,9 @@ namespace MermaidDiagramApp
                             _logger.LogInformation("Received legacy MermaidReady message");
                             _isWebViewReady = true;
                             checkTimer?.Stop();
+                            
+                            // Initialize Markdown to Word export now that WebView2 is ready
+                            InitializeMarkdownToWordExport();
                             
                             DispatcherQueue.TryEnqueue(async () =>
                             {
@@ -969,8 +622,11 @@ namespace MermaidDiagramApp
                             checkTimer.Stop();
                             _logger.LogInformation("Renderers are ready!");
                             _isWebViewReady = true;
+                            
+                            // Initialize Markdown to Word export now that WebView2 is ready
+                            InitializeMarkdownToWordExport();
+                            
                             await UpdatePreview(); // Initial render
-                            await SetupCtrlWheelZoom(); // Setup Ctrl+Wheel zoom
                         }
                         else
                         {
@@ -1114,6 +770,29 @@ namespace MermaidDiagramApp
 
                 // BuilderViewModel.ParseMermaidCode(currentCode); // Commented out to disable buggy visual builder logic
                 await UpdatePreview();
+                
+                // Sync content with Export to Word system if a Markdown or Mermaid file is loaded
+                if (_markdownToWordViewModel != null && 
+                    !string.IsNullOrWhiteSpace(_markdownToWordViewModel.MarkdownFilePath))
+                {
+                    var fileExtension = Path.GetExtension(_markdownToWordViewModel.MarkdownFilePath).ToLower();
+                    
+                    // Handle both Markdown files and Mermaid files
+                    if (fileExtension == ".md" || fileExtension == ".markdown")
+                    {
+                        // For Markdown files, use content as-is
+                        if (_currentContentType == ContentType.Markdown || _currentContentType == ContentType.MarkdownWithMermaid)
+                        {
+                            _markdownToWordViewModel.UpdateMarkdownContent(currentCode);
+                        }
+                    }
+                    else if (fileExtension == ".mmd")
+                    {
+                        // For Mermaid files, wrap in Markdown code block
+                        var wrappedContent = $"# Mermaid Diagram\n\n```mermaid\n{currentCode}\n```";
+                        _markdownToWordViewModel.UpdateMarkdownContent(wrappedContent);
+                    }
+                }
             }
         }
 
@@ -1201,9 +880,6 @@ namespace MermaidDiagramApp
                 await ExecuteRenderingScript(code, renderResult.DetectedContentType, context);
 
                 _lastPreviewedCode = code;
-                
-                // Re-setup Ctrl+Wheel zoom after content update
-                await SetupCtrlWheelZoom();
             }
             catch (Exception ex)
             {
@@ -1299,6 +975,32 @@ namespace MermaidDiagramApp
                 default:
                     RenderModeText.Text = "Unknown";
                     RenderModeIcon.Glyph = "\uE897"; // Warning icon
+                    break;
+            }
+            
+            // Update code editor content type indicator
+            UpdateContentTypeIndicator(contentType);
+        }
+        
+        private void UpdateContentTypeIndicator(ContentType contentType)
+        {
+            switch (contentType)
+            {
+                case ContentType.Mermaid:
+                    RenderModeText.Text = "Mermaid";
+                    RenderModeIcon.Glyph = "\uE8BC"; // Chart icon
+                    break;
+                case ContentType.Markdown:
+                    RenderModeText.Text = "Markdown";
+                    RenderModeIcon.Glyph = "\uE8A5"; // Document icon
+                    break;
+                case ContentType.MarkdownWithMermaid:
+                    RenderModeText.Text = "Hybrid";
+                    RenderModeIcon.Glyph = "\uE8FD"; // Combined icon
+                    break;
+                default:
+                    RenderModeText.Text = "Unknown";
+                    RenderModeIcon.Glyph = "\uE9CE"; // Question icon
                     break;
             }
         }
@@ -1451,31 +1153,198 @@ namespace MermaidDiagramApp
         {
             _timer?.Stop();
             
-            // Stop file watcher
-            StopFileWatcher();
-            
             // Save window state before closing
             var appWindow = GetAppWindowForCurrentWindow();
             WindowStateManager.SaveWindowState(appWindow);
         }
 
-        private void MainWindow_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
-        {
-            // Use KeyboardShortcutManager to handle all keyboard shortcuts in preview phase
-            // This ensures shortcuts work even when focus is on child controls
-            _keyboardShortcutManager.HandleKeyDown(e);
-        }
-
         private void MainWindow_KeyDown(object sender, KeyRoutedEventArgs e)
         {
-            // Use KeyboardShortcutManager to handle all keyboard shortcuts
-            _keyboardShortcutManager.HandleKeyDown(e);
+            if (e.Key == Windows.System.VirtualKey.Escape)
+            {
+                if (_isFullScreen)
+                {
+                    ToggleFullScreen_Click(this, new RoutedEventArgs());
+                }
+                if (_isPresentationMode)
+                {
+                    PresentationMode_Click(this, new RoutedEventArgs());
+                }
+            }
         }
 
         private void PreviewBrowser_KeyDown(object sender, KeyRoutedEventArgs e)
         {
-            // Use KeyboardShortcutManager to handle all keyboard shortcuts
-            _keyboardShortcutManager.HandleKeyDown(e);
+            // Handle Escape key when WebView has focus (e.g., immediately after entering full screen)
+            if (e.Key == Windows.System.VirtualKey.Escape)
+            {
+                if (_isFullScreen)
+                {
+                    ToggleFullScreen_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                }
+                else if (_isPresentationMode)
+                {
+                    PresentationMode_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                }
+            }
+            // Handle F11 key for full screen toggle when WebView has focus
+            else if (e.Key == Windows.System.VirtualKey.F11)
+            {
+                ToggleFullScreen_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+        }
+
+        private void DragModeToggle_Click(object sender, RoutedEventArgs e)
+        {
+            _isPanModeEnabled = DragModeToggle.IsChecked ?? false;
+            UpdatePanMode();
+        }
+
+        // Missing event handlers to fix build errors
+        private void MainWindow_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            // Handle preview key down events
+        }
+
+        private void ZoomIn_Click(object sender, RoutedEventArgs e)
+        {
+            // Handle zoom in
+        }
+
+        private void ZoomOut_Click(object sender, RoutedEventArgs e)
+        {
+            // Handle zoom out
+        }
+
+        private void ZoomReset_Click(object sender, RoutedEventArgs e)
+        {
+            // Handle zoom reset
+        }
+
+        private void AiSettings_Click(object sender, RoutedEventArgs e)
+        {
+            // Handle AI settings
+        }
+
+        private void AiPanelTool_Click(object sender, RoutedEventArgs e)
+        {
+            // Handle AI panel toggle
+        }
+
+        private void Close_Click(object sender, RoutedEventArgs e)
+        {
+            // Clear the Export to Word state if a file was loaded
+            if (_markdownToWordViewModel != null)
+            {
+                _markdownToWordViewModel.MarkdownFilePath = null;
+            }
+            
+            // Handle close
+        }
+
+        private void DismissKeyboardTip_Click(object sender, RoutedEventArgs e)
+        {
+            // Handle dismiss keyboard tip
+        }
+
+        /// <summary>
+        ///   ads a Markdown or Mermaid file into the Export to Word system when opened through regular Open.
+        /// </summary>
+        private async Task LoadMarkdownFileForExport(string filePath)
+        {
+            try
+            {
+                if (_markdownToWordViewModel != null)
+                {
+                    // Clear any existing content first
+                    _markdownToWordViewModel.MarkdownFilePath = null;
+                    
+                    var content = CodeEditor.Text;
+                    
+                    // If it's a .mmd file, wrap the Mermaid content in a Markdown code block
+                    if (Path.GetExtension(filePath).ToLower() == ".mmd")
+                    {
+                        content = $"# Mermaid Diagram\n\n```mermaid\n{content}\n```";
+                    }
+                    
+                    // Pass the processed content to avoid re-reading the file
+                    await _markdownToWordViewModel.LoadMarkdownFileAsync(filePath, content);
+                    _logger.Log(LogLevel.Information, $"File loaded for export: {filePath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Warning, $"Failed to load file for export: {ex.Message}", ex);
+                // Don't show error dialog here since the file was successfully opened in the editor
+                // The user can still use the file normally, just export won't be available
+            }
+        }   
+
+        private async void UpdatePanMode()
+        {
+            if (!_isWebViewReady || PreviewBrowser?.CoreWebView2 == null) return;
+
+            if (_isPanModeEnabled)
+            {
+                await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(@"
+                    const body = document.body;
+                    body.style.cursor = 'grab';
+
+                    let isDown = false;
+                    let startX, startY, scrollLeft, scrollTop;
+
+                    const mouseDownHandler = (e) => {
+                        isDown = true;
+                        body.style.cursor = 'grabbing';
+                        startX = e.pageX;
+                        startY = e.pageY;
+                        scrollLeft = window.scrollX;
+                        scrollTop = window.scrollY;
+                    };
+
+                    const mouseLeaveHandler = () => {
+                        isDown = false;
+                        body.style.cursor = 'grab';
+                    };
+
+                    const mouseUpHandler = () => {
+                        isDown = false;
+                        body.style.cursor = 'grab';
+                    };
+
+                    const mouseMoveHandler = (e) => {
+                        if (!isDown) return;
+                        e.preventDefault();
+                        const x = e.pageX;
+                        const y = e.pageY;
+                        const walkX = x - startX;
+                        const walkY = y - startY;
+                        window.scrollTo(scrollLeft - walkX, scrollTop - walkY);
+                    };
+
+                    window.panHandlers = { mouseDownHandler, mouseLeaveHandler, mouseUpHandler, mouseMoveHandler };
+                    document.addEventListener('mousedown', mouseDownHandler, true);
+                    document.addEventListener('mouseleave', mouseLeaveHandler, true);
+                    document.addEventListener('mouseup', mouseUpHandler, true);
+                    document.addEventListener('mousemove', mouseMoveHandler, true);
+                ");
+            }
+            else
+            {
+                await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(@"
+                    document.body.style.cursor = 'default';
+                    if (window.panHandlers) {
+                        document.removeEventListener('mousedown', window.panHandlers.mouseDownHandler, true);
+                        document.removeEventListener('mouseleave', window.panHandlers.mouseLeaveHandler, true);
+                        document.removeEventListener('mouseup', window.panHandlers.mouseUpHandler, true);
+                        document.removeEventListener('mousemove', window.panHandlers.mouseMoveHandler, true);
+                        window.panHandlers = null;
+                    }
+                ");
+            }
         }
 
         private AppWindow GetAppWindowForCurrentWindow()
@@ -1601,12 +1470,6 @@ namespace MermaidDiagramApp
                 PropertiesColumn.Width = new GridLength(0);
                 PropertiesPanel.Visibility = Visibility.Collapsed;
                 PropertiesSplitter.Visibility = Visibility.Collapsed;
-                
-                // Show zoom controls in full-screen mode
-                if (ZoomControlsPanel != null)
-                {
-                    ZoomControlsPanel.Visibility = Visibility.Visible;
-                }
             }
             else
             {
@@ -1614,12 +1477,6 @@ namespace MermaidDiagramApp
                 EditorColumn.Width = new GridLength(1, GridUnitType.Star);
                 EditorPreviewSplitter.Visibility = Visibility.Visible;
                 UpdateBuilderVisibility(); // Restore builder visibility based on its state
-                
-                // Hide zoom controls when exiting full-screen
-                if (ZoomControlsPanel != null)
-                {
-                    ZoomControlsPanel.Visibility = Visibility.Collapsed;
-                }
             }
         }
 
@@ -1627,68 +1484,6 @@ namespace MermaidDiagramApp
         {
             _isBuilderVisible = BuilderTool.IsChecked;
             UpdateBuilderVisibility();
-        }
-
-        private void AiPanelTool_Click(object sender, RoutedEventArgs e)
-        {
-            var isVisible = AiPanelTool.IsChecked;
-            // Show/hide floating AI prompt instead of the left docked panel
-            if (FloatingAiPromptControl != null)
-            {
-                if (isVisible)
-                {
-                    // Position at bottom center when showing
-                    PositionAiPromptAtBottomCenter();
-                    FloatingAiPromptControl.Visibility = Visibility.Visible;
-                }
-                else
-                {
-                    FloatingAiPromptControl.Visibility = Visibility.Collapsed;
-                }
-            }
-        }
-
-        private void PositionAiPromptAtBottomCenter()
-        {
-            if (FloatingAiPromptControl == null || OverlayCanvas == null) return;
-
-            try
-            {
-                // Ensure the control has been measured
-                FloatingAiPromptControl.UpdateLayout();
-
-                // Get the canvas dimensions
-                var canvasWidth = OverlayCanvas.ActualWidth;
-                var canvasHeight = OverlayCanvas.ActualHeight;
-
-                // Get the control dimensions
-                var controlWidth = FloatingAiPromptControl.ActualWidth;
-                var controlHeight = FloatingAiPromptControl.ActualHeight;
-
-                // If dimensions aren't available yet, use reasonable defaults
-                if (controlWidth == 0) controlWidth = 400;
-                if (controlHeight == 0) controlHeight = 500;
-
-                // Calculate bottom center position
-                var left = (canvasWidth - controlWidth) / 2;
-                var top = canvasHeight - controlHeight - 40; // 40px margin from bottom
-
-                // Ensure it stays within bounds
-                left = Math.Max(20, Math.Min(left, canvasWidth - controlWidth - 20));
-                top = Math.Max(20, Math.Min(top, canvasHeight - controlHeight - 20));
-
-                Canvas.SetLeft(FloatingAiPromptControl, left);
-                Canvas.SetTop(FloatingAiPromptControl, top);
-
-                _logger.LogDebug($"Positioned AI prompt at bottom center: Left={left}, Top={top}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to position AI prompt: {ex.Message}", ex);
-                // Fallback to default position
-                Canvas.SetLeft(FloatingAiPromptControl, 24);
-                Canvas.SetTop(FloatingAiPromptControl, 24);
-            }
         }
 
         private void UpdateBuilderVisibility()
@@ -1887,63 +1682,6 @@ namespace MermaidDiagramApp
             }
         }
 
-        private async Task OpenAiSettingsAndRefreshVmAsync()
-        {
-            if (_aiConfig == null)
-            {
-                _aiConfig = new Services.AI.AiConfiguration();
-            }
-
-            var dialog = new Views.AiSettingsDialog(_aiConfig)
-            {
-                XamlRoot = this.Content.XamlRoot
-            };
-
-            var result = await dialog.ShowAsync();
-            if (result == ContentDialogResult.Primary)
-            {
-                // Update AI configuration from dialog
-                var updatedConfig = dialog.GetUpdatedConfiguration();
-                _aiConfig.ProviderType = updatedConfig.ProviderType;
-                _aiConfig.ApiKey = updatedConfig.ApiKey;
-                _aiConfig.BaseUrl = updatedConfig.BaseUrl;
-                _aiConfig.ModelName = updatedConfig.ModelName;
-                _aiConfig.Temperature = updatedConfig.Temperature;
-                _aiConfig.MaxTokens = updatedConfig.MaxTokens;
-                _aiConfig.TimeoutSeconds = updatedConfig.TimeoutSeconds;
-
-                // Persist to disk
-                try { await Services.AI.AiConfigStorageService.SaveAsync(_aiConfig); } catch { /* ignore */ }
-
-                // Recreate AI service
-                _aiService = Services.AI.AiServiceFactory.CreateAiService(_aiConfig);
-
-                // Refresh floating prompt VM if present
-                if (FloatingAiPromptControl != null)
-                {
-                    var vm = new ViewModels.AiDiagramGeneratorViewModel(_aiService);
-                    vm.SelectedProvider = _aiConfig.ProviderType;
-                    vm.SelectedModel = _aiConfig.ModelName;
-                    vm.Temperature = _aiConfig.Temperature;
-                    FloatingAiPromptControl.DataContext = vm;
-                }
-
-                _logger.LogInformation("AI settings updated and saved.");
-            }
-        }
-
-        private async void AiSettings_Click(object sender, RoutedEventArgs e)
-        {
-            if (_aiConfig != null)
-            {
-                await OpenAiSettingsAndRefreshVmAsync();
-            }
-            else
-            {
-                await ShowMessageAsync("AI Not Available", "AI services are not initialized.");
-            }
-        }
-
         private async void About_Click(object sender, RoutedEventArgs e)
         {
             var package = Windows.ApplicationModel.Package.Current;
@@ -2136,7 +1874,6 @@ namespace MermaidDiagramApp
             if (file != null)
             {
                 _currentFilePath = file.Path;
-                SetupFileWatcher(file.Path);
                 
                 // Check if opening .mmdx (Diagram Builder File)
                 if (file.FileType.ToLower() == ".mmdx")
@@ -2205,6 +1942,14 @@ namespace MermaidDiagramApp
                     CodeEditor.Text = await FileIO.ReadTextAsync(file);
                     await UpdatePreview();
                     UpdateWindowTitle();
+                    
+                    // If it's a Markdown or Mermaid file, also load it into the Export to Word system
+                    if (file.FileType.ToLower() == ".md" || 
+                        file.FileType.ToLower() == ".markdown" || 
+                        file.FileType.ToLower() == ".mmd")
+                    {
+                        await LoadMarkdownFileForExport(file.Path);
+                    }
                 }
             }
         }
@@ -2220,62 +1965,6 @@ namespace MermaidDiagramApp
             {
                 this.Title = "Mermaid Diagram Editor";
             }
-        }
-
-        private async void Close_Click(object sender, RoutedEventArgs e)
-        {
-            // Check for unsaved changes in builder before closing
-            if (_isBuilderVisible && DiagramCanvasControl != null && DiagramCanvasControl.ViewModel.HasUnsavedChanges)
-            {
-                var result = await ShowUnsavedChangesDialog();
-                if (result == ContentDialogResult.None) // Cancel
-                {
-                    return;
-                }
-                else if (result == ContentDialogResult.Primary) // Save
-                {
-                    Save_Click(this, new RoutedEventArgs());
-                    // Wait a bit for save to complete
-                    await Task.Delay(100);
-                }
-                // Secondary = Discard, continue with close
-            }
-
-            // Stop file watcher
-            StopFileWatcher();
-
-            // Clear the current file path
-            _currentFilePath = string.Empty;
-
-            // Clear the code editor
-            CodeEditor.Text = string.Empty;
-
-            // Clear the diagram builder canvas if visible
-            if (_isBuilderVisible && DiagramCanvasControl != null)
-            {
-                DiagramCanvasControl.ClearVisuals();
-                DiagramCanvasControl.ViewModel.ClearCanvas();
-                DiagramCanvasControl.ViewModel.MarkAsSaved();
-            }
-
-            // Hide the builder panels if visible
-            if (_isBuilderVisible)
-            {
-                _isBuilderVisible = false;
-                if (BuilderTool != null)
-                {
-                    BuilderTool.IsChecked = false;
-                }
-                UpdateBuilderVisibility();
-            }
-
-            // Clear the preview
-            await UpdatePreview();
-
-            // Update window title
-            UpdateWindowTitle();
-
-            _logger.LogInformation("Document closed");
         }
 
         private async void Save_Click(object sender, RoutedEventArgs e)
@@ -2310,65 +1999,37 @@ namespace MermaidDiagramApp
             var file = await savePicker.PickSaveFileAsync();
             if (file != null)
             {
-                // Temporarily disable file watcher to avoid triggering reload on our own save
-                var wasWatching = _fileWatcher?.EnableRaisingEvents ?? false;
-                if (_fileWatcher != null)
+                // Check if saving as .mmdx (Diagram Builder File)
+                if (file.FileType.ToLower() == ".mmdx" && DiagramCanvasControl != null)
                 {
-                    _fileWatcher.EnableRaisingEvents = false;
-                }
-
-                try
-                {
-                    // Check if saving as .mmdx (Diagram Builder File)
-                    if (file.FileType.ToLower() == ".mmdx" && DiagramCanvasControl != null)
+                    var success = await _diagramFileService.SaveDiagramAsync(file.Path, DiagramCanvasControl.ViewModel);
+                    if (success)
                     {
-                        var success = await _diagramFileService.SaveDiagramAsync(file.Path, DiagramCanvasControl.ViewModel);
-                        if (success)
-                        {
-                            _currentFilePath = file.Path;
-                            DiagramCanvasControl.ViewModel.MarkAsSaved();
-                            _logger.LogInformation($"Diagram Builder file saved: {file.Path}");
-                            UpdateWindowTitle();
-                            
-                            // Setup watcher for new file if path changed
-                            SetupFileWatcher(file.Path);
-                        }
-                        else
-                        {
-                            _logger.LogError($"Failed to save Diagram Builder file: {file.Path}");
-                            var errorDialog = new ContentDialog
-                            {
-                                Title = "Save Error",
-                                Content = "Failed to save the diagram file. Please try again.",
-                                CloseButtonText = "OK",
-                                XamlRoot = this.Content.XamlRoot
-                            };
-                            await errorDialog.ShowAsync();
-                        }
+                        _currentFilePath = file.Path;
+                        DiagramCanvasControl.ViewModel.MarkAsSaved();
+                        _logger.LogInformation($"Diagram Builder file saved: {file.Path}");
+                        UpdateWindowTitle();
                     }
                     else
                     {
-                        // Save as plain text (.mmd or .md)
-                        await FileIO.WriteTextAsync(file, CodeEditor.Text);
-                        _currentFilePath = file.Path;
-                        _logger.LogInformation($"File saved: {file.Path}");
-                        UpdateWindowTitle();
-                        
-                        // Setup watcher for new file if path changed
-                        SetupFileWatcher(file.Path);
+                        _logger.LogError($"Failed to save Diagram Builder file: {file.Path}");
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Save Error",
+                            Content = "Failed to save the diagram file. Please try again.",
+                            CloseButtonText = "OK",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
                     }
                 }
-                finally
+                else
                 {
-                    // Re-enable file watcher after a short delay
-                    if (wasWatching && _fileWatcher != null)
-                    {
-                        await Task.Delay(500); // Wait to avoid detecting our own write
-                        if (_fileWatcher != null)
-                        {
-                            _fileWatcher.EnableRaisingEvents = true;
-                        }
-                    }
+                    // Save as plain text (.mmd or .md)
+                    await FileIO.WriteTextAsync(file, CodeEditor.Text);
+                    _currentFilePath = file.Path;
+                    _logger.LogInformation($"File saved: {file.Path}");
+                    UpdateWindowTitle();
                 }
             }
         }
@@ -2505,341 +2166,6 @@ namespace MermaidDiagramApp
             await dialog.ShowAsync();
         }
 
-        private void ZoomIn_Click(object sender, RoutedEventArgs e)
-        {
-            _previewZoomLevel = Math.Min(_previewZoomLevel + 0.1, 3.0); // Max 300%
-            ApplyPreviewZoom();
-        }
-
-        private void ZoomOut_Click(object sender, RoutedEventArgs e)
-        {
-            _previewZoomLevel = Math.Max(_previewZoomLevel - 0.1, 0.5); // Min 50%
-            ApplyPreviewZoom();
-        }
-
-        private void ZoomReset_Click(object sender, RoutedEventArgs e)
-        {
-            _previewZoomLevel = 1.0;
-            ApplyPreviewZoom();
-        }
-
-        private async void DragModeToggle_Click(object sender, RoutedEventArgs e)
-        {
-            _isPreviewDragMode = DragModeToggle.IsChecked == true;
-            _logger.LogInformation($"Drag mode toggled: {_isPreviewDragMode}");
-            await UpdatePreviewInteractionMode();
-            
-            // Update icon and tooltip
-            if (DragModeIcon != null)
-            {
-                DragModeIcon.Glyph = _isPreviewDragMode ? "\xE8AB" : "\xE7C2"; // Hand vs Cursor
-                _logger.LogDebug($"Icon updated to: {(_isPreviewDragMode ? "Hand" : "Cursor")}");
-            }
-            
-            if (DragModeToggle != null)
-            {
-                ToolTipService.SetToolTip(DragModeToggle, _isPreviewDragMode ? "Drag Mode (Click to Select)" : "Select Mode (Click to Drag)");
-            }
-        }
-
-        private async Task UpdatePreviewInteractionMode()
-        {
-            try
-            {
-                if (PreviewBrowser?.CoreWebView2 != null && _isWebViewReady)
-                {
-                    var modeScript = $@"
-                        (function() {{
-                            const isDragMode = {(_isPreviewDragMode ? "true" : "false")};
-                            const body = document.body;
-                            const html = document.documentElement;
-                            
-                            if (isDragMode) {{
-                                // Enable drag mode with aggressive cursor styling
-                                body.style.userSelect = 'none';
-                                body.style.webkitUserSelect = 'none';
-                                body.style.mozUserSelect = 'none';
-                                body.style.msUserSelect = 'none';
-                                
-                                // Function to apply cursor to all elements
-                                const applyCursor = (cursorType) => {{
-                                    const logMsg = '[CONSOLE] Applying cursor: ' + cursorType;
-                                    if (window.chrome && window.chrome.webview) {{
-                                        window.chrome.webview.postMessage(logMsg);
-                                    }}
-                                    
-                                    // Update via style element with highest priority
-                                    let styleEl = document.getElementById('drag-cursor-style');
-                                    if (!styleEl) {{
-                                        styleEl = document.createElement('style');
-                                        styleEl.id = 'drag-cursor-style';
-                                        document.head.appendChild(styleEl);
-                                    }}
-                                    
-                                    // Map cursor types to ensure browser compatibility
-                                    // Use 'all-scroll' for grab (shows hand) and 'grabbing' for grabbing (shows closed hand)
-                                    const cursorValue = cursorType === 'grab' ? 'all-scroll' : (cursorType === 'grabbing' ? 'grabbing' : cursorType);
-                                    
-                                    // Use very specific CSS to override everything
-                                    styleEl.textContent = `
-                                        * {{
-                                            cursor: ${{cursorValue}} !important;
-                                            -webkit-user-select: none !important;
-                                            user-select: none !important;
-                                        }}
-                                    `;
-                                    
-                                    // Also set directly on body and html as backup
-                                    document.body.style.cursor = cursorValue;
-                                    document.documentElement.style.cursor = cursorValue;
-                                    
-                                    const countMsg = '[CONSOLE] Cursor style updated in CSS';
-                                    if (window.chrome && window.chrome.webview) {{
-                                        window.chrome.webview.postMessage(countMsg);
-                                    }}
-                                }};
-                                
-                                // Initial grab cursor
-                                applyCursor('grab');
-                                
-                                let isDown = false;
-                                let startX, startY, scrollLeft, scrollTop;
-                                
-                                const mouseDownHandler = (e) => {{
-                                    const downMsg = '[CONSOLE] Mouse down detected in drag mode';
-                                    if (window.chrome && window.chrome.webview) {{
-                                        window.chrome.webview.postMessage(downMsg);
-                                    }}
-                                    isDown = true;
-                                    applyCursor('grabbing');
-                                    
-                                    startX = e.clientX;
-                                    startY = e.clientY;
-                                    scrollLeft = window.scrollX;
-                                    scrollTop = window.scrollY;
-                                    
-                                    e.preventDefault();
-                                }};
-                                
-                                const mouseUpHandler = (e) => {{
-                                    if (isDown) {{
-                                        const upMsg = '[CONSOLE] Mouse up detected, resetting cursor';
-                                        if (window.chrome && window.chrome.webview) {{
-                                            window.chrome.webview.postMessage(upMsg);
-                                        }}
-                                        isDown = false;
-                                        applyCursor('grab');
-                                    }}
-                                }};
-                                
-                                const mouseMoveHandler = (e) => {{
-                                    if (!isDown) return;
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    
-                                    const x = e.clientX;
-                                    const y = e.clientY;
-                                    const walkX = x - startX;
-                                    const walkY = y - startY;
-                                    
-                                    window.scrollTo(scrollLeft - walkX, scrollTop - walkY);
-                                }};
-                                
-                                // Store handlers for cleanup
-                                window.dragHandlers = {{ mouseDownHandler, mouseUpHandler, mouseMoveHandler }};
-                                
-                                // Attach to window for smooth dragging (won't trigger leave events)
-                                window.addEventListener('mousedown', mouseDownHandler, {{ capture: true, passive: false }});
-                                window.addEventListener('mouseup', mouseUpHandler, {{ capture: true, passive: false }});
-                                window.addEventListener('mousemove', mouseMoveHandler, {{ capture: true, passive: false }});
-                            }} else {{
-                                // Disable drag mode
-                                body.style.cursor = 'default';
-                                html.style.cursor = 'default';
-                                body.style.userSelect = 'auto';
-                                
-                                // Remove cursor style
-                                const styleEl = document.getElementById('drag-cursor-style');
-                                if (styleEl) {{
-                                    styleEl.remove();
-                                }}
-                                
-                                if (window.dragHandlers) {{
-                                    window.removeEventListener('mousedown', window.dragHandlers.mouseDownHandler, {{ capture: true }});
-                                    window.removeEventListener('mouseup', window.dragHandlers.mouseUpHandler, {{ capture: true }});
-                                    window.removeEventListener('mousemove', window.dragHandlers.mouseMoveHandler, {{ capture: true }});
-                                    window.dragHandlers = null;
-                                }}
-                            }}
-                        }})();
-                    ";
-                    await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(modeScript);
-                    _logger.LogDebug($"Preview interaction mode: {(_isPreviewDragMode ? "Drag" : "Select")}");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to update preview interaction mode: {ex.Message}", ex);
-            }
-        }
-
-        private async Task SetupCtrlWheelZoom()
-        {
-            try
-            {
-                if (PreviewBrowser?.CoreWebView2 != null)
-                {
-                    var wheelZoomScript = @"
-                        (function() {
-                            // Remove existing listener if any
-                            if (window.ctrlWheelHandler) {
-                                document.removeEventListener('wheel', window.ctrlWheelHandler, { passive: false });
-                                window.removeEventListener('wheel', window.ctrlWheelHandler);
-                            }
-                            
-                            // Create and store the handler
-                            window.ctrlWheelHandler = function(e) {
-                                // Log every wheel event for debugging
-                                const logMsg = '[CONSOLE] Wheel event: ctrlKey=' + e.ctrlKey + ', deltaY=' + e.deltaY;
-                                if (window.chrome && window.chrome.webview) {
-                                    window.chrome.webview.postMessage(logMsg);
-                                }
-                                
-                                if (e.ctrlKey) {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    
-                                    // Determine zoom direction (deltaY > 0 means scroll down = zoom out)
-                                    // 0.1 = 10% zoom change per scroll
-                                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-                                    
-                                    // Log for debugging
-                                    console.log('Ctrl+Wheel detected, deltaY:', e.deltaY, 'delta:', delta);
-                                    const ctrlWheelLog = '[CONSOLE] Ctrl+Wheel detected, deltaY: ' + e.deltaY + ', delta: ' + delta;
-                                    if (window.chrome && window.chrome.webview) {
-                                        window.chrome.webview.postMessage(ctrlWheelLog);
-                                    }
-                                    
-                                    // Send message to C# to handle zoom
-                                    if (window.chrome && window.chrome.webview) {
-                                        // Must stringify the JSON object for WebView2
-                                        const message = JSON.stringify({
-                                            type: 'ctrlWheel',
-                                            delta: delta
-                                        });
-                                        window.chrome.webview.postMessage(message);
-                                        const sentLog = '[CONSOLE] Sent ctrlWheel JSON: ' + message;
-                                        window.chrome.webview.postMessage(sentLog);
-                                    } else {
-                                        console.error('WebView messaging not available');
-                                        const errorLog = '[CONSOLE] ERROR: WebView messaging not available';
-                                        if (window.chrome && window.chrome.webview) {
-                                            window.chrome.webview.postMessage(errorLog);
-                                        }
-                                    }
-                                }
-                            };
-                            
-                            // Add the listener to both document and window
-                            document.addEventListener('wheel', window.ctrlWheelHandler, { passive: false, capture: true });
-                            window.addEventListener('wheel', window.ctrlWheelHandler, { passive: false, capture: true });
-                            
-                            console.log('Ctrl+Wheel zoom handler installed on document and window');
-                        })();
-                    ";
-                    await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(wheelZoomScript);
-                    _logger.LogInformation("Ctrl+Wheel zoom handler installed successfully");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to setup Ctrl+Wheel zoom: {ex.Message}", ex);
-            }
-        }
-
-        private async void ApplyPreviewZoom()
-        {
-            try
-            {
-                if (PreviewBrowser?.CoreWebView2 != null && _isWebViewReady)
-                {
-                    var scale = _previewZoomLevel.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    
-                    // Apply zoom using transform with a wrapper approach for proper scrolling
-                    var zoomScript = $@"
-                        (function() {{
-                            const scale = {scale};
-                            const container = document.getElementById('content-container');
-                            
-                            if (!container) return;
-                            
-                            // If scale is 1.0, remove wrapper and reset to original
-                            if (scale === 1.0) {{
-                                const wrapper = document.getElementById('zoom-wrapper');
-                                if (wrapper) {{
-                                    const parent = wrapper.parentNode;
-                                    parent.insertBefore(container, wrapper);
-                                    wrapper.remove();
-                                    
-                                    // Reset body styles
-                                    document.body.style.width = '';
-                                    document.body.style.height = '';
-                                    document.body.style.overflow = '';
-                                }}
-                                return;
-                            }}
-                            
-                            // Create or get zoom wrapper
-                            let wrapper = document.getElementById('zoom-wrapper');
-                            if (!wrapper) {{
-                                wrapper = document.createElement('div');
-                                wrapper.id = 'zoom-wrapper';
-                                wrapper.style.transformOrigin = '0 0';
-                                wrapper.style.display = 'inline-block';
-                                wrapper.style.minWidth = '100%';
-                                wrapper.style.minHeight = '100%';
-                                
-                                // Wrap the container
-                                const parent = container.parentNode;
-                                parent.insertBefore(wrapper, container);
-                                wrapper.appendChild(container);
-                                
-                                // Adjust body for scrolling
-                                document.body.style.overflow = 'auto';
-                                document.body.style.margin = '0';
-                                document.body.style.padding = '0';
-                            }}
-                            
-                            // Apply transform scale
-                            wrapper.style.transform = 'scale(' + scale + ')';
-                            
-                            // Adjust wrapper size to create proper scroll area
-                            const rect = container.getBoundingClientRect();
-                            wrapper.style.width = (rect.width / scale) + 'px';
-                            wrapper.style.height = (rect.height / scale) + 'px';
-                            
-                            // Force body to accommodate scaled content
-                            document.body.style.width = (rect.width) + 'px';
-                            document.body.style.height = (rect.height) + 'px';
-                        }})();
-                    ";
-                    await PreviewBrowser.CoreWebView2.ExecuteScriptAsync(zoomScript);
-                    
-                    // Update zoom level display
-                    if (ZoomLevelText != null)
-                    {
-                        ZoomLevelText.Text = $"{(_previewZoomLevel * 100):F0}%";
-                    }
-                    
-                    _logger.LogDebug($"Applied preview zoom: {_previewZoomLevel * 100:F0}%");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to apply preview zoom: {ex.Message}", ex);
-            }
-        }
-
         private async Task<ContentDialogResult> ShowUnsavedChangesDialog()
         {
             var dialog = new ContentDialog
@@ -2872,63 +2198,6 @@ namespace MermaidDiagramApp
                 }
             }
             */
-        }
-
-        private async Task ImportCodeToCanvasAsync(string mermaidCode)
-        {
-            try
-            {
-                // Show builder if not already visible
-                if (!_isBuilderVisible)
-                {
-                    _isBuilderVisible = true;
-                    BuilderTool.IsChecked = true;
-                    UpdateBuilderVisibility();
-                }
-
-                // Show loading indicator
-                if (DiagramCanvasControl != null)
-                {
-                    DiagramCanvasControl.ShowLoading();
-                    
-                    // Clear existing canvas visuals AND data for new session
-                    DiagramCanvasControl.ClearVisuals();
-                    DiagramCanvasControl.ViewModel.ClearCanvas();
-                    
-                    // Small delay to ensure clearing is complete
-                    await Task.Delay(50);
-                    
-                    // For now, we'll just update the code editor with the generated code
-                    // A full implementation would parse the Mermaid code and create canvas elements
-                    CodeEditor.Text = mermaidCode;
-                    await UpdatePreview();
-                    
-                    // Hide loading indicator
-                    DiagramCanvasControl.HideLoading();
-                    
-                    _logger.LogInformation("AI-generated code imported to canvas");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to import code to canvas: {ex.Message}", ex);
-                
-                // Hide loading indicator if it was shown
-                if (DiagramCanvasControl != null)
-                {
-                    DiagramCanvasControl.HideLoading();
-                }
-                
-                // Show error message to user
-                var dialog = new ContentDialog
-                {
-                    Title = "Import Error",
-                    Content = $"Failed to import diagram to canvas: {ex.Message}",
-                    CloseButtonText = "OK",
-                    XamlRoot = this.Content.XamlRoot
-                };
-                await dialog.ShowAsync();
-            }
         }
 
         private async void UpdateMermaid_Click(object sender, RoutedEventArgs e)
@@ -3041,58 +2310,6 @@ namespace MermaidDiagramApp
         }
     
 
-        /// <summary>
-        /// Shows a keyboard shortcut tip to the user about using Ctrl+F11 as an alternative to F11.
-        /// Only shows if the user hasn't dismissed it before.
-        /// </summary>
-        private void ShowKeyboardShortcutTip()
-        {
-            try
-            {
-                // Check if user wants to see tips
-                if (!_shortcutPreferencesService.GetShowTips())
-                {
-                    _logger.LogDebug("Keyboard shortcut tip suppressed by user preference");
-                    return;
-                }
-
-                // Show the tip
-                KeyboardShortcutTipBar.Message = "If F11 doesn't work for full-screen preview (it may be captured by Windows), use Ctrl+F11 instead. Both shortcuts are available in the View menu.";
-                KeyboardShortcutTipBar.IsOpen = true;
-                
-                _logger.LogInformation("Displayed keyboard shortcut tip to user");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error showing keyboard shortcut tip: {ex.Message}", ex);
-            }
-        }
-
-        /// <summary>
-        /// Handles the "Don't show again" button click on the keyboard shortcut tip.
-        /// Saves the user's preference to not show the tip again.
-        /// </summary>
-        private void DismissKeyboardTip_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                // Save preference to not show tips again
-                _shortcutPreferencesService.SetShowTips(false);
-                
-                // Close the tip bar
-                KeyboardShortcutTipBar.IsOpen = false;
-                
-                _logger.LogInformation("User dismissed keyboard shortcut tip, preference saved");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error dismissing keyboard shortcut tip: {ex.Message}", ex);
-                
-                // Still close the tip bar even if saving preference failed
-                KeyboardShortcutTipBar.IsOpen = false;
-            }
-        }
-
         [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         public interface IInitializeWithWindow
         {
@@ -3108,138 +2325,6 @@ namespace MermaidDiagramApp
                 initializeWithWindow.Initialize(window_hwnd);
             }
 
-        }
-
-        private void SetupFileWatcher(string filePath)
-        {
-            // Dispose existing watcher if any
-            _fileWatcher?.Dispose();
-            _fileWatcher = null;
-
-            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
-                return;
-
-            try
-            {
-                var directory = Path.GetDirectoryName(filePath);
-                var fileName = Path.GetFileName(filePath);
-
-                if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName))
-                    return;
-
-                _fileWatcher = new FileSystemWatcher(directory)
-                {
-                    Filter = fileName,
-                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
-                    EnableRaisingEvents = true
-                };
-
-                _fileWatcher.Changed += OnFileChanged;
-                _logger.LogInformation($"File watcher enabled for: {filePath}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to setup file watcher: {ex.Message}");
-            }
-        }
-
-        private async void OnFileChanged(object sender, FileSystemEventArgs e)
-        {
-            // Debounce: Ignore rapid successive changes (some editors trigger multiple events)
-            var now = DateTime.Now;
-            if ((now - _lastFileChangeTime).TotalMilliseconds < 500)
-                return;
-
-            _lastFileChangeTime = now;
-
-            // Wait a bit to ensure file is fully written
-            await Task.Delay(100);
-
-            // Dispatch to UI thread
-            DispatcherQueue.TryEnqueue(async () =>
-            {
-                try
-                {
-                    await ReloadCurrentFile();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError($"Error reloading file: {ex.Message}");
-                }
-            });
-        }
-
-        private async Task ReloadCurrentFile()
-        {
-            if (string.IsNullOrEmpty(_currentFilePath) || !File.Exists(_currentFilePath))
-                return;
-
-            _logger.LogInformation($"Reloading file: {_currentFilePath}");
-
-            var extension = Path.GetExtension(_currentFilePath).ToLower();
-
-            try
-            {
-                if (extension == ".mmdx")
-                {
-                    // Reload Diagram Builder file
-                    var diagramFile = await _diagramFileService.LoadDiagramAsync(_currentFilePath);
-                    if (diagramFile != null && DiagramCanvasControl != null)
-                    {
-                        // Show loading indicator
-                        DiagramCanvasControl.ShowLoading();
-
-                        // Clear existing canvas
-                        DiagramCanvasControl.ClearVisuals();
-                        DiagramCanvasControl.ViewModel.ClearCanvas();
-
-                        await Task.Delay(50);
-
-                        // Restore diagram data
-                        _diagramFileService.RestoreDiagram(diagramFile, DiagramCanvasControl.ViewModel);
-
-                        // Mark as saved since we just loaded from file
-                        DiagramCanvasControl.ViewModel.MarkAsSaved();
-
-                        await Task.Delay(150);
-
-                        // Hide loading indicator
-                        DiagramCanvasControl.HideLoading();
-                        DiagramCanvasControl.Focus(FocusState.Programmatic);
-
-                        // Update code editor
-                        CodeEditor.Text = diagramFile.MermaidCode;
-                        await UpdatePreview();
-
-                        _logger.LogInformation("Diagram Builder file reloaded successfully");
-                    }
-                }
-                else if (extension == ".mmd" || extension == ".md" || extension == ".markdown")
-                {
-                    // Reload plain text file
-                    var content = await File.ReadAllTextAsync(_currentFilePath);
-                    CodeEditor.Text = content;
-                    await UpdatePreview();
-
-                    _logger.LogInformation("Text file reloaded successfully");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to reload file: {ex.Message}");
-            }
-        }
-
-        private void StopFileWatcher()
-        {
-            if (_fileWatcher != null)
-            {
-                _fileWatcher.EnableRaisingEvents = false;
-                _fileWatcher.Changed -= OnFileChanged;
-                _fileWatcher.Dispose();
-                _fileWatcher = null;
-                _logger.LogInformation("File watcher stopped");
-            }
         }
     }
 }

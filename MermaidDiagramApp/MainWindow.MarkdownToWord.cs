@@ -34,6 +34,13 @@ namespace MermaidDiagramApp
                     return;
                 }
 
+                // Check if WebView2 is actually ready for Mermaid rendering
+                if (!_isWebViewReady)
+                {
+                    _logger.Log(LogLevel.Warning, "WebView2 not fully initialized, deferring Markdown to Word export initialization");
+                    return;
+                }
+
                 // Create the export service components
                 var markdownParser = new MarkdigMarkdownParser();
                 var wordGenerator = new OpenXmlWordDocumentGenerator();
@@ -221,6 +228,20 @@ namespace MermaidDiagramApp
         {
             if (_markdownToWordViewModel == null || !_markdownToWordViewModel.CanExport)
             {
+                return;
+            }
+
+            // Check if WebView2 is ready for Mermaid rendering
+            if (!_isWebViewReady)
+            {
+                var warningDialog = new ContentDialog
+                {
+                    Title = "WebView2 Not Ready",
+                    Content = "The preview system is still initializing. Please wait a moment and try again.\n\nNote: Mermaid diagrams may not render properly if the preview system is not fully loaded.",
+                    CloseButtonText = "OK",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await warningDialog.ShowAsync();
                 return;
             }
 
