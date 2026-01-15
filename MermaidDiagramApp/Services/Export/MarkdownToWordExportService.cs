@@ -115,6 +115,13 @@ public class MarkdownToWordExportService
 
             await RenderMermaidDiagramsAsync(mermaidBlocks, cancellationToken);
             result.Statistics.MermaidDiagramsRendered = mermaidBlocks.Count(mb => mb.RenderedImagePath != null);
+            
+            // Log mermaid block details for debugging
+            _logger.LogInformation($"Mermaid blocks after rendering: {mermaidBlocks.Count}");
+            foreach (var mb in mermaidBlocks)
+            {
+                _logger.LogInformation($"  Block at line {mb.LineNumber}: RenderedImagePath={mb.RenderedImagePath ?? "null"}, ErrorMessage={mb.ErrorMessage ?? "null"}");
+            }
 
             // Stage 3: Resolve image paths
             ReportProgress(progress, 50, "Resolving image paths...", ExportStage.ResolvingImages);
@@ -127,9 +134,19 @@ public class MarkdownToWordExportService
             ReportProgress(progress, 70, "Generating Word document...", ExportStage.GeneratingDocument);
             cancellationToken.ThrowIfCancellationRequested();
 
+            _logger.LogInformation("=== STAGE 4: About to enter Word document generation try block ===");
+            
             try
             {
+                _logger.LogInformation($"About to generate Word document with {mermaidBlocks.Count} Mermaid blocks");
                 GenerateWordDocument(document, mermaidBlocks, imageReferences, outputPath);
+                _logger.LogInformation("Word document generation completed successfully");
+                
+                // IMPORTANT: Clean up temporary files AFTER document generation completes
+                // This ensures all images are embedded before we delete the temp files
+                _logger.LogInformation($"About to clean up {_temporaryFiles.Count} temporary files");
+                CleanupTemporaryFiles();
+                _logger.LogInformation("Temporary files cleanup completed");
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -211,8 +228,12 @@ public class MarkdownToWordExportService
         }
         finally
         {
-            // Always clean up temporary files, even on error
-            CleanupTemporaryFiles();
+            // Clean up temporary files only if they weren't already cleaned up
+            // (they are cleaned up after successful document generation)
+            if (_temporaryFiles.Count > 0)
+            {
+                CleanupTemporaryFiles();
+            }
         }
     }
 
@@ -449,18 +470,31 @@ public class MarkdownToWordExportService
 
         if (language.Equals("mermaid", StringComparison.OrdinalIgnoreCase))
         {
+            _logger.LogInformation($"Processing Mermaid code block at line {codeBlock.Line}");
+            
             // Find the corresponding rendered Mermaid block
-            var mermaidBlock = mermaidBlocks.FirstOrDefault(mb => mb.LineNumber == codeBlock.Line);
+            // Note: codeBlock.Line is 0-based, but MermaidBlock.LineNumber is 1-based (converted in parser)
+            var mermaidBlock = mermaidBlocks.FirstOrDefault(mb => mb.LineNumber == codeBlock.Line + 1);
+            
+            _logger.LogInformation($"Found mermaid block: {mermaidBlock != null}, RenderedImagePath: {mermaidBlock?.RenderedImagePath ?? "null"}");
+            
+            if (mermaidBlock?.RenderedImagePath != null)
+            {
+                var fileExists = File.Exists(mermaidBlock.RenderedImagePath);
+                _logger.LogInformation($"File exists check: {fileExists} for path: {mermaidBlock.RenderedImagePath}");
+            }
 
             if (mermaidBlock?.RenderedImagePath != null && File.Exists(mermaidBlock.RenderedImagePath))
             {
                 try
                 {
+                    _logger.LogInformation($"Attempting to add image: {mermaidBlock.RenderedImagePath}");
                     _wordGenerator.AddImage(mermaidBlock.RenderedImagePath, new ImageOptions());
+                    _logger.LogInformation("Image added successfully");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning("Failed to embed Mermaid diagram", ex);
+                    _logger.LogWarning($"Failed to embed Mermaid diagram: {ex.Message}", ex);
                     _wordGenerator.AddParagraph($"[Mermaid diagram error: {ex.Message}]", new ParagraphStyle());
                     // Include the original code for reference
                     _wordGenerator.AddCodeBlock(mermaidBlock.Code, "mermaid");
@@ -468,6 +502,7 @@ public class MarkdownToWordExportService
             }
             else if (mermaidBlock?.ErrorMessage != null)
             {
+                _logger.LogWarning($"Mermaid block has error message: {mermaidBlock.ErrorMessage}");
                 // Display the specific error message
                 _wordGenerator.AddParagraph($"[{mermaidBlock.ErrorMessage}]", new ParagraphStyle());
                 // Include the original code for reference
@@ -475,6 +510,7 @@ public class MarkdownToWordExportService
             }
             else
             {
+                _logger.LogWarning($"Mermaid diagram rendering failed - no rendered path or file doesn't exist");
                 _wordGenerator.AddParagraph("[Mermaid diagram rendering failed]", new ParagraphStyle());
                 // Try to include the original code if available
                 if (mermaidBlock != null)
