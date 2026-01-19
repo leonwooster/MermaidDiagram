@@ -9,7 +9,7 @@ namespace MermaidDiagramApp.Services.Export;
 /// </summary>
 public class CoreWebView2Wrapper : IWebView2Wrapper
 {
-    private readonly CoreWebView2 _coreWebView2;
+    public readonly CoreWebView2 _coreWebView2;
 
     public CoreWebView2Wrapper(CoreWebView2 coreWebView2)
     {
@@ -20,4 +20,9 @@ public class CoreWebView2Wrapper : IWebView2Wrapper
     {
         return await _coreWebView2.ExecuteScriptAsync(script);
     }
+
+    /// <summary>
+    /// Gets the underlying CoreWebView2 instance for advanced operations.
+    /// </summary>
+    public CoreWebView2 CoreWebView2 => _coreWebView2;
 }

@@ -331,15 +331,46 @@
             try {
                 await loadLibraries();
                 
-                // Initialize Mermaid
+                // Initialize Mermaid with configuration to avoid foreignObject issues
                 if (typeof mermaid !== 'undefined') {
-                    mermaid.initialize({
+                    const config = {
                         startOnLoad: false,
                         securityLevel: 'loose',
                         theme: 'dark',
-                        logLevel: 1
-                    });
-                    log('Mermaid initialized');
+                        logLevel: 3, // Increased for debugging
+                        // Force text-based rendering instead of HTML
+                        flowchart: { 
+                            htmlLabels: false,
+                            useMaxWidth: true
+                        },
+                        sequence: { 
+                            htmlLabels: false,
+                            useMaxWidth: true
+                        },
+                        gantt: { 
+                            htmlLabels: false,
+                            useMaxWidth: true
+                        }
+                    };
+                    
+                    try {
+                        mermaid.initialize(config);
+                        log('Mermaid initialized with config:', JSON.stringify(config));
+                        
+                        // Verify the configuration was applied
+                        const currentConfig = mermaid.getConfig();
+                        log('Current Mermaid config:', JSON.stringify(currentConfig));
+                        
+                        // Send configuration to host for verification
+                        if (window.chrome && window.chrome.webview) {
+                            window.chrome.webview.postMessage({
+                                type: 'mermaidConfigured',
+                                config: currentConfig
+                            });
+                        }
+                    } catch (error) {
+                        log('Error initializing Mermaid:', error);
+                    }
                 }
                 
                 // Initialize markdown-it
@@ -390,17 +421,32 @@
             container.innerHTML = '<div>Rendering diagram...</div>';
             
             try {
-                // Update theme if needed
-                if (mermaid.initialize) {
-                    mermaid.initialize({
-                        startOnLoad: false,
-                        securityLevel: 'loose',
-                        theme: theme.toLowerCase(),
-                        logLevel: 1
-                    });
-                }
+                // CRITICAL: Re-initialize with htmlLabels: false before EACH render
+                // This ensures the configuration is applied to this specific render
+                mermaid.initialize({
+                    startOnLoad: false,
+                    securityLevel: 'loose',
+                    theme: theme.toLowerCase(),
+                    logLevel: 3,
+                    flowchart: { htmlLabels: false, useMaxWidth: true },
+                    sequence: { htmlLabels: false },
+                    gantt: { htmlLabels: false },
+                    class: { htmlLabels: false },
+                    state: { htmlLabels: false }
+                });
+                
+                log('Mermaid re-initialized for render with htmlLabels: false');
                 
                 const { svg } = await mermaid.render('mermaid-diagram-' + Date.now(), content);
+                
+                // Check if SVG contains foreignObject
+                if (svg.includes('<foreignObject')) {
+                    log('WARNING: SVG still contains foreignObject despite htmlLabels: false!');
+                    log('This may be a Mermaid.js version issue or theme override');
+                } else {
+                    log('SUCCESS: SVG does not contain foreignObject');
+                }
+                
                 container.innerHTML = svg;
                 
                 log('Mermaid diagram rendered successfully');
@@ -408,7 +454,8 @@
                 if (window.chrome && window.chrome.webview) {
                     window.chrome.webview.postMessage({
                         type: 'renderComplete',
-                        mode: 'mermaid'
+                        mode: 'mermaid',
+                        hasForeignObject: svg.includes('<foreignObject')
                     });
                 }
             } catch (error) {
@@ -518,7 +565,17 @@
                                 startOnLoad: false,
                                 securityLevel: 'loose',
                                 theme: theme.toLowerCase(),
-                                logLevel: 1
+                                logLevel: 1,
+                                // Disable HTML labels to avoid foreignObject issues
+                                flowchart: { htmlLabels: false },
+                                sequence: { htmlLabels: false },
+                                gantt: { htmlLabels: false },
+                                journey: { htmlLabels: false },
+                                timeline: { htmlLabels: false },
+                                class: { htmlLabels: false },
+                                state: { htmlLabels: false },
+                                er: { htmlLabels: false },
+                                pie: { htmlLabels: false }
                             });
                         }
                         
@@ -581,9 +638,70 @@
 
         // Get current SVG (for export)
         window.getSvg = function() {
+            // First check if we have an export SVG stored
+            if (window._exportSvg) {
+                return window._exportSvg;
+            }
+            
+            // Otherwise get the current SVG from the container
             const container = document.getElementById('content-container');
             const svg = container.querySelector('svg');
             return svg ? svg.outerHTML : '';
+        };
+
+        // Render Mermaid for export without affecting current preview
+        window.renderMermaidForExport = async function(content, theme = 'light') {
+            log('Rendering Mermaid diagram for export...');
+            
+            try {
+                // Store current container content
+                const container = document.getElementById('content-container');
+                const originalContent = container.innerHTML;
+                const originalClassName = container.className;
+                
+                // Temporarily switch to mermaid mode for rendering
+                container.className = 'mermaid-mode';
+                container.innerHTML = '<div>Rendering for export...</div>';
+                
+                // Update theme for export rendering
+                if (mermaid.initialize) {
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        securityLevel: 'loose',
+                        theme: theme.toLowerCase(),
+                        logLevel: 1,
+                        // Disable HTML labels to avoid foreignObject issues during export
+                        flowchart: { htmlLabels: false },
+                        sequence: { htmlLabels: false },
+                        gantt: { htmlLabels: false },
+                        journey: { htmlLabels: false },
+                        timeline: { htmlLabels: false },
+                        class: { htmlLabels: false },
+                        state: { htmlLabels: false },
+                        er: { htmlLabels: false },
+                        pie: { htmlLabels: false }
+                    });
+                }
+                
+                // Render the diagram
+                const { svg } = await mermaid.render('export-diagram-' + Date.now(), content);
+                
+                // Store the SVG for retrieval
+                window._exportSvg = svg;
+                
+                // Restore original content immediately
+                container.innerHTML = originalContent;
+                container.className = originalClassName;
+                
+                log('Mermaid diagram rendered for export successfully');
+                
+                return svg;
+            } catch (error) {
+                const errorMsg = `Mermaid export rendering failed: ${error.message || error}`;
+                log(errorMsg);
+                window._exportSvg = '';
+                throw error;
+            }
         };
 
         // Start initialization
