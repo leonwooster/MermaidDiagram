@@ -439,15 +439,18 @@
                 
                 const { svg } = await mermaid.render('mermaid-diagram-' + Date.now(), content);
                 
+                // Fix z-order to ensure text labels appear above lines
+                const fixedSvg = window.fixSvgZOrder(svg, theme);
+                
                 // Check if SVG contains foreignObject
-                if (svg.includes('<foreignObject')) {
+                if (fixedSvg.includes('<foreignObject')) {
                     log('WARNING: SVG still contains foreignObject despite htmlLabels: false!');
                     log('This may be a Mermaid.js version issue or theme override');
                 } else {
                     log('SUCCESS: SVG does not contain foreignObject');
                 }
                 
-                container.innerHTML = svg;
+                container.innerHTML = fixedSvg;
                 
                 log('Mermaid diagram rendered successfully');
                 
@@ -585,8 +588,12 @@
                             
                             try {
                                 const { svg } = await mermaid.render(`mermaid-${i}-${Date.now()}`, code);
+                                
+                                // Fix z-order to ensure text labels appear above lines
+                                const fixedSvg = window.fixSvgZOrder(svg, theme);
+                                
                                 const div = document.createElement('div');
-                                div.innerHTML = svg;
+                                div.innerHTML = fixedSvg;
                                 div.style.textAlign = 'center';
                                 div.style.margin = '20px 0';
                                 block.parentElement.replaceWith(div);
@@ -633,6 +640,141 @@
                 await window.renderMarkdown(content, enableMermaid, theme, styleSettings, baseFilePath);
             } else {
                 log(`Unknown rendering mode: ${mode}`);
+            }
+        };
+
+        // Fix SVG z-order to ensure text labels appear above lines
+        window.fixSvgZOrder = function(svgString, theme = 'dark') {
+            try {
+                log('Fixing SVG z-order and edge label backgrounds...');
+                log('Theme:', theme);
+                log('SVG length:', svgString.length);
+                
+                // Parse the SVG string into a DOM
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(svgString, 'image/svg+xml');
+                const svg = doc.querySelector('svg');
+                
+                if (!svg) {
+                    log('No SVG element found, returning original');
+                    return svgString;
+                }
+                
+                // Determine background color based on theme
+                const bgColor = theme === 'light' ? '#ffffff' : '#222222';
+                log('Using background color:', bgColor);
+                
+                // Step 1: Fix edge label backgrounds
+                const edgeLabelGroups = svg.querySelectorAll('g.edgeLabel');
+                log(`Found ${edgeLabelGroups.length} edge label groups`);
+                
+                let labelsFixed = 0;
+                
+                edgeLabelGroups.forEach((edgeLabelGroup, index) => {
+                    // Find the rect inside the label group
+                    const rect = edgeLabelGroup.querySelector('rect');
+                    const text = edgeLabelGroup.querySelector('text');
+                    
+                    log(`Label ${index}: rect=${!!rect}, text=${!!text}`);
+                    
+                    if (rect && text) {
+                        // Set the rect to have a solid background
+                        rect.setAttribute('fill', bgColor);
+                        rect.setAttribute('fill-opacity', '1.0');
+                        rect.setAttribute('stroke', '#666');
+                        rect.setAttribute('stroke-width', '1');
+                        
+                        // Add a small padding by expanding the rect
+                        const x = parseFloat(rect.getAttribute('x') || '0');
+                        const y = parseFloat(rect.getAttribute('y') || '0');
+                        const width = parseFloat(rect.getAttribute('width') || '0');
+                        const height = parseFloat(rect.getAttribute('height') || '0');
+                        
+                        log(`Label ${index} original rect: x=${x}, y=${y}, w=${width}, h=${height}`);
+                        
+                        const padding = 4;
+                        rect.setAttribute('x', (x - padding).toString());
+                        rect.setAttribute('y', (y - padding).toString());
+                        rect.setAttribute('width', (width + padding * 2).toString());
+                        rect.setAttribute('height', (height + padding * 2).toString());
+                        
+                        labelsFixed++;
+                    }
+                });
+                
+                log(`Fixed ${labelsFixed} edge label backgrounds`);
+                
+                // Step 2: Fix z-order by moving ALL label-related elements to the end
+                // Find the main group that contains all diagram elements
+                const mainGroup = svg.querySelector('g');
+                if (mainGroup) {
+                    log('Found main group, analyzing structure...');
+                    
+                    // Collect all groups that should be on top (labels, nodes, etc.)
+                    const elementsToMoveToTop = [];
+                    
+                    // 1. Edge labels (text on connector lines)
+                    const edgeLabels = Array.from(mainGroup.querySelectorAll('g.edgeLabel'));
+                    elementsToMoveToTop.push(...edgeLabels);
+                    log(`Found ${edgeLabels.length} edge label groups`);
+                    
+                    // 2. Node labels (text inside nodes)
+                    const nodeLabels = Array.from(mainGroup.querySelectorAll('g.nodeLabel, g.label'));
+                    elementsToMoveToTop.push(...nodeLabels);
+                    log(`Found ${nodeLabels.length} node label groups`);
+                    
+                    // 3. Nodes themselves (should be above edges)
+                    const nodes = Array.from(mainGroup.querySelectorAll('g.node'));
+                    elementsToMoveToTop.push(...nodes);
+                    log(`Found ${nodes.length} node groups`);
+                    
+                    // Remove duplicates (in case an element matches multiple selectors)
+                    const uniqueElements = [...new Set(elementsToMoveToTop)];
+                    
+                    if (uniqueElements.length > 0) {
+                        log(`Reordering ${uniqueElements.length} elements to appear on top`);
+                        
+                        // Remove elements from their current position and append to end
+                        // This ensures they render last (on top)
+                        uniqueElements.forEach(element => {
+                            const parent = element.parentNode;
+                            if (parent && parent === mainGroup) {
+                                parent.removeChild(element);
+                                parent.appendChild(element);
+                            }
+                        });
+                        
+                        log('Z-order fixed: labels and nodes moved to end (will render on top)');
+                    } else {
+                        log('No elements found to reorder');
+                    }
+                } else {
+                    log('No main group found, trying alternative approach...');
+                    
+                    // Alternative: Look for any group containing edges and labels
+                    const allGroups = svg.querySelectorAll('g');
+                    log(`Found ${allGroups.length} total groups in SVG`);
+                    
+                    // Find groups with class names
+                    allGroups.forEach((group, index) => {
+                        const className = group.getAttribute('class') || '';
+                        if (className) {
+                            log(`Group ${index}: class="${className}"`);
+                        }
+                    });
+                }
+                
+                // Serialize back to string
+                const serializer = new XMLSerializer();
+                const fixedSvg = serializer.serializeToString(svg);
+                
+                log('SVG processing completed');
+                log('Fixed SVG length:', fixedSvg.length);
+                
+                return fixedSvg;
+            } catch (error) {
+                log('Error fixing SVG:', error.message, error.stack);
+                return svgString; // Return original on error
             }
         };
 
@@ -686,8 +828,11 @@
                 // Render the diagram
                 const { svg } = await mermaid.render('export-diagram-' + Date.now(), content);
                 
-                // Store the SVG for retrieval
-                window._exportSvg = svg;
+                // Fix z-order to ensure text labels appear above lines
+                const fixedSvg = window.fixSvgZOrder(svg, theme);
+                
+                // Store the fixed SVG for retrieval
+                window._exportSvg = fixedSvg;
                 
                 // Restore original content immediately
                 container.innerHTML = originalContent;

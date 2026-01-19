@@ -470,13 +470,15 @@ public class MarkdownToWordExportService
 
         if (language.Equals("mermaid", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogInformation($"Processing Mermaid code block at line {codeBlock.Line}");
+            var codeBlockLineNumber = codeBlock.Line + 1; // Convert to 1-based
+            _logger.LogInformation($"Processing Mermaid code block at line {codeBlockLineNumber}");
             
-            // Find the corresponding rendered Mermaid block
-            // Note: codeBlock.Line is 0-based, but MermaidBlock.LineNumber is 1-based (converted in parser)
-            var mermaidBlock = mermaidBlocks.FirstOrDefault(mb => mb.LineNumber == codeBlock.Line + 1);
+            // Find the corresponding rendered Mermaid block by matching line numbers
+            // Both are now 1-based line numbers
+            var mermaidBlock = mermaidBlocks.FirstOrDefault(mb => mb.LineNumber == codeBlockLineNumber);
             
             _logger.LogInformation($"Found mermaid block: {mermaidBlock != null}, RenderedImagePath: {mermaidBlock?.RenderedImagePath ?? "null"}");
+            _logger.LogInformation($"Available mermaid blocks: {string.Join(", ", mermaidBlocks.Select(mb => $"Line {mb.LineNumber}"))}");
             
             if (mermaidBlock?.RenderedImagePath != null)
             {
