@@ -58,6 +58,9 @@
             max-width: var(--md-max-width);
             margin: 0 auto;
         }
+        
+        /* Allow Mermaid to handle text layout naturally - removed forced wrapping CSS */
+        /* The previous CSS was forcing text to wrap at 250-280px which caused unnecessary line breaks */
 
         .markdown-body {
             font-size: var(--md-font-size);
@@ -337,11 +340,15 @@
                         startOnLoad: false,
                         securityLevel: 'loose',
                         theme: 'dark',
-                        logLevel: 3, // Increased for debugging
-                        // Force text-based rendering instead of HTML
+                        logLevel: 3,
+                        // CRITICAL: Disable automatic text wrapping (Mermaid v10.1.0+)
+                        markdownAutoWrap: false,
+                        // Disable text wrapping for subgraph titles
                         flowchart: { 
-                            htmlLabels: false,
-                            useMaxWidth: true
+                            htmlLabels: true,
+                            useMaxWidth: true,
+                            // Remove wrappingWidth to prevent unnecessary text wrapping
+                            // wrappingWidth: 200  // REMOVED - was causing titles to wrap
                         },
                         sequence: { 
                             htmlLabels: false,
@@ -350,6 +357,10 @@
                         gantt: { 
                             htmlLabels: false,
                             useMaxWidth: true
+                        },
+                        themeVariables: {
+                            fontSize: '14px',
+                            fontFamily: 'arial, sans-serif'
                         }
                     };
                     
@@ -421,36 +432,42 @@
             container.innerHTML = '<div>Rendering diagram...</div>';
             
             try {
-                // CRITICAL: Re-initialize with htmlLabels: false before EACH render
-                // This ensures the configuration is applied to this specific render
+                // Re-initialize with better configuration
                 mermaid.initialize({
                     startOnLoad: false,
                     securityLevel: 'loose',
                     theme: theme.toLowerCase(),
                     logLevel: 3,
-                    flowchart: { htmlLabels: false, useMaxWidth: true },
+                    // CRITICAL: Disable automatic text wrapping (Mermaid v10.1.0+)
+                    markdownAutoWrap: false,
+                    flowchart: { 
+                        htmlLabels: true, 
+                        useMaxWidth: true,
+                        // Remove wrappingWidth to prevent title wrapping
+                        // wrappingWidth: 300,  // REMOVED
+                        nodeSpacing: 80,
+                        rankSpacing: 80,
+                        padding: 20
+                    },
                     sequence: { htmlLabels: false },
                     gantt: { htmlLabels: false },
                     class: { htmlLabels: false },
                     state: { htmlLabels: false }
                 });
                 
-                log('Mermaid re-initialized for render with htmlLabels: false');
+                log('Mermaid re-initialized for render');
                 
                 const { svg } = await mermaid.render('mermaid-diagram-' + Date.now(), content);
                 
-                // Fix z-order to ensure text labels appear above lines
-                const fixedSvg = window.fixSvgZOrder(svg, theme);
-                
                 // Check if SVG contains foreignObject
-                if (fixedSvg.includes('<foreignObject')) {
+                if (svg.includes('<foreignObject')) {
                     log('WARNING: SVG still contains foreignObject despite htmlLabels: false!');
                     log('This may be a Mermaid.js version issue or theme override');
                 } else {
                     log('SUCCESS: SVG does not contain foreignObject');
                 }
                 
-                container.innerHTML = fixedSvg;
+                container.innerHTML = svg;
                 
                 log('Mermaid diagram rendered successfully');
                 
@@ -474,6 +491,16 @@
                 }
             }
         };
+        
+        // DISABLED: Let Mermaid handle all text layout naturally
+        // The previous fix was causing unnecessary text wrapping
+        function fixSubgraphTitleOverflow(container) {
+            // Do nothing - Mermaid handles text layout correctly by default
+            log('fixSubgraphTitleOverflow: DISABLED - letting Mermaid handle text layout');
+        }
+        
+        // REMOVED: splitTextForDisplay function - no longer needed
+        // Mermaid handles text layout correctly by default
 
         // Update style settings dynamically
         window.updateStyleSettings = function(settings) {
@@ -569,6 +596,8 @@
                                 securityLevel: 'loose',
                                 theme: theme.toLowerCase(),
                                 logLevel: 1,
+                                // CRITICAL: Disable automatic text wrapping
+                                markdownAutoWrap: false,
                                 // Disable HTML labels to avoid foreignObject issues
                                 flowchart: { htmlLabels: false },
                                 sequence: { htmlLabels: false },
@@ -596,6 +625,10 @@
                                 div.innerHTML = fixedSvg;
                                 div.style.textAlign = 'center';
                                 div.style.margin = '20px 0';
+                                
+                                // Apply subgraph title fix to embedded diagrams
+                                fixSubgraphTitleOverflow(div);
+                                
                                 block.parentElement.replaceWith(div);
                             } catch (error) {
                                 log(`Failed to render Mermaid block ${i}:`, error.message);
@@ -812,6 +845,8 @@
                         securityLevel: 'loose',
                         theme: theme.toLowerCase(),
                         logLevel: 1,
+                        // CRITICAL: Disable automatic text wrapping
+                        markdownAutoWrap: false,
                         // Disable HTML labels to avoid foreignObject issues during export
                         flowchart: { htmlLabels: false },
                         sequence: { htmlLabels: false },

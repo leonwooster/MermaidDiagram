@@ -104,6 +104,9 @@
                     <MenuFlyoutItem Text="Git Graph" Click="NewGitGraph_Click"/>
                 </MenuFlyoutSubItem>
                 <MenuFlyoutItem Text="Open" Click="Open_Click"/>
+                <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="Recent Files">
+                    <MenuFlyoutItem Text="(No recent files)" IsEnabled="False"/>
+                </MenuFlyoutSubItem>
                 <MenuFlyoutItem Text="Close" Click="Close_Click"/>
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Save" Click="Save_Click"/>
@@ -116,6 +119,12 @@
                 <MenuFlyoutItem Text="Exit" Click="Exit_Click"/>
             </MenuBarItem>
             <MenuBarItem Title="Edit">
+                <MenuFlyoutItem Text="Find..." Click="Find_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F" Modifiers="Control"/>
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Check &amp; Fix Mermaid Syntax" Click="CheckSyntax_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="F7"/>
@@ -265,8 +274,58 @@
             </Border>
 
             <Grid Grid.Column="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                
+                <!-- Search Panel -->
+                <Border x:Name="SearchPanel" 
+                        Grid.Row="0" 
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="8"
+                        Visibility="Collapsed">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+                        <TextBlock Grid.Column="0" 
+                                   Text="Find:" 
+                                   VerticalAlignment="Center" 
+                                   Margin="0,0,8,0"/>
+                        <TextBox x:Name="SearchTextBox" 
+                                 Grid.Column="1" 
+                                 PlaceholderText="Search in code..."
+                                 TextChanged="SearchTextBox_TextChanged"
+                                 KeyDown="SearchTextBox_KeyDown"/>
+                        <Button x:Name="FindPreviousButton" 
+                                Grid.Column="2" 
+                                Content="▲" 
+                                Margin="4,0,0,0"
+                                ToolTipService.ToolTip="Find Previous (Shift+F3)"
+                                Click="FindPrevious_Click"/>
+                        <Button x:Name="FindNextButton" 
+                                Grid.Column="3" 
+                                Content="▼" 
+                                Margin="4,0,0,0"
+                                ToolTipService.ToolTip="Find Next (F3)"
+                                Click="FindNext_Click"/>
+                        <TextBlock x:Name="SearchResultsText" 
+                                   Grid.Column="4" 
+                                   VerticalAlignment="Center" 
+                                   Margin="8,0,0,0"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <Button x:Name="CloseSearchButton" 
+                                Grid.Column="5" 
+                                Content="✕" 
+                                Margin="8,0,0,0"
+                                ToolTipService.ToolTip="Close (Esc)"
+                                Click="CloseSearch_Click"/>
+                    </Grid>
+                </Border>
+                
                 <tcb:TextControlBox
                     x:Name="CodeEditor"
+                    Grid.Row="1"
                     ShowLineNumbers="True"/>
 
                 <!-- Floating AI Prompt moved to OverlayCanvas at root level -->

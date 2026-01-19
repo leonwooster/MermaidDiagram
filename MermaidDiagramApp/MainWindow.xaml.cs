@@ -65,6 +65,7 @@ namespace MermaidDiagramApp
         private string _currentFilePath = string.Empty;
         private readonly MarkdownStyleSettingsService _styleSettingsService;
         private readonly DiagramFileService _diagramFileService;
+        private readonly RecentFilesService _recentFilesService;
 
         public DiagramBuilderViewModel BuilderViewModel { get; }
 
@@ -89,9 +90,13 @@ namespace MermaidDiagramApp
             
             // Initialize diagram file service
             _diagramFileService = new DiagramFileService();
+            
+            // Initialize recent files service
+            _recentFilesService = new RecentFilesService();
 
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
+            
             if (this.Content is FrameworkElement content)
             {
                 content.Loaded += MainWindow_Loaded;
@@ -111,6 +116,9 @@ namespace MermaidDiagramApp
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             await InitializeWebViewAsync();
+            
+            // Populate recent files menu
+            PopulateRecentFilesMenu();
             
             // Wire up visual builder components
             if (DiagramCanvasControl != null && PropertiesPanelControl != null && ShapeToolboxControl != null)
@@ -1922,6 +1930,10 @@ namespace MermaidDiagramApp
                         
                         _logger.LogInformation($"Diagram Builder file loaded: {file.Path}");
                         UpdateWindowTitle();
+                        
+                        // Add to recent files
+                        _recentFilesService.AddRecentFile(file.Path);
+                        PopulateRecentFilesMenu();
                     }
                     else
                     {
@@ -1939,9 +1951,29 @@ namespace MermaidDiagramApp
                 else
                 {
                     // Open as plain text file
-                    CodeEditor.Text = await FileIO.ReadTextAsync(file);
+                    var fileContent = await FileIO.ReadTextAsync(file);
+                    
+                    // Auto-optimize Mermaid diagrams for text overflow
+                    if (file.FileType.ToLower() == ".mmd")
+                    {
+                        var optimizer = new MermaidTextOptimizer(_logger);
+                        if (optimizer.NeedsOptimization(fileContent))
+                        {
+                            var optimizedContent = optimizer.OptimizeDiagram(fileContent);
+                            fileContent = optimizedContent;
+                            
+                            // Log the optimization
+                            _logger.LogInformation("Diagram text was automatically optimized to prevent overflow");
+                        }
+                    }
+                    
+                    CodeEditor.Text = fileContent;
                     await UpdatePreview();
                     UpdateWindowTitle();
+                    
+                    // Add to recent files
+                    _recentFilesService.AddRecentFile(file.Path);
+                    PopulateRecentFilesMenu();
                     
                     // If it's a Markdown or Mermaid file, also load it into the Export to Word system
                     if (file.FileType.ToLower() == ".md" || 
@@ -1965,6 +1997,215 @@ namespace MermaidDiagramApp
             {
                 this.Title = "Mermaid Diagram Editor";
             }
+        }
+
+        private void PopulateRecentFilesMenu()
+        {
+            try
+            {
+                // Clear existing items
+                RecentFilesMenu.Items.Clear();
+
+                var recentFiles = _recentFilesService.RecentFiles;
+
+                if (recentFiles.Count == 0)
+                {
+                    var emptyItem = new MenuFlyoutItem
+                    {
+                        Text = "(No recent files)",
+                        IsEnabled = false
+                    };
+                    RecentFilesMenu.Items.Add(emptyItem);
+                }
+                else
+                {
+                    // Add recent files (limit to 20 in menu for usability)
+                    foreach (var recentFile in recentFiles.Take(20))
+                    {
+                        var menuItem = new MenuFlyoutItem
+                        {
+                            Text = $"{recentFile.FileName}",
+                            Tag = recentFile.FilePath
+                        };
+                        
+                        // Add tooltip with full path
+                        ToolTipService.SetToolTip(menuItem, recentFile.FilePath);
+                        
+                        menuItem.Click += RecentFile_Click;
+                        RecentFilesMenu.Items.Add(menuItem);
+                    }
+
+                    // Add separator and clear option
+                    RecentFilesMenu.Items.Add(new MenuFlyoutSeparator());
+                    
+                    var clearItem = new MenuFlyoutItem
+                    {
+                        Text = "Clear Recent Files"
+                    };
+                    clearItem.Click += ClearRecentFiles_Click;
+                    RecentFilesMenu.Items.Add(clearItem);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error populating recent files menu: {ex.Message}", ex);
+            }
+        }
+
+        private async void RecentFile_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is MenuFlyoutItem menuItem && menuItem.Tag is string filePath)
+                {
+                    await OpenRecentFile(filePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error opening recent file: {ex.Message}", ex);
+            }
+        }
+
+        private async Task OpenRecentFile(string filePath)
+        {
+            try
+            {
+                // Check if file exists
+                if (!File.Exists(filePath))
+                {
+                    var dialog = new ContentDialog
+                    {
+                        Title = "File Not Found",
+                        Content = $"The file '{Path.GetFileName(filePath)}' no longer exists.\n\nWould you like to remove it from recent files?",
+                        PrimaryButtonText = "Remove",
+                        CloseButtonText = "Cancel",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+
+                    var result = await dialog.ShowAsync();
+                    if (result == ContentDialogResult.Primary)
+                    {
+                        _recentFilesService.RemoveRecentFile(filePath);
+                        PopulateRecentFilesMenu();
+                    }
+                    return;
+                }
+
+                // Check for unsaved changes
+                if (!string.IsNullOrEmpty(CodeEditor.Text))
+                {
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Unsaved Changes",
+                        Content = "You have unsaved changes. Do you want to save before opening another file?",
+                        PrimaryButtonText = "Save",
+                        SecondaryButtonText = "Discard",
+                        CloseButtonText = "Cancel",
+                        XamlRoot = this.Content.XamlRoot
+                    };
+
+                    var result = await dialog.ShowAsync();
+                    if (result == ContentDialogResult.Primary)
+                    {
+                        Save_Click(this, new RoutedEventArgs());
+                        await Task.Delay(100);
+                    }
+                    else if (result == ContentDialogResult.None)
+                    {
+                        return; // Cancel
+                    }
+                }
+
+                // Open the file
+                var file = await StorageFile.GetFileFromPathAsync(filePath);
+                _currentFilePath = file.Path;
+
+                // Check if opening .mmdx (Diagram Builder File)
+                if (file.FileType.ToLower() == ".mmdx")
+                {
+                    var diagramFile = await _diagramFileService.LoadDiagramAsync(file.Path);
+                    if (diagramFile != null)
+                    {
+                        // Show builder if not already visible
+                        if (!_isBuilderVisible)
+                        {
+                            _isBuilderVisible = true;
+                            BuilderTool.IsChecked = true;
+                            UpdateBuilderVisibility();
+                        }
+
+                        // Restore diagram to canvas
+                        if (DiagramCanvasControl != null)
+                        {
+                            DiagramCanvasControl.ShowLoading();
+                            DiagramCanvasControl.ClearVisuals();
+                            DiagramCanvasControl.ViewModel.ClearCanvas();
+                            await Task.Delay(50);
+                            _diagramFileService.RestoreDiagram(diagramFile, DiagramCanvasControl.ViewModel);
+                            DiagramCanvasControl.ViewModel.MarkAsSaved();
+                            await Task.Delay(150);
+                            DiagramCanvasControl.HideLoading();
+                            DiagramCanvasControl.Focus(FocusState.Programmatic);
+                            CodeEditor.Text = diagramFile.MermaidCode;
+                            await UpdatePreview();
+                        }
+
+                        _logger.LogInformation($"Diagram Builder file loaded from recent: {file.Path}");
+                    }
+                }
+                else
+                {
+                    // Open as plain text file
+                    var fileContent = await FileIO.ReadTextAsync(file);
+
+                    // Auto-optimize Mermaid diagrams
+                    if (file.FileType.ToLower() == ".mmd")
+                    {
+                        var optimizer = new MermaidTextOptimizer(_logger);
+                        if (optimizer.NeedsOptimization(fileContent))
+                        {
+                            fileContent = optimizer.OptimizeDiagram(fileContent);
+                            _logger.LogInformation("Diagram text was automatically optimized");
+                        }
+                    }
+
+                    CodeEditor.Text = fileContent;
+                    await UpdatePreview();
+
+                    // Load for export if markdown/mermaid
+                    if (file.FileType.ToLower() == ".md" ||
+                        file.FileType.ToLower() == ".markdown" ||
+                        file.FileType.ToLower() == ".mmd")
+                    {
+                        await LoadMarkdownFileForExport(file.Path);
+                    }
+                }
+
+                UpdateWindowTitle();
+
+                // Add to recent files
+                _recentFilesService.AddRecentFile(filePath);
+                PopulateRecentFilesMenu();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error opening recent file '{filePath}': {ex.Message}", ex);
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Open Error",
+                    Content = $"Failed to open the file:\n{ex.Message}",
+                    CloseButtonText = "OK",
+                    XamlRoot = this.Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
+        }
+
+        private void ClearRecentFiles_Click(object sender, RoutedEventArgs e)
+        {
+            _recentFilesService.ClearRecentFiles();
+            PopulateRecentFilesMenu();
         }
 
         private async void Save_Click(object sender, RoutedEventArgs e)
@@ -2308,6 +2549,140 @@ namespace MermaidDiagramApp
                 }
             }
         }
+
+        #region Search Functionality
+
+        private string _currentSearchText = string.Empty;
+
+        private void Find_Click(object sender, RoutedEventArgs e)
+        {
+            SearchPanel.Visibility = Visibility.Visible;
+            SearchTextBox.Focus(FocusState.Programmatic);
+        }
+
+        private void CloseSearch_Click(object sender, RoutedEventArgs e)
+        {
+            SearchPanel.Visibility = Visibility.Collapsed;
+            SearchResultsText.Text = string.Empty;
+            _currentSearchText = string.Empty;
+            
+            // Safely end search if it's open
+            try
+            {
+                if (CodeEditor.SearchIsOpen)
+                {
+                    CodeEditor.EndSearch();
+                }
+            }
+            catch
+            {
+                // Ignore errors when closing search
+            }
+            
+            CodeEditor.Focus(FocusState.Programmatic);
+        }
+
+        private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            // Just clear the results text - don't call EndSearch here to avoid crashes
+            SearchResultsText.Text = string.Empty;
+        }
+
+        private void SearchTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == VirtualKey.Enter)
+            {
+                if (Windows.UI.Core.CoreWindow.GetForCurrentThread().GetKeyState(VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+                {
+                    FindPrevious_Click(sender, new RoutedEventArgs());
+                }
+                else
+                {
+                    FindNext_Click(sender, new RoutedEventArgs());
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == VirtualKey.Escape)
+            {
+                CloseSearch_Click(sender, new RoutedEventArgs());
+                e.Handled = true;
+            }
+        }
+
+        private void FindNext_Click(object sender, RoutedEventArgs e)
+        {
+            PerformSearch(forward: true);
+        }
+
+        private void FindPrevious_Click(object sender, RoutedEventArgs e)
+        {
+            PerformSearch(forward: false);
+        }
+
+        private void PerformSearch(bool forward)
+        {
+            var searchText = SearchTextBox.Text;
+            if (string.IsNullOrEmpty(searchText))
+            {
+                SearchResultsText.Text = string.Empty;
+                return;
+            }
+
+            try
+            {
+                // If search text changed, restart the search
+                if (searchText != _currentSearchText)
+                {
+                    // End previous search if it exists
+                    if (CodeEditor.SearchIsOpen)
+                    {
+                        CodeEditor.EndSearch();
+                    }
+                    
+                    // Start new search with the new text
+                    CodeEditor.BeginSearch(searchText, wholeWord: false, matchCase: false);
+                    _currentSearchText = searchText;
+                }
+                // If search not open (first search or after close), start it
+                else if (!CodeEditor.SearchIsOpen)
+                {
+                    CodeEditor.BeginSearch(searchText, wholeWord: false, matchCase: false);
+                    _currentSearchText = searchText;
+                }
+
+                // Navigate to next or previous match
+                if (forward)
+                {
+                    CodeEditor.FindNext();
+                }
+                else
+                {
+                    CodeEditor.FindPrevious();
+                }
+                
+                SearchResultsText.Text = string.Empty;
+            }
+            catch (Exception ex)
+            {
+                SearchResultsText.Text = "Search error";
+                System.Diagnostics.Debug.WriteLine($"Search error: {ex.Message}");
+            }
+            
+            CodeEditor.Focus(FocusState.Programmatic);
+        }
+
+        #endregion
+
+        #region Synchronized Scrolling
+        
+        // Note: Synchronized scrolling is not implemented because TextControlBox
+        // doesn't expose selection or cursor position properties needed for this feature.
+        // This would require either:
+        // 1. Using a different text editor control with selection APIs
+        // 2. Extending TextControlBox to expose these properties
+        // 3. Using a custom text editor implementation
+
+        #endregion
     
 
         [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
