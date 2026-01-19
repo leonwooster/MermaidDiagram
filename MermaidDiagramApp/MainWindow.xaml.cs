@@ -1939,7 +1939,23 @@ namespace MermaidDiagramApp
                 else
                 {
                     // Open as plain text file
-                    CodeEditor.Text = await FileIO.ReadTextAsync(file);
+                    var fileContent = await FileIO.ReadTextAsync(file);
+                    
+                    // Auto-optimize Mermaid diagrams for text overflow
+                    if (file.FileType.ToLower() == ".mmd")
+                    {
+                        var optimizer = new MermaidTextOptimizer(_logger);
+                        if (optimizer.NeedsOptimization(fileContent))
+                        {
+                            var optimizedContent = optimizer.OptimizeDiagram(fileContent);
+                            fileContent = optimizedContent;
+                            
+                            // Log the optimization
+                            _logger.LogInformation("Diagram text was automatically optimized to prevent overflow");
+                        }
+                    }
+                    
+                    CodeEditor.Text = fileContent;
                     await UpdatePreview();
                     UpdateWindowTitle();
                     

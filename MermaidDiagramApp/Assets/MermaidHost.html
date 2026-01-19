@@ -23,6 +23,10 @@
             overflow: auto;
             text-align: center;
         }
+        
+        /* Allow Mermaid to handle text layout naturally - removed forced wrapping CSS */
+        /* The previous CSS was forcing text to wrap at 250-280px which caused unnecessary line breaks */
+        
         #debug-info {
             position: fixed;
             bottom: 0;
@@ -162,7 +166,30 @@
                     startOnLoad: false,
                     securityLevel: 'loose',
                     theme: 'dark',
-                    logLevel: 1 // Debug level logging
+                    logLevel: 1,
+                    // CRITICAL: Disable automatic text wrapping (Mermaid v10.1.0+)
+                    markdownAutoWrap: false,
+                    // Configure flowchart to handle long labels better
+                    flowchart: {
+                        htmlLabels: true,
+                        curve: 'basis',
+                        useMaxWidth: true,
+                        // Removed wrappingWidth to prevent unnecessary text wrapping
+                        // wrappingWidth: 300,  // REMOVED - was causing titles to wrap
+                        nodeSpacing: 80,    // More space between nodes
+                        rankSpacing: 80,    // More space between ranks
+                        padding: 20         // Padding around diagram
+                    },
+                    themeVariables: {
+                        fontSize: '14px',
+                        fontFamily: 'arial, sans-serif',
+                        // Increase subgraph label area
+                        clusterBkg: '#2a2a2a',
+                        clusterBorder: '#555',
+                        // Make sure text is visible
+                        primaryTextColor: '#fff',
+                        secondaryTextColor: '#ccc'
+                    }
                 });
                 
                 log('Mermaid initialized successfully');
@@ -203,6 +230,10 @@
                 const { svg } = await mermaid.render('mermaid-diagram', code);
                 container.innerHTML = svg;
                 window.currentSvg = svg;
+                
+                // Post-process to fix subgraph title overflow
+                fixSubgraphTitleOverflow();
+                
                 log('Diagram rendered successfully');
             } catch (error) {
                 const errorMsg = `Rendering failed: ${error.message || error}`;
@@ -211,6 +242,16 @@
                     `<div class="error">${errorMsg}\n\n${error.stack || ''}</div>`;
             }
         };
+        
+        // DISABLED: Let Mermaid handle all text layout naturally
+        // The previous fix was causing unnecessary text wrapping
+        function fixSubgraphTitleOverflow() {
+            // Do nothing - Mermaid handles text layout correctly by default
+            log('fixSubgraphTitleOverflow: DISABLED - letting Mermaid handle text layout');
+        }
+        
+        // REMOVED: splitTextForDisplay function - no longer needed
+        // Mermaid handles text layout correctly by default
         
         window.getSvg = function() {
             return window.currentSvg || '';
