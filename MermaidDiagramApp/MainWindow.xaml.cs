@@ -96,6 +96,7 @@ namespace MermaidDiagramApp
 
             CodeEditor.EnableSyntaxHighlighting = true;
             CodeEditor.SelectSyntaxHighlightingById(TextControlBoxNS.SyntaxHighlightID.Markdown);
+            
             if (this.Content is FrameworkElement content)
             {
                 content.Loaded += MainWindow_Loaded;
@@ -2548,6 +2549,140 @@ namespace MermaidDiagramApp
                 }
             }
         }
+
+        #region Search Functionality
+
+        private string _currentSearchText = string.Empty;
+
+        private void Find_Click(object sender, RoutedEventArgs e)
+        {
+            SearchPanel.Visibility = Visibility.Visible;
+            SearchTextBox.Focus(FocusState.Programmatic);
+        }
+
+        private void CloseSearch_Click(object sender, RoutedEventArgs e)
+        {
+            SearchPanel.Visibility = Visibility.Collapsed;
+            SearchResultsText.Text = string.Empty;
+            _currentSearchText = string.Empty;
+            
+            // Safely end search if it's open
+            try
+            {
+                if (CodeEditor.SearchIsOpen)
+                {
+                    CodeEditor.EndSearch();
+                }
+            }
+            catch
+            {
+                // Ignore errors when closing search
+            }
+            
+            CodeEditor.Focus(FocusState.Programmatic);
+        }
+
+        private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            // Just clear the results text - don't call EndSearch here to avoid crashes
+            SearchResultsText.Text = string.Empty;
+        }
+
+        private void SearchTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == VirtualKey.Enter)
+            {
+                if (Windows.UI.Core.CoreWindow.GetForCurrentThread().GetKeyState(VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+                {
+                    FindPrevious_Click(sender, new RoutedEventArgs());
+                }
+                else
+                {
+                    FindNext_Click(sender, new RoutedEventArgs());
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == VirtualKey.Escape)
+            {
+                CloseSearch_Click(sender, new RoutedEventArgs());
+                e.Handled = true;
+            }
+        }
+
+        private void FindNext_Click(object sender, RoutedEventArgs e)
+        {
+            PerformSearch(forward: true);
+        }
+
+        private void FindPrevious_Click(object sender, RoutedEventArgs e)
+        {
+            PerformSearch(forward: false);
+        }
+
+        private void PerformSearch(bool forward)
+        {
+            var searchText = SearchTextBox.Text;
+            if (string.IsNullOrEmpty(searchText))
+            {
+                SearchResultsText.Text = string.Empty;
+                return;
+            }
+
+            try
+            {
+                // If search text changed, restart the search
+                if (searchText != _currentSearchText)
+                {
+                    // End previous search if it exists
+                    if (CodeEditor.SearchIsOpen)
+                    {
+                        CodeEditor.EndSearch();
+                    }
+                    
+                    // Start new search with the new text
+                    CodeEditor.BeginSearch(searchText, wholeWord: false, matchCase: false);
+                    _currentSearchText = searchText;
+                }
+                // If search not open (first search or after close), start it
+                else if (!CodeEditor.SearchIsOpen)
+                {
+                    CodeEditor.BeginSearch(searchText, wholeWord: false, matchCase: false);
+                    _currentSearchText = searchText;
+                }
+
+                // Navigate to next or previous match
+                if (forward)
+                {
+                    CodeEditor.FindNext();
+                }
+                else
+                {
+                    CodeEditor.FindPrevious();
+                }
+                
+                SearchResultsText.Text = string.Empty;
+            }
+            catch (Exception ex)
+            {
+                SearchResultsText.Text = "Search error";
+                System.Diagnostics.Debug.WriteLine($"Search error: {ex.Message}");
+            }
+            
+            CodeEditor.Focus(FocusState.Programmatic);
+        }
+
+        #endregion
+
+        #region Synchronized Scrolling
+        
+        // Note: Synchronized scrolling is not implemented because TextControlBox
+        // doesn't expose selection or cursor position properties needed for this feature.
+        // This would require either:
+        // 1. Using a different text editor control with selection APIs
+        // 2. Extending TextControlBox to expose these properties
+        // 3. Using a custom text editor implementation
+
+        #endregion
     
 
         [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
