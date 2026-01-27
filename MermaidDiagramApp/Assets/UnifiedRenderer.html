@@ -679,7 +679,7 @@
         // Fix SVG z-order to ensure text labels appear above lines
         window.fixSvgZOrder = function(svgString, theme = 'dark') {
             try {
-                log('Fixing SVG z-order and edge label backgrounds...');
+                log('=== Fixing SVG z-order and edge label backgrounds ===');
                 log('Theme:', theme);
                 log('SVG length:', svgString.length);
                 
@@ -689,13 +689,22 @@
                 const svg = doc.querySelector('svg');
                 
                 if (!svg) {
-                    log('No SVG element found, returning original');
+                    log('ERROR: No SVG element found, returning original');
                     return svgString;
                 }
                 
                 // Determine background color based on theme
                 const bgColor = theme === 'light' ? '#ffffff' : '#222222';
                 log('Using background color:', bgColor);
+                
+                // Log SVG structure for debugging
+                const allGroups = svg.querySelectorAll('g');
+                log(`Total groups in SVG: ${allGroups.length}`);
+                allGroups.forEach((g, i) => {
+                    const className = g.getAttribute('class') || '(no class)';
+                    const id = g.getAttribute('id') || '(no id)';
+                    log(`  Group ${i}: class="${className}", id="${id}"`);
+                });
                 
                 // Step 1: Fix edge label backgrounds
                 const edgeLabelGroups = svg.querySelectorAll('g.edgeLabel');
@@ -708,7 +717,7 @@
                     const rect = edgeLabelGroup.querySelector('rect');
                     const text = edgeLabelGroup.querySelector('text');
                     
-                    log(`Label ${index}: rect=${!!rect}, text=${!!text}`);
+                    log(`  Label ${index}: rect=${!!rect}, text=${!!text}`);
                     
                     if (rect && text) {
                         // Set the rect to have a solid background
@@ -723,7 +732,7 @@
                         const width = parseFloat(rect.getAttribute('width') || '0');
                         const height = parseFloat(rect.getAttribute('height') || '0');
                         
-                        log(`Label ${index} original rect: x=${x}, y=${y}, w=${width}, h=${height}`);
+                        log(`  Label ${index} original rect: x=${x}, y=${y}, w=${width}, h=${height}`);
                         
                         const padding = 4;
                         rect.setAttribute('x', (x - padding).toString());
@@ -738,75 +747,85 @@
                 log(`Fixed ${labelsFixed} edge label backgrounds`);
                 
                 // Step 2: Fix z-order by moving ALL label-related elements to the end
-                // Find the main group that contains all diagram elements
-                const mainGroup = svg.querySelector('g');
-                if (mainGroup) {
-                    log('Found main group, analyzing structure...');
-                    
-                    // Collect all groups that should be on top (labels, nodes, etc.)
-                    const elementsToMoveToTop = [];
-                    
-                    // 1. Edge labels (text on connector lines)
-                    const edgeLabels = Array.from(mainGroup.querySelectorAll('g.edgeLabel'));
-                    elementsToMoveToTop.push(...edgeLabels);
-                    log(`Found ${edgeLabels.length} edge label groups`);
-                    
-                    // 2. Node labels (text inside nodes)
-                    const nodeLabels = Array.from(mainGroup.querySelectorAll('g.nodeLabel, g.label'));
-                    elementsToMoveToTop.push(...nodeLabels);
-                    log(`Found ${nodeLabels.length} node label groups`);
-                    
-                    // 3. Nodes themselves (should be above edges)
-                    const nodes = Array.from(mainGroup.querySelectorAll('g.node'));
-                    elementsToMoveToTop.push(...nodes);
-                    log(`Found ${nodes.length} node groups`);
-                    
-                    // Remove duplicates (in case an element matches multiple selectors)
-                    const uniqueElements = [...new Set(elementsToMoveToTop)];
-                    
-                    if (uniqueElements.length > 0) {
-                        log(`Reordering ${uniqueElements.length} elements to appear on top`);
-                        
-                        // Remove elements from their current position and append to end
-                        // This ensures they render last (on top)
-                        uniqueElements.forEach(element => {
-                            const parent = element.parentNode;
-                            if (parent && parent === mainGroup) {
-                                parent.removeChild(element);
-                                parent.appendChild(element);
-                            }
-                        });
-                        
-                        log('Z-order fixed: labels and nodes moved to end (will render on top)');
-                    } else {
-                        log('No elements found to reorder');
-                    }
-                } else {
-                    log('No main group found, trying alternative approach...');
-                    
-                    // Alternative: Look for any group containing edges and labels
-                    const allGroups = svg.querySelectorAll('g');
-                    log(`Found ${allGroups.length} total groups in SVG`);
-                    
-                    // Find groups with class names
-                    allGroups.forEach((group, index) => {
-                        const className = group.getAttribute('class') || '';
-                        if (className) {
-                            log(`Group ${index}: class="${className}"`);
+                // Strategy: Find all groups and move labels/nodes to the end
+                
+                // Get the root group or SVG element to work with
+                const rootElement = svg.querySelector('g') || svg;
+                log(`Working with root element: ${rootElement.tagName}`);
+                
+                // Collect all elements that should be on top
+                const elementsToMoveToTop = [];
+                
+                // Find all edge paths first (these should stay at the bottom)
+                const edgePaths = Array.from(rootElement.querySelectorAll('g.edgePath, path.edge, path[class*="edge"]'));
+                log(`Found ${edgePaths.length} edge paths (will stay at bottom)`);
+                
+                // Find all label elements (these should be on top)
+                const edgeLabels = Array.from(rootElement.querySelectorAll('g.edgeLabel'));
+                const nodeLabels = Array.from(rootElement.querySelectorAll('g.nodeLabel, g.label'));
+                const nodes = Array.from(rootElement.querySelectorAll('g.node'));
+                
+                log(`Found elements to move to top:`);
+                log(`  - ${edgeLabels.length} edge labels`);
+                log(`  - ${nodeLabels.length} node labels`);
+                log(`  - ${nodes.length} nodes`);
+                
+                // Combine all elements that should be on top
+                elementsToMoveToTop.push(...edgeLabels, ...nodeLabels, ...nodes);
+                
+                // Remove duplicates
+                const uniqueElements = [...new Set(elementsToMoveToTop)];
+                log(`Total unique elements to reorder: ${uniqueElements.length}`);
+                
+                if (uniqueElements.length > 0) {
+                    // Move each element to the end of its parent
+                    let movedCount = 0;
+                    uniqueElements.forEach((element, index) => {
+                        const parent = element.parentNode;
+                        if (parent) {
+                            log(`  Moving element ${index}: ${element.tagName}.${element.getAttribute('class') || '(no class)'}`);
+                            parent.removeChild(element);
+                            parent.appendChild(element);
+                            movedCount++;
                         }
                     });
+                    log(`Successfully moved ${movedCount} elements to top`);
+                } else {
+                    log('WARNING: No elements found to reorder - SVG structure may be different than expected');
+                    log('Attempting alternative approach...');
+                    
+                    // Alternative: Look for any text elements and move them to the end
+                    const allTextElements = Array.from(svg.querySelectorAll('text'));
+                    log(`Found ${allTextElements.length} text elements`);
+                    
+                    if (allTextElements.length > 0) {
+                        allTextElements.forEach((textEl, index) => {
+                            const parent = textEl.parentNode;
+                            if (parent && parent.tagName === 'g') {
+                                // Move the parent group to the end
+                                const grandParent = parent.parentNode;
+                                if (grandParent) {
+                                    log(`  Moving text parent group ${index}`);
+                                    grandParent.removeChild(parent);
+                                    grandParent.appendChild(parent);
+                                }
+                            }
+                        });
+                        log('Moved text element parent groups to top');
+                    }
                 }
                 
                 // Serialize back to string
                 const serializer = new XMLSerializer();
                 const fixedSvg = serializer.serializeToString(svg);
                 
-                log('SVG processing completed');
+                log('=== SVG processing completed ===');
                 log('Fixed SVG length:', fixedSvg.length);
                 
                 return fixedSvg;
             } catch (error) {
-                log('Error fixing SVG:', error.message, error.stack);
+                log('ERROR fixing SVG:', error.message);
+                log('Stack trace:', error.stack);
                 return svgString; // Return original on error
             }
         };

@@ -145,8 +145,7 @@ namespace MermaidDiagramApp.ViewModels
         /// <summary>
         /// Gets whether the export command can be executed.
         /// </summary>
-        public bool CanExport => !string.IsNullOrWhiteSpace(MarkdownFilePath) && 
-                                 !string.IsNullOrWhiteSpace(_markdownContent) && 
+        public bool CanExport => !string.IsNullOrWhiteSpace(_markdownContent) && 
                                  !IsExporting;
 
         #endregion
@@ -253,10 +252,15 @@ namespace MermaidDiagramApp.ViewModels
                     ProgressMessage = p.CurrentOperation;
                 });
 
+                // Use a temporary file path if no file is loaded (for pasted content)
+                var markdownPath = !string.IsNullOrWhiteSpace(MarkdownFilePath) 
+                    ? MarkdownFilePath 
+                    : Path.Combine(Path.GetTempPath(), "temp_export.md");
+
                 // Perform export using current content
                 var result = await _exportService.ExportToWordAsync(
                     _markdownContent!,
-                    MarkdownFilePath!,
+                    markdownPath,
                     OutputPath!,
                     progress,
                     _cancellationTokenSource.Token);

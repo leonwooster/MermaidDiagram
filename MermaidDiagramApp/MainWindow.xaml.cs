@@ -890,6 +890,23 @@ namespace MermaidDiagramApp
                 // Execute appropriate JavaScript rendering based on content type
                 await ExecuteRenderingScript(code, renderResult.DetectedContentType, context);
 
+                // Update export ViewModel with current content so export menu is enabled
+                if (_markdownToWordViewModel != null)
+                {
+                    if (_currentContentType == ContentType.Markdown || _currentContentType == ContentType.MarkdownWithMermaid)
+                    {
+                        _markdownToWordViewModel.UpdateMarkdownContent(code);
+                        _logger.LogDebug("Updated export ViewModel with Markdown content");
+                    }
+                    else if (_currentContentType == ContentType.Mermaid)
+                    {
+                        // Wrap Mermaid diagram in Markdown format for export
+                        var wrappedContent = $"# Mermaid Diagram\n\n```mermaid\n{code}\n```";
+                        _markdownToWordViewModel.UpdateMarkdownContent(wrappedContent);
+                        _logger.LogDebug("Updated export ViewModel with wrapped Mermaid content");
+                    }
+                }
+
                 _lastPreviewedCode = code;
             }
             catch (Exception ex)
