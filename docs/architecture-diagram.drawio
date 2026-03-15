@@ -1,0 +1,492 @@
+<mxfile host="app.diagrams.net" modified="2025-01-30T00:00:00.000Z" agent="Kiro" version="24.0.0">
+  <diagram name="Architecture" id="architecture">
+    <mxGraphModel dx="1434" dy="844" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="🖥️ Mermaid Diagram App - Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="550" y="20" width="500" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Presentation Layer -->
+        <mxCell id="presentation-layer" value="🎨 PRESENTATION LAYER" style="swimlane;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="80" width="1400" height="180" as="geometry" />
+        </mxCell>
+        
+        <!-- MainWindow -->
+        <mxCell id="mainwindow" value="🪟 MainWindow.xaml" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="presentation-layer">
+          <mxGeometry x="20" y="40" width="140" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Views -->
+        <mxCell id="views-group" value="📱 Views" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="presentation-layer">
+          <mxGeometry x="180" y="40" width="600" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="diagram-canvas" value="🎨 DiagramCanvas" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="views-group">
+          <mxGeometry x="10" y="30" width="110" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="shape-toolbox" value="🔧 ShapeToolbox" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="views-group">
+          <mxGeometry x="130" y="30" width="110" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="properties-panel" value="⚙️ PropertiesPanel" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="views-group">
+          <mxGeometry x="250" y="30" width="110" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ai-panel" value="🤖 AI Generator" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="views-group">
+          <mxGeometry x="370" y="30" width="110" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="style-dialog" value="🎨 Style Settings" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="views-group">
+          <mxGeometry x="10" y="75" width="110" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ai-settings" value="⚙️ AI Settings" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="views-group">
+          <mxGeometry x="130" y="75" width="110" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- ViewModels -->
+        <mxCell id="viewmodels-group" value="📊 ViewModels (MVVM)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="presentation-layer">
+          <mxGeometry x="800" y="40" width="580" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="builder-vm" value="🏗️ DiagramBuilderVM" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="viewmodels-group">
+          <mxGeometry x="10" y="30" width="130" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="canvas-vm" value="🎨 DiagramCanvasVM" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="viewmodels-group">
+          <mxGeometry x="150" y="30" width="130" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ai-vm" value="🤖 AiGeneratorVM" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="viewmodels-group">
+          <mxGeometry x="290" y="30" width="120" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="export-vm" value="📄 MarkdownToWordVM" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="viewmodels-group">
+          <mxGeometry x="420" y="30" width="140" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="properties-vm" value="⚙️ PropertiesPanelVM" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="viewmodels-group">
+          <mxGeometry x="10" y="75" width="130" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="syntax-vm" value="⚠️ SyntaxIssuesVM" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="viewmodels-group">
+          <mxGeometry x="150" y="75" width="130" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Application Layer -->
+        <mxCell id="application-layer" value="⚡ APPLICATION LAYER" style="swimlane;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="280" width="1400" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="mainwindow-logic" value="🔄 MainWindow Logic&#xa;(Event Handlers, Timer, UpdatePreview)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="application-layer">
+          <mxGeometry x="20" y="40" width="240" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="commands" value="⌨️ Commands&#xa;(RelayCommand)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="application-layer">
+          <mxGeometry x="280" y="40" width="140" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="converters" value="🔄 Converters&#xa;(XAML Value Converters)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="application-layer">
+          <mxGeometry x="440" y="40" width="160" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Service Layer -->
+        <mxCell id="service-layer" value="⚙️ SERVICE LAYER (Business Logic)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="420" width="1400" height="380" as="geometry" />
+        </mxCell>
+        
+        <!-- Rendering Services -->
+        <mxCell id="rendering-group" value="🎬 Rendering Pipeline (Strategy Pattern)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="service-layer">
+          <mxGeometry x="20" y="40" width="420" height="320" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="rendering-orchestrator" value="🎯 RenderingOrchestrator&#xa;(Coordinates Pipeline)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="rendering-group">
+          <mxGeometry x="100" y="30" width="220" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="content-detector" value="🔍 ContentTypeDetector&#xa;(Detects Mermaid/Markdown)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="rendering-group">
+          <mxGeometry x="20" y="100" width="180" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="renderer-factory" value="🏭 ContentRendererFactory&#xa;(Factory Pattern)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="rendering-group">
+          <mxGeometry x="220" y="100" width="180" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="irenderer" value="📐 &lt;&lt;IContentRenderer&gt;&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=2" vertex="1" parent="rendering-group">
+          <mxGeometry x="120" y="170" width="180" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="mermaid-renderer" value="📊 MermaidRenderer&#xa;(Diagram Rendering)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="rendering-group">
+          <mxGeometry x="20" y="230" width="180" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="markdown-renderer" value="📝 MarkdownRenderer&#xa;(Document Rendering)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="rendering-group">
+          <mxGeometry x="220" y="230" width="180" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Export Services -->
+        <mxCell id="export-group" value="📤 Export Services" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="service-layer">
+          <mxGeometry x="460" y="40" width="300" height="320" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="export-service" value="📄 MarkdownToWordExportService&#xa;(Main Orchestrator)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="export-group">
+          <mxGeometry x="40" y="30" width="220" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="markdown-parser" value="📝 MarkdigMarkdownParser&#xa;(Parse to Structure)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="export-group">
+          <mxGeometry x="20" y="100" width="260" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="word-generator" value="📄 OpenXmlWordDocumentGenerator&#xa;(Generate .docx)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="export-group">
+          <mxGeometry x="20" y="150" width="260" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="image-renderer" value="🖼️ WebView2MermaidImageRenderer&#xa;(Render to PNG/SVG)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="export-group">
+          <mxGeometry x="20" y="200" width="260" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="image-resolver" value="🔗 ImagePathResolver&#xa;(Resolve Paths)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="export-group">
+          <mxGeometry x="20" y="250" width="260" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- AI Services -->
+        <mxCell id="ai-group" value="🤖 AI Services" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="service-layer">
+          <mxGeometry x="780" y="40" width="280" height="200" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ai-factory" value="🏭 AiServiceFactory&#xa;(Factory Pattern)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="ai-group">
+          <mxGeometry x="60" y="30" width="160" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="openai-service" value="🤖 OpenAiService" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="ai-group">
+          <mxGeometry x="20" y="90" width="110" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ollama-service" value="🦙 OllamaAiService" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="ai-group">
+          <mxGeometry x="150" y="90" width="110" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="diagram-classifier" value="🏷️ DiagramTypeClassifier" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="ai-group">
+          <mxGeometry x="20" y="140" width="240" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Other Services -->
+        <mxCell id="other-services-group" value="🔧 Other Services" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="service-layer">
+          <mxGeometry x="1080" y="40" width="300" height="320" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="syntax-analyzer" value="🔍 MermaidSyntaxAnalyzer" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="other-services-group">
+          <mxGeometry x="20" y="30" width="260" height="35" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="syntax-fixer" value="🔧 MermaidSyntaxFixer" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="other-services-group">
+          <mxGeometry x="20" y="75" width="260" height="35" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="text-optimizer" value="✨ MermaidTextOptimizer" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="other-services-group">
+          <mxGeometry x="20" y="120" width="260" height="35" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="shortcut-manager" value="⌨️ KeyboardShortcutManager" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="other-services-group">
+          <mxGeometry x="20" y="165" width="260" height="35" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="recent-files" value="📁 RecentFilesService" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="other-services-group">
+          <mxGeometry x="20" y="210" width="260" height="35" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="diagram-file" value="💾 DiagramFileService" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="other-services-group">
+          <mxGeometry x="20" y="255" width="260" height="35" as="geometry" />
+        </mxCell>
+        
+        <!-- Logging Services -->
+        <mxCell id="logging-group" value="📋 Logging" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="service-layer">
+          <mxGeometry x="780" y="260" width="280" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="logging-service" value="📝 LoggingService (Singleton)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="logging-group">
+          <mxGeometry x="60" y="30" width="160" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="rolling-log" value="📄 RollingFileLogSink" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="logging-group">
+          <mxGeometry x="60" y="65" width="160" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- Infrastructure Layer -->
+        <mxCell id="infrastructure-layer" value="🏗️ INFRASTRUCTURE LAYER" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="820" width="1400" height="200" as="geometry" />
+        </mxCell>
+        
+        <!-- WebView2 -->
+        <mxCell id="webview2-group" value="🌐 WebView2 Rendering Engine" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="infrastructure-layer">
+          <mxGeometry x="20" y="40" width="500" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="unified-renderer" value="🔗 UnifiedRenderer.html&#xa;(JavaScript Bridge)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="webview2-group">
+          <mxGeometry x="160" y="30" width="180" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="mermaid-js" value="📊 mermaid.min.js&#xa;(v10.9.0+)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="webview2-group">
+          <mxGeometry x="20" y="90" width="140" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="markdown-it" value="📝 markdown-it.js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="webview2-group">
+          <mxGeometry x="180" y="90" width="140" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="highlight-js" value="💡 highlight.js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="webview2-group">
+          <mxGeometry x="340" y="90" width="140" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- External Dependencies -->
+        <mxCell id="external-group" value="🔌 External Dependencies" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="infrastructure-layer">
+          <mxGeometry x="540" y="40" width="420" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="file-system" value="💾 File System&#xa;(.mmd, .md, .docx)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="external-group">
+          <mxGeometry x="20" y="30" width="120" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="openxml" value="📄 DocumentFormat.OpenXml&#xa;(Word Generation)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="external-group">
+          <mxGeometry x="160" y="30" width="120" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="skia" value="🖼️ Svg.Skia + SkiaSharp&#xa;(Image Conversion)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="external-group">
+          <mxGeometry x="300" y="30" width="110" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="openai-api" value="🤖 OpenAI API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="external-group">
+          <mxGeometry x="20" y="90" width="120" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ollama-api" value="🦙 Ollama API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="external-group">
+          <mxGeometry x="160" y="90" width="120" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="local-storage" value="💾 ApplicationData&#xa;(Settings, Logs)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="external-group">
+          <mxGeometry x="300" y="90" width="110" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Platform -->
+        <mxCell id="platform-group" value="🪟 Platform" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontStyle=1" vertex="1" parent="infrastructure-layer">
+          <mxGeometry x="980" y="40" width="400" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="winui3" value="🎨 WinUI 3&#xa;(Windows App SDK 1.7)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="platform-group">
+          <mxGeometry x="20" y="30" width="160" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="dotnet" value="⚙️ .NET 8.0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="platform-group">
+          <mxGeometry x="200" y="30" width="180" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="windows" value="🪟 Windows 10/11&#xa;(Min: 1809)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="platform-group">
+          <mxGeometry x="110" y="90" width="180" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Data Flow Arrows -->
+        <mxCell id="arrow1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#dae8fc;strokeColor=#6c8ebf;" edge="1" parent="1" source="mainwindow" target="mainwindow-logic">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="arrow2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#d5e8d4;strokeColor=#82b366;" edge="1" parent="1" source="mainwindow-logic" target="rendering-orchestrator">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="380" as="sourcePoint" />
+            <mxPoint x="255" y="490" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#d5e8d4;strokeColor=#82b366;" edge="1" parent="1" source="rendering-orchestrator" target="unified-renderer">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="760" as="sourcePoint" />
+            <mxPoint x="330" y="870" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;dashed=1;fillColor=#e1d5e7;strokeColor=#9673a6;" edge="1" parent="1" source="rendering-orchestrator" target="content-detector">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="340" y="515" as="sourcePoint" />
+            <mxPoint x="240" y="575" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;dashed=1;fillColor=#e1d5e7;strokeColor=#9673a6;" edge="1" parent="1" source="rendering-orchestrator" target="renderer-factory">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="350" y="525" as="sourcePoint" />
+            <mxPoint x="250" y="585" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;dashed=1;fillColor=#e1d5e7;strokeColor=#9673a6;" edge="1" parent="1" source="irenderer" target="mermaid-renderer">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="360" y="535" as="sourcePoint" />
+            <mxPoint x="260" y="595" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;dashed=1;fillColor=#e1d5e7;strokeColor=#9673a6;" edge="1" parent="1" source="irenderer" target="markdown-renderer">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="370" y="545" as="sourcePoint" />
+            <mxPoint x="270" y="605" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#d5e8d4;strokeColor=#82b366;" edge="1" parent="1" source="export-vm" target="export-service">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1465" y="260" as="sourcePoint" />
+            <mxPoint x="650" y="490" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#d5e8d4;strokeColor=#82b366;" edge="1" parent="1" source="ai-vm" target="ai-factory">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1350" y="260" as="sourcePoint" />
+            <mxPoint x="1000" y="490" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;dashed=1;fillColor=#e1d5e7;strokeColor=#9673a6;" edge="1" parent="1" source="ai-factory" target="openai-service">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="950" y="530" as="sourcePoint" />
+            <mxPoint x="850" y="590" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;dashed=1;fillColor=#e1d5e7;strokeColor=#9673a6;" edge="1" parent="1" source="ai-factory" target="ollama-service">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="960" y="540" as="sourcePoint" />
+            <mxPoint x="860" y="600" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#f8cecc;strokeColor=#b85450;" edge="1" parent="1" source="mermaid-renderer" target="mermaid-js">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="230" y="800" as="sourcePoint" />
+            <mxPoint x="210" y="920" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#f8cecc;strokeColor=#b85450;" edge="1" parent="1" source="markdown-renderer" target="markdown-it">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="450" y="800" as="sourcePoint" />
+            <mxPoint x="400" y="920" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#f8cecc;strokeColor=#b85450;" edge="1" parent="1" source="export-service" target="openxml">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="650" y="800" as="sourcePoint" />
+            <mxPoint x="720" y="880" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#f8cecc;strokeColor=#b85450;" edge="1" parent="1" source="image-renderer" target="skia">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="700" y="800" as="sourcePoint" />
+            <mxPoint x="855" y="880" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#f8cecc;strokeColor=#b85450;" edge="1" parent="1" source="openai-service" target="openai-api">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="850" y="680" as="sourcePoint" />
+            <mxPoint x="680" y="900" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#f8cecc;strokeColor=#b85450;" edge="1" parent="1" source="ollama-service" target="ollama-api">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1010" y="680" as="sourcePoint" />
+            <mxPoint x="820" y="900" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Legend -->
+        <mxCell id="legend" value="Legend" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="1040" width="400" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="legend-solid" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="legend">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="20" y="40" as="sourcePoint" />
+            <mxPoint x="80" y="40" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="legend-solid-text" value="Direct Dependency / Data Flow" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="legend">
+          <mxGeometry x="90" y="25" width="200" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="legend-dashed" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#9673a6;dashed=1;" edge="1" parent="legend">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="20" y="75" as="sourcePoint" />
+            <mxPoint x="80" y="75" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="legend-dashed-text" value="Uses / Creates (Factory/Strategy)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="legend">
+          <mxGeometry x="90" y="60" width="200" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="legend-infra" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#b85450;" edge="1" parent="legend">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="20" y="110" as="sourcePoint" />
+            <mxPoint x="80" y="110" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="legend-infra-text" value="Infrastructure / External Dependency" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="legend">
+          <mxGeometry x="90" y="95" width="250" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- Design Patterns Box -->
+        <mxCell id="patterns" value="Design Patterns Applied" style="swimlane;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="520" y="1040" width="380" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="pattern1" value="• Strategy Pattern: IContentRenderer implementations" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="patterns">
+          <mxGeometry x="10" y="30" width="360" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="pattern2" value="• Factory Pattern: ContentRendererFactory, AiServiceFactory" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="patterns">
+          <mxGeometry x="10" y="55" width="360" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="pattern3" value="• MVVM Pattern: ViewModels + Views separation" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="patterns">
+          <mxGeometry x="10" y="80" width="360" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="pattern4" value="• Singleton Pattern: LoggingService" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="patterns">
+          <mxGeometry x="10" y="105" width="360" height="20" as="geometry" />
+        </mxCell>
+        
+        <!-- Key Features Box -->
+        <mxCell id="features" value="Key Architectural Features" style="swimlane;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="920" y="1040" width="580" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="feature1" value="• Layered Architecture: Clear separation of Presentation, Application, Service, Infrastructure" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="features">
+          <mxGeometry x="10" y="30" width="560" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="feature2" value="• SOLID Principles: Interface-based design, Single Responsibility, Dependency Inversion" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="features">
+          <mxGeometry x="10" y="55" width="560" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="feature3" value="• Unified Rendering: Single WebView2 engine handles both Mermaid and Markdown" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="features">
+          <mxGeometry x="10" y="80" width="560" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="feature4" value="• Extensible: Easy to add new content types, AI providers, or export formats" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="features">
+          <mxGeometry x="10" y="105" width="560" height="20" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
