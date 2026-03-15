@@ -1,4 +1,4 @@
-# Z-Order and Export Fixes Summary
+# Z-Order, Export, and AI Panel Fixes Summary
 
 ## Date: January 28, 2026
 
@@ -79,10 +79,43 @@ if (_markdownToWordViewModel != null)
 
 ---
 
+### 3. AI Diagram Generator Not Showing
+
+**Problem**: When users clicked "AI Diagram Generator" in the View menu, nothing happened. The panel didn't appear.
+
+**Root Cause**: The `AiPanelTool_Click` event handler in `MainWindow.xaml.cs` was empty (just had a comment placeholder). It wasn't toggling the visibility of the `FloatingAiPromptControl`.
+
+**Solution Implemented**:
+Implemented the `AiPanelTool_Click` handler to toggle the floating AI prompt visibility:
+
+```csharp
+private void AiPanelTool_Click(object sender, RoutedEventArgs e)
+{
+    // Toggle the floating AI prompt visibility
+    if (FloatingAiPromptControl != null)
+    {
+        FloatingAiPromptControl.Visibility = AiPanelTool.IsChecked 
+            ? Visibility.Visible 
+            : Visibility.Collapsed;
+        
+        _logger.LogDebug($"AI Diagram Generator panel visibility: {FloatingAiPromptControl.Visibility}");
+    }
+}
+```
+
+**Result**: Users can now click "AI Diagram Generator" in the View menu to show/hide the floating AI prompt panel.
+
+**Files Modified**:
+- `MermaidDiagramApp/MainWindow.xaml.cs` (lines 1268-1278)
+
+**Note**: The AI panel is implemented as a floating control (`FloatingAiPromptControl`) that appears as an overlay in the editor area, not as a separate side panel.
+
+---
+
 ## Build Status
 
 ✅ Application rebuilt successfully with `dotnet build --arch x64`
-- Build completed in 7.0 seconds
+- Build completed in 18.6 seconds
 - 4 warnings (pre-existing, not related to these changes)
 - Output: `MermaidDiagramApp/bin/Debug/net8.0-windows10.0.19041.0/win-x64/`
 
@@ -104,6 +137,12 @@ if (_markdownToWordViewModel != null)
 3. Click the Refresh button (or press F5)
 4. Check that "Export to Word" menu item is now enabled
 5. Click "Export to Word" and verify the export works
+
+### Test AI Diagram Generator:
+1. Click "View" menu → "AI Diagram Generator"
+2. Verify the floating AI prompt panel appears in the editor area
+3. Click the menu item again to hide it
+4. Verify the panel disappears
 
 ---
 
