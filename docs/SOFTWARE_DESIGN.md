@@ -12,47 +12,44 @@ The application follows a layered architecture with clear separation of concerns
 
 ### 2.1. High-Level Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Presentation Layer                       │
-│  (MainWindow.xaml, Dialogs, UI Controls)                    │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────┴────────────────────────────────────┐
-│                   Application Layer                          │
-│  (ViewModels, Commands, UI Logic)                           │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────┴────────────────────────────────────┐
-│                    Service Layer                             │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │         Rendering Pipeline (Strategy Pattern)         │  │
-│  │  ┌────────────────────────────────────────────────┐  │  │
-│  │  │        RenderingOrchestrator                    │  │  │
-│  │  │  - Coordinates rendering workflow               │  │  │
-│  │  │  - Manages content type detection               │  │  │
-│  │  │  - Delegates to appropriate renderer            │  │  │
-│  │  └──────────────┬─────────────────────────────────┘  │  │
-│  │                 │                                      │  │
-│  │     ┌───────────┴───────────┐                         │  │
-│  │     │                       │                         │  │
-│  │  ┌──▼──────────┐    ┌──────▼────────┐               │  │
-│  │  │ Mermaid     │    │  Markdown     │               │  │
-│  │  │ Renderer    │    │  Renderer     │               │  │
-│  │  │ (IContent   │    │  (IContent    │               │  │
-│  │  │  Renderer)  │    │   Renderer)   │               │  │
-│  │  └─────────────┘    └───────────────┘               │  │
-│  │                                                        │  │
-│  │  ContentTypeDetector | ContentRendererFactory        │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                              │
-│  Other Services: FontManager, SyntaxAnalyzer, Logger, etc. │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-┌──────────────────────────┴───────────────────────────────────┐
-│                   Infrastructure Layer                        │
-│  (WebView2, File System, External Libraries)                 │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Presentation["Presentation Layer"]
+        MW["MainWindow.xaml + partial classes"]
+        DLG["Dialogs & UI Controls"]
+    end
+
+    subgraph Application["Application Layer"]
+        VM["MainWindowViewModel"]
+        CMD["Commands (RelayCommand)"]
+        DI["DI Container (App.xaml.cs)"]
+    end
+
+    subgraph Service["Service Layer"]
+        subgraph Rendering["Rendering Pipeline (Strategy Pattern)"]
+            RO["RenderingOrchestrator"]
+            CTD["ContentTypeDetector"]
+            CRF["ContentRendererFactory"]
+            MR["MermaidRenderer\n(IContentRenderer)"]
+            MDR["MarkdownRenderer\n(IContentRenderer)"]
+            RO --> CTD
+            RO --> CRF
+            CRF --> MR
+            CRF --> MDR
+        end
+        SVC["FileOperationsService\nSearchService\nMermaidUpdateService\nExportService"]
+        OTHER["FontManager, SyntaxAnalyzer,\nLogger, etc."]
+    end
+
+    subgraph Infra["Infrastructure Layer"]
+        WV2["WebView2"]
+        FS["File System"]
+        EXT["External Libraries\n(SkiaSharp, OpenXml)"]
+    end
+
+    Presentation --> Application
+    Application --> Service
+    Service --> Infra
 ```
 
 ### 2.2. SOLID Principles Applied
@@ -65,7 +62,7 @@ The application follows a layered architecture with clear separation of concerns
 
 - **Interface Segregation Principle (I)**: Focused interfaces (`IContentRenderer`, `IContentTypeDetector`, `IRenderingContext`) ensure clients only depend on methods they use.
 
-- **Dependency Inversion Principle (D)**: High-level modules (`MainWindow`, `RenderingOrchestrator`) depend on abstractions (`IContentRenderer`) rather than concrete implementations.
+- **Dependency Inversion Principle (D)**: High-level modules (`MainWindow`, `RenderingOrchestrator`) depend on abstractions (`IContentRenderer`, `IFileOperationsService`, `ISearchService`) rather than concrete implementations. The DI container in `App.xaml.cs` manages all interface-to-implementation bindings.
 
 ### 2.3. Design Patterns
 
@@ -164,9 +161,9 @@ public class ContentRendererFactory
 }
 ```
 
-### 3.2. MainWindow.xaml / MainWindow.xaml.cs
+### 3.2. MainWindow — Partial Class Architecture
 
-This is the primary component of the application.
+The MainWindow is the primary component of the application, split across partial class files by concern. Services are injected via the DI container configured in `App.xaml.cs`.
 
 - **`MainWindow.xaml`**: Defines the user interface structure, including:
   - `MenuBar`: For application commands (File, New, View, etc.)
@@ -175,11 +172,55 @@ This is the primary component of the application.
   - `GridSplitter`: Allows the user to resize the editor and preview panes
   - Status indicators for rendering mode
 
-- **`MainWindow.xaml.cs`**: Contains the application logic:
-  - **Initialization**: Sets up the `WebView2` control, loads `UnifiedRenderer.html`, initializes `RenderingOrchestrator`, and starts a `DispatcherTimer` to trigger live updates
-  - **Event Handlers**: Manages clicks for menu items like `Open`, `Save`, `Export`, and creating new diagrams from templates
-  - **Live Preview Logic**: The `Timer_Tick` event checks for changes in the `CodeEditor` and calls the `UpdatePreview` method
-  - **`UpdatePreview`**: Delegates to `RenderingOrchestrator.RenderAsync()` which handles content detection and rendering
+- **`MainWindow.xaml.cs`** (~250 lines): Core partial class containing:
+  - Constructor with DI-injected services (RenderingOrchestrator, IContentTypeDetector, IFileOperationsService, ISearchService, IMermaidUpdateService, IExportService, ILogger, etc.)
+  - MainWindowViewModel wiring (callback delegates for UI actions)
+  - `MainWindow_Loaded` / `MainWindow_Closed` lifecycle orchestration
+  - `RestoreWindowStateAsync`, `CheckForSyntaxIssues`, `GetAppWindowForCurrentWindow`
+  - `WinRT_InterOp` helper class for file picker interop
+
+- **`MainWindow.WebView.cs`** (~460 lines): WebView2 interop:
+  - `InitializeWebViewAsync` — sets up virtual host mapping, message handlers, navigation
+  - `UpdatePreview` — delegates to `RenderingOrchestrator.RenderAsync()` and executes JavaScript
+  - `ExecuteRenderingScript` — routes to Mermaid or Markdown renderer scripts
+  - `Timer_Tick` — live preview update loop (500ms interval)
+  - Render mode indicators, pan mode, zoom controls
+
+- **`MainWindow.UI.cs`** (~440 lines): New diagram templates, fullscreen/presentation mode toggling, keyboard shortcut wiring, Markdown style settings dialog, syntax check dialog
+
+- **`MainWindow.FileOps.cs`** (~490 lines): File open/save/close handlers, recent files menu management, unsaved changes dialog, window title updates
+
+- **`MainWindow.Export.cs`** (~430 lines): SVG/PNG export handlers, Mermaid.js update checking/installation, About dialog, log file access
+
+- **`MainWindow.RenderMode.cs`** (~230 lines): Render mode override handlers (auto-detect, force Mermaid, force Markdown), content type indicators, zoom/pan controls
+
+- **`MainWindow.Builder.cs`** (~120 lines): Visual builder panel visibility, canvas/toolbox/properties panel wiring
+
+- **`MainWindow.Search.cs`** (~140 lines): Search panel visibility, find next/previous, CodeEditor search integration
+
+- **`MainWindow.ScrollSync.cs`** (~200 lines): Synchronized scrolling between code editor and preview
+
+- **`MainWindow.MarkdownToWord.cs`** (~415 lines): Markdown-to-Word export dialogs and progress
+
+### 3.2.1. MainWindowViewModel
+
+**Location:** `ViewModels/MainWindowViewModel.cs`
+
+Holds UI state and exposes bindable properties with `INotifyPropertyChanged` support. Services are accepted via constructor injection.
+
+**Bindable Properties:** `CurrentFilePath`, `CurrentContentType`, `IsFullScreen`, `IsPresentationMode`, `IsPanModeEnabled`, `IsBuilderVisible`, `CurrentSearchText`, `LastPreviewedCode`, `IsWebViewReady`
+
+**Commands (19 ICommand properties):** `NewClassDiagramCommand`, `NewSequenceDiagramCommand`, `NewStateDiagramCommand`, `NewActivityDiagramCommand`, `NewFlowchartCommand`, `NewGanttChartCommand`, `NewPieChartCommand`, `NewGitGraphCommand`, `OpenFileCommand`, `SaveFileCommand`, `CloseFileCommand`, `ExportSvgCommand`, `ExportPngCommand`, `ToggleFullScreenCommand`, `TogglePresentationModeCommand`, `ToggleBuilderCommand`, `FindCommand`, `CheckSyntaxCommand`, `ExitCommand`
+
+Commands use callback delegates (`Action`/`Func`) for operations requiring UI interaction (file pickers, dialogs, WebView2), keeping the ViewModel free of UI dependencies.
+
+### 3.2.2. Dependency Injection
+
+The DI container is configured in `App.xaml.cs` using `Microsoft.Extensions.DependencyInjection`:
+
+- **Singletons:** LoggingService/ILogger, ContentTypeDetector, ContentRendererFactory, RenderingOrchestrator, DiagramFileService, RecentFilesService, MarkdownStyleSettingsService, ShortcutPreferencesService, MermaidLinter, KeyboardShortcutManager, IFileOperationsService, ISearchService, IMermaidUpdateService, IExportService
+- **Transient:** MermaidSyntaxAnalyzer, MermaidSyntaxFixer, MermaidTextOptimizer, MainWindowViewModel
+- **Static (not DI-registered):** WindowStateManager, AiConfigStorageService, AiServiceFactory, FontManager
 
 **Simplified UpdatePreview:**
 ```csharp
@@ -260,8 +301,8 @@ window.renderContent = async function(content, mode) {
 
 Because the application is configured as **unpackaged**, it cannot use the standard `FileOpenPicker` and `FileSavePicker` APIs directly. These APIs require a window handle to be associated with them.
 
-- **Solution**: A static helper class (`WinRT_InterOp`) and a COM interface (`IInitializeWithWindow`) are defined in `MainWindow.xaml.cs`.
-- **`WinRT_InterOp.InitializeWithWindow()`**: This method retrieves the main window's handle (`HWND`) using `WinRT.Interop.WindowNative.GetWindowHandle()` and passes it to the picker instance by casting the picker to the `IInitializeWithWindow` interface. This is done for every `Open`, `Save`, and `Export` operation.
+- **Solution**: A static helper class (`WinRT_InterOp`) and a COM interface (`IInitializeWithWindow`) are defined in `MainWindow.xaml.cs` (core partial class).
+- **`WinRT_InterOp.InitializeWithWindow()`**: This method retrieves the main window's handle (`HWND`) using `WinRT.Interop.WindowNative.GetWindowHandle()` and passes it to the picker instance by casting the picker to the `IInitializeWithWindow` interface. This is done for every `Open`, `Save`, and `Export` operation in `MainWindow.FileOps.cs` and `MainWindow.Export.cs`.
 
 ## 4. Data Flow: Content Rendering
 
@@ -300,28 +341,15 @@ Because the application is configured as **unpackaged**, it cannot use the stand
 
 ### 4.3. Content Type Detection Flow
 
-```
-File Opened/Content Changed
-         ↓
-ContentTypeDetector.DetectContentType()
-         ↓
-Check file extension
-         ↓
-    .mmd? ──Yes──→ Return ContentType.Mermaid
-         ↓
-        No
-         ↓
-    .md? ──No──→ Return ContentType.Mermaid (default)
-         ↓
-       Yes
-         ↓
-Scan first 10 lines for keywords
-         ↓
-Mermaid keywords found? ──Yes──→ Return ContentType.Mermaid
-         ↓
-        No
-         ↓
-Return ContentType.Markdown
+```mermaid
+flowchart TD
+    A["File Opened / Content Changed"] --> B["ContentTypeDetector.DetectContentType()"]
+    B --> C{"Check file extension"}
+    C -->|.mmd| D["Return ContentType.Mermaid"]
+    C -->|.md| E{"Scan first 10 lines\nfor Mermaid keywords"}
+    C -->|other| F["Return ContentType.Mermaid (default)"]
+    E -->|Keywords found| D
+    E -->|No keywords| G["Return ContentType.Markdown"]
 ```
 
 ## 5. Dependencies

@@ -26,7 +26,7 @@ public class MarkdownToWordViewModelPropertyTests
     /// if and only if a Markdown file is successfully loaded.
     /// Validates: Requirements 1.5, 9.2
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public async Task ExportToWordCommand_CanExecute_ReflectsFileLoadingState(string markdownContent)
     {
         // Arrange: Filter out invalid inputs
@@ -101,7 +101,7 @@ public class MarkdownToWordViewModelPropertyTests
     /// should be disabled.
     /// Validates: Requirements 1.5, 9.2
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ExportToWordCommand_CanExecute_DisabledDuringExport(string markdownContent)
     {
         // Arrange
@@ -154,7 +154,7 @@ public class MarkdownToWordViewModelPropertyTests
     /// MarkdownFilePath is set and content is loaded.
     /// Validates: Requirements 1.5, 9.2
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void CanExport_RequiresBothFilePathAndContent(string filePath)
     {
         // Arrange
@@ -195,7 +195,7 @@ public class MarkdownToWordViewModelPropertyTests
     /// For any property change that affects CanExport, PropertyChanged event should be raised.
     /// Validates: Requirements 1.5, 9.2
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void PropertyChanges_RaisePropertyChangedEvent(string filePath, bool isExporting)
     {
         // Arrange

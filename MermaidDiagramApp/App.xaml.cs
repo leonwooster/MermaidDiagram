@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -14,7 +15,9 @@ using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using MermaidDiagramApp.Services;
 using MermaidDiagramApp.Services.Logging;
+using MermaidDiagramApp.Services.Rendering;
 using Windows.Storage;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -31,6 +34,11 @@ namespace MermaidDiagramApp
         private readonly ILogger _logger;
 
         /// <summary>
+        /// Gets the application-wide service provider for dependency injection.
+        /// </summary>
+        public static IServiceProvider Services { get; private set; } = null!;
+
+        /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
         /// executed, and as such is the logical equivalent of main() or WinMain().
         /// </summary>
@@ -38,6 +46,7 @@ namespace MermaidDiagramApp
         {
             InitializeComponent();
             InitializeLogging();
+            Services = ConfigureServices();
             _logger = LoggingService.Instance.GetLogger<App>();
         }
 
@@ -48,9 +57,72 @@ namespace MermaidDiagramApp
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
             _logger.Log(LogLevel.Information, "Application launching");
-            _window = new MainWindow();
+            var viewModel = Services.GetRequiredService<ViewModels.MainWindowViewModel>();
+            _window = new MainWindow(
+                viewModel,
+                Services.GetRequiredService<RenderingOrchestrator>(),
+                Services.GetRequiredService<IContentTypeDetector>(),
+                Services.GetRequiredService<ContentRendererFactory>(),
+                Services.GetRequiredService<DiagramFileService>(),
+                Services.GetRequiredService<RecentFilesService>(),
+                Services.GetRequiredService<MarkdownStyleSettingsService>(),
+                Services.GetRequiredService<MermaidLinter>(),
+                Services.GetRequiredService<ILogger>(),
+                Services.GetRequiredService<IFileOperationsService>(),
+                Services.GetRequiredService<ISearchService>(),
+                Services.GetRequiredService<IMermaidUpdateService>(),
+                Services.GetRequiredService<IExportService>()
+            );
             _window.Activate();
             _logger.Log(LogLevel.Information, "Main window activated");
+        }
+
+        /// <summary>
+        /// Configures the DI container with all service registrations.
+        /// </summary>
+        internal static IServiceProvider ConfigureServices()
+        {
+            var services = new ServiceCollection();
+
+            // Logging — ILogger registered as a factory-created singleton
+            services.AddSingleton<ILogger>(LoggingService.Instance.GetLogger<App>());
+
+            // Rendering
+            services.AddSingleton<IContentTypeDetector, ContentTypeDetector>();
+            services.AddSingleton<ContentRendererFactory>();
+            services.AddSingleton<RenderingOrchestrator>();
+
+            // File & State
+            services.AddSingleton<DiagramFileService>();
+            services.AddSingleton<RecentFilesService>();
+            services.AddSingleton<MarkdownStyleSettingsService>();
+            services.AddSingleton<ShortcutPreferencesService>();
+
+            // Syntax
+            services.AddTransient<MermaidSyntaxAnalyzer>();
+            services.AddTransient<MermaidSyntaxFixer>();
+            services.AddTransient<MermaidTextOptimizer>();
+            services.AddSingleton<MermaidLinter>();
+
+            // Keyboard
+            services.AddSingleton<KeyboardShortcutManager>();
+
+            // File Operations (wraps DiagramFileService, RecentFilesService, MermaidTextOptimizer)
+            services.AddSingleton<IFileOperationsService, FileOperationsService>();
+
+            // Search
+            services.AddSingleton<ISearchService, SearchService>();
+
+            // Mermaid Updates
+            services.AddSingleton<IMermaidUpdateService, MermaidUpdateService>();
+
+            // Export
+            services.AddSingleton<IExportService, ExportService>();
+
+            // ViewModel
+            services.AddTransient<ViewModels.MainWindowViewModel>();
+
+            return services.BuildServiceProvider();
         }
 
         private void InitializeLogging()

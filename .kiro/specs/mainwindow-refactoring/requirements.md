@@ -2,100 +2,90 @@
 
 ## Introduction
 
-This feature refactors the MainWindow.xaml.cs file in the MermaidDiagramApp to improve code maintainability and organization. The current MainWindow.xaml.cs file contains approximately 2962 lines of code, making it difficult to navigate, understand, and maintain. By splitting the file into logical partial classes organized by functionality, the codebase will become more modular, easier to test, and simpler to extend.
+This feature comprehensively refactors the MermaidDiagramApp to improve maintainability, testability, and adherence to SOLID principles. The current MainWindow.xaml.cs is a ~2900-line God Object that handles UI lifecycle, file I/O, rendering, export, search, keyboard shortcuts, window state, AI features, visual builder, zoom, fullscreen, updates, and more. Services are manually instantiated with no dependency injection container, and business logic is tightly coupled to UI event handlers. This refactoring introduces a DI container, extracts a MainWindowViewModel following MVVM, creates focused services for remaining business logic, and completes partial class splitting of the code-behind — all without changing any user-facing behavior.
 
 ## Glossary
 
-- **MainWindow**: The primary window class in the MermaidDiagramApp WPF/WinUI application
-- **Partial Class**: A C# language feature that allows a class definition to be split across multiple files
-- **Code Organization**: The practice of structuring code into logical, cohesive units
-- **Refactoring**: The process of restructuring existing code without changing its external behavior
-- **Functional Cohesion**: Grouping related functionality together in a single module
+- **MainWindow**: The primary window class (~2900 lines) that currently acts as a God Object handling all application concerns
+- **God_Object**: An anti-pattern where a single class has too many responsibilities
+- **DI_Container**: A Dependency Injection container (Microsoft.Extensions.DependencyInjection) that manages object creation and lifetime
+- **MainWindowViewModel**: A new ViewModel class that holds UI state and commands, extracted from MainWindow code-behind
+- **Code_Behind**: The C# file (MainWindow.xaml.cs) associated with a XAML view
+- **MVVM**: Model-View-ViewModel architectural pattern separating UI from business logic
+- **Service_Registration**: The process of configuring the DI container with interface-to-implementation mappings in App.xaml.cs
+- **Partial_Class**: A C# feature allowing a single class definition to be split across multiple source files
 
 ## Requirements
 
-### Requirement 1
+### Requirement 1: Introduce Dependency Injection Container
 
-**User Story:** As a developer, I want the MainWindow code split into logical partial classes, so that I can easily find and modify specific functionality.
-
-#### Acceptance Criteria
-
-1. WHEN the refactoring is complete, THEN the MainWindow class SHALL be split into multiple partial class files organized by functionality
-2. WHEN a developer needs to modify WebView functionality, THEN the developer SHALL find all WebView-related code in MainWindow.WebView.cs
-3. WHEN a developer needs to modify file operations, THEN the developer SHALL find all file operation code in MainWindow.FileOperations.cs
-4. WHEN a developer needs to modify UI event handlers, THEN the developer SHALL find all UI event handlers in MainWindow.UI.cs
-5. WHEN a developer needs to modify AI features, THEN the developer SHALL find all AI-related code in MainWindow.AI.cs
-
-### Requirement 2
-
-**User Story:** As a developer, I want each partial class file to have a clear, single responsibility, so that the code is easier to understand and maintain.
+**User Story:** As a developer, I want all services registered in a central DI container, so that dependencies are explicit, testable, and not manually wired in the MainWindow constructor.
 
 #### Acceptance Criteria
 
-1. WHEN examining MainWindow.xaml.cs, THEN the file SHALL contain only the constructor, core fields, and basic initialization
-2. WHEN examining MainWindow.WebView.cs, THEN the file SHALL contain only WebView2 initialization, message handling, and rendering logic
-3. WHEN examining MainWindow.FileOperations.cs, THEN the file SHALL contain only file I/O operations and window state management
-4. WHEN examining MainWindow.UI.cs, THEN the file SHALL contain only UI event handlers and dialog management
-5. WHEN examining MainWindow.AI.cs, THEN the file SHALL contain only AI service initialization and AI-related operations
-6. WHEN examining MainWindow.Builder.cs, THEN the file SHALL contain only visual builder and canvas operations
-7. WHEN examining MainWindow.MarkdownToWord.cs, THEN the file SHALL contain only Markdown to Word export functionality
+1. WHEN the application starts, THE App SHALL configure a DI container (Microsoft.Extensions.DependencyInjection) with all service registrations in App.xaml.cs
+2. WHEN the DI container is configured, THE App SHALL register all existing services (RenderingOrchestrator, ContentTypeDetector, ContentRendererFactory, DiagramFileService, RecentFilesService, MarkdownStyleSettingsService, MermaidSyntaxAnalyzer, MermaidSyntaxFixer, MermaidTextOptimizer, KeyboardShortcutManager, FontManager, WindowStateManager, ShortcutPreferencesService, AiConfigStorageService, AiServiceFactory, LoggingService) with appropriate lifetimes
+3. WHEN the DI container is configured, THE App SHALL register the MainWindowViewModel as a transient service
+4. WHEN MainWindow is created, THE App SHALL resolve MainWindow dependencies from the DI container rather than manually instantiating services in the constructor
+5. IF a required service is not registered in the DI container, THEN THE App SHALL fail fast at startup with a descriptive error message
 
-### Requirement 3
+### Requirement 2: Extract MainWindowViewModel
 
-**User Story:** As a developer, I want the refactored code to maintain all existing functionality, so that no features are broken during the refactoring process.
+**User Story:** As a developer, I want UI state and commands extracted from MainWindow code-behind into a MainWindowViewModel, so that business logic is separated from the view and can be unit tested independently.
 
 #### Acceptance Criteria
 
-1. WHEN the refactoring is complete, THEN all existing functionality SHALL work exactly as before
-2. WHEN the application is built, THEN the build SHALL succeed without errors
-3. WHEN existing tests are run, THEN all tests SHALL pass
-4. WHEN the application is launched, THEN the application SHALL start and function normally
-5. WHEN any feature is used, THEN the feature SHALL behave identically to the pre-refactoring version
+1. WHEN the refactoring is complete, THE MainWindowViewModel SHALL hold all UI state fields currently in MainWindow (including _currentFilePath, _currentContentType, _isFullScreen, _isPresentationMode, _isPanModeEnabled, _isBuilderVisible, _currentSearchText, _lastPreviewedCode)
+2. WHEN the refactoring is complete, THE MainWindowViewModel SHALL expose commands (using ICommand/RelayCommand) for user actions including: NewDiagram, OpenFile, SaveFile, CloseFile, ExportSvg, ExportPng, ToggleFullScreen, TogglePresentationMode, ToggleBuilder, Find, CheckSyntax, Exit
+3. WHEN the refactoring is complete, THE MainWindowViewModel SHALL implement INotifyPropertyChanged for all bindable properties
+4. WHEN a UI action is triggered, THE MainWindow code-behind SHALL delegate to the MainWindowViewModel command rather than containing business logic inline
+5. WHEN the MainWindowViewModel state changes, THE MainWindow view SHALL update through data binding rather than direct UI manipulation where feasible
 
-### Requirement 4
+### Requirement 3: Extract Remaining Business Logic into Services
 
-**User Story:** As a developer, I want each partial class file to be reasonably sized, so that files remain easy to navigate and understand.
-
-#### Acceptance Criteria
-
-1. WHEN examining any partial class file, THEN the file SHALL contain no more than 500 lines of code
-2. WHEN a partial class file exceeds 400 lines, THEN the developer SHALL consider further subdivision
-3. WHEN all partial class files are combined, THEN the total line count SHALL match the original MainWindow.xaml.cs
-4. WHEN examining the file structure, THEN each file SHALL have a clear, descriptive name indicating its purpose
-5. WHEN examining the project structure, THEN all MainWindow partial class files SHALL be located in the same directory
-
-### Requirement 5
-
-**User Story:** As a developer, I want clear documentation in each partial class file, so that I understand what functionality belongs in each file.
+**User Story:** As a developer, I want business logic that is currently embedded in MainWindow event handlers extracted into dedicated service classes, so that each service has a single responsibility and can be tested in isolation.
 
 #### Acceptance Criteria
 
-1. WHEN examining any partial class file, THEN the file SHALL contain a summary comment describing its purpose
-2. WHEN examining any partial class file, THEN the file SHALL contain comments for complex methods
-3. WHEN examining the file header, THEN the file SHALL include a clear description of what functionality it contains
-4. WHEN a method is moved to a partial class, THEN the method SHALL retain its original XML documentation comments
-5. WHEN examining related methods, THEN methods SHALL be grouped logically within each partial class file
+1. WHEN the refactoring is complete, THE application SHALL have a FileOperationsService that encapsulates file open, save, close, recent files management, and file type detection logic
+2. WHEN the refactoring is complete, THE application SHALL have a SearchService that encapsulates find-next, find-previous, and search state management logic
+3. WHEN the refactoring is complete, THE application SHALL have a MermaidUpdateService that encapsulates version checking, downloading, and installing Mermaid.js updates
+4. WHEN the refactoring is complete, THE application SHALL have an ExportService that encapsulates SVG and PNG export logic currently in MainWindow
+5. WHEN a new service is created, THE service SHALL define an interface (e.g., IFileOperationsService, ISearchService) and be registered in the DI container
+6. WHEN the refactoring is complete, THE MainWindow code-behind SHALL contain only view-specific wiring (XAML event routing, WebView2 interop, dialog presentation) and no business logic
 
-### Requirement 6
+### Requirement 4: Complete Partial Class Splitting of Code-Behind
 
-**User Story:** As a developer, I want the refactoring to follow C# best practices, so that the code remains maintainable and follows industry standards.
-
-#### Acceptance Criteria
-
-1. WHEN examining the partial class files, THEN all files SHALL use the same namespace
-2. WHEN examining the partial class files, THEN all files SHALL declare the class as `public sealed partial class MainWindow : Window`
-3. WHEN examining the partial class files, THEN all files SHALL include necessary using statements
-4. WHEN examining method accessibility, THEN methods SHALL maintain their original access modifiers (private, public, etc.)
-5. WHEN examining the code, THEN no duplicate code SHALL exist across partial class files
-
-### Requirement 7
-
-**User Story:** As a developer, I want a clear migration guide, so that I know where to add new functionality in the future.
+**User Story:** As a developer, I want the remaining MainWindow code-behind organized into partial class files by concern, so that I can quickly locate and modify view-specific code.
 
 #### Acceptance Criteria
 
-1. WHEN adding new WebView functionality, THEN the developer SHALL add it to MainWindow.WebView.cs
-2. WHEN adding new file operations, THEN the developer SHALL add it to MainWindow.FileOperations.cs
-3. WHEN adding new UI event handlers, THEN the developer SHALL add it to MainWindow.UI.cs
-4. WHEN adding new AI features, THEN the developer SHALL add it to MainWindow.AI.cs
-5. WHEN adding new export functionality, THEN the developer SHALL add it to the appropriate export partial class file
+1. WHEN the refactoring is complete, THE MainWindow.xaml.cs core file SHALL contain only the constructor, field declarations, and initialization orchestration
+2. WHEN the refactoring is complete, THE MainWindow.WebView.cs SHALL contain all WebView2 initialization, message handling, and JavaScript interop code
+3. WHEN the refactoring is complete, THE MainWindow.UI.cs SHALL contain UI event routing, dialog presentation, fullscreen/presentation mode toggling, and keyboard shortcut wiring
+4. WHEN the refactoring is complete, THE MainWindow.Builder.cs SHALL contain visual builder panel visibility management and canvas wiring code
+5. WHEN the refactoring is complete, THE MainWindow.Search.cs SHALL contain search panel UI wiring and CodeEditor search integration
+6. WHEN the refactoring is complete, THE MainWindow.ScrollSync.cs SHALL contain synchronized scrolling initialization and scroll-to-line logic
+7. WHEN examining any single partial class file, THE file SHALL contain no more than 500 lines of code
+
+### Requirement 5: Preserve All Existing Behavior
+
+**User Story:** As a user, I want all existing features to work identically after the refactoring, so that the refactoring does not introduce regressions.
+
+#### Acceptance Criteria
+
+1. WHEN the refactored application is built, THE build SHALL succeed without errors on all target platforms (x86, x64, ARM64)
+2. WHEN existing tests are run after refactoring, THE test suite SHALL pass with zero failures
+3. WHEN the application is launched after refactoring, THE application SHALL start, display the editor and preview pane, and render diagrams identically to the pre-refactoring version
+4. WHEN any feature is used (file operations, rendering, export, AI, builder, search, keyboard shortcuts, fullscreen, presentation mode, Mermaid updates), THE feature SHALL behave identically to the pre-refactoring version
+
+### Requirement 6: Improve Testability of Extracted Components
+
+**User Story:** As a developer, I want the newly extracted ViewModel and services to be unit-testable with mocked dependencies, so that I can verify correctness without requiring a running UI.
+
+#### Acceptance Criteria
+
+1. WHEN the MainWindowViewModel is instantiated in a test, THE ViewModel SHALL accept all dependencies through constructor injection
+2. WHEN a new service (FileOperationsService, SearchService, MermaidUpdateService, ExportService) is created, THE service SHALL accept dependencies through constructor injection using interfaces
+3. WHEN the refactoring is complete, THE test project SHALL contain unit tests for the MainWindowViewModel verifying command execution and state transitions
+4. WHEN the refactoring is complete, THE test project SHALL contain unit tests for each newly created service

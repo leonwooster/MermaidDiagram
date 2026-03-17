@@ -1,406 +1,409 @@
-# Design Document: MainWindow Refactoring
+# Design Document: MainWindow Comprehensive Refactoring
 
 ## Overview
 
-This design document outlines the refactoring of the MainWindow.xaml.cs file into multiple partial class files organized by functionality. The current monolithic file contains approximately 2962 lines of code, making it difficult to maintain and navigate. By splitting the code into logical, cohesive modules, we will improve code organization, maintainability, and developer productivity.
+This design transforms the MermaidDiagramApp from a God Object architecture (where MainWindow.xaml.cs handles everything) into a well-structured MVVM application with dependency injection, clear service boundaries, and organized code-behind files.
 
-The refactoring will use C#'s partial class feature to split the MainWindow class across multiple files while maintaining all existing functionality. Each partial class file will focus on a specific area of functionality, following the Single Responsibility Principle.
+The refactoring follows an incremental, safe approach:
+
+1. **Phase 1 — DI Container**: Introduce Microsoft.Extensions.DependencyInjection in App.xaml.cs, register all existing services, and resolve them into MainWindow via constructor injection. No logic changes.
+2. **Phase 2 — Service Extraction**: Extract business logic from MainWindow event handlers into new services (FileOperationsService, SearchService, MermaidUpdateService, ExportService) behind interfaces.
+3. **Phase 3 — ViewModel Extraction**: Create MainWindowViewModel holding UI state and ICommand-based commands, wired to the view via data binding.
+4. **Phase 4 — Partial Class Splitting**: Organize remaining code-behind into focused partial class files by concern.
+
+Each phase produces a compilable, testable application with all existing tests passing.
 
 ## Architecture
 
-### Current Structure
+### Current Architecture
 
-```
-MainWindow.xaml.cs (2962 lines)
-├── Constructor & Initialization
-├── WebView2 Setup & Rendering
-├── File Operations (Open/Save/Close)
-├── UI Event Handlers (Menu items, dialogs)
-├── Keyboard Shortcuts
-├── AI Features
-├── Visual Builder
-├── Mermaid Updates
-├── Zoom Controls
-├── Full Screen Mode
-└── Various Helper Methods
+```mermaid
+block-beta
+    columns 1
+    block:MW["MainWindow.xaml.cs (~2900 lines)"]
+        columns 1
+        A["Manual service instantiation"]
+        B["UI state (20+ private fields)"]
+        C["Business logic in event handlers"]
+        D["WebView2 interop"]
+        E["File I/O in click handlers"]
+        F["Search, Export, Update, Builder, Scroll sync"]
+    end
 ```
 
-### Proposed Structure
+### Target Architecture
 
-```
-MainWindow/
-├── MainWindow.xaml.cs (Core - ~200 lines)
-│   ├── Constructor
-│   ├── Core fields and properties
-│   └── Basic initialization
-│
-├── MainWindow.WebView.cs (~500 lines)
-│   ├── InitializeWebViewAsync
-│   ├── WebView message handling
-│   ├── Preview rendering
-│   ├── Content type detection
-│   └── Zoom controls
-│
-├── MainWindow.FileOperations.cs (~300 lines)
-│   ├── Open/Save/Close operations
-│   ├── File watching
-│   ├── Window state management
-│   └── File path handling
-│
-├── MainWindow.UI.cs (~600 lines)
-│   ├── Menu item click handlers
-│   ├── Dialog management
-│   ├── Full screen/presentation mode
-│   ├── Keyboard shortcuts
-│   └── Status bar updates
-│
-├── MainWindow.AI.cs (~400 lines)
-│   ├── AI service initialization
-│   ├── AI prompt handling
-│   ├── Diagram generation
-│   ├── AI settings dialog
-│   └── Pop-out window management
-│
-├── MainWindow.Builder.cs (~400 lines)
-│   ├── Builder initialization
-│   ├── Canvas operations
-│   ├── Shape toolbox integration
-│   ├── Properties panel
-│   └── Code import/export
-│
-├── MainWindow.MarkdownToWord.cs (~300 lines) [Already exists]
-│   ├── Export initialization
-│   ├── File picker dialogs
-│   ├── Progress dialog
-│   └── Export workflow
-│
-└── MainWindow.Updates.cs (~200 lines)
-    ├── Mermaid.js update checking
-    ├── Version comparison
-    ├── Download and installation
-    └── Update notifications
+```mermaid
+graph TD
+    subgraph Presentation
+        MW[MainWindow.xaml]
+        MW_CS[MainWindow.xaml.cs<br/>~250 lines: constructor + init]
+        MW_WV[MainWindow.WebView.cs<br/>WebView2 interop]
+        MW_UI[MainWindow.UI.cs<br/>Diagram templates + fullscreen]
+        MW_FO[MainWindow.FileOps.cs<br/>File open/save/close]
+        MW_EX[MainWindow.Export.cs<br/>SVG/PNG export + updates]
+        MW_RM[MainWindow.RenderMode.cs<br/>Render mode + zoom/pan]
+        MW_BLD[MainWindow.Builder.cs<br/>Builder panel wiring]
+        MW_SRCH[MainWindow.Search.cs<br/>Search panel wiring]
+        MW_SCROLL[MainWindow.ScrollSync.cs<br/>Scroll sync]
+        MW_MD2W[MainWindow.MarkdownToWord.cs<br/>Export dialogs - existing]
+    end
+
+    subgraph ViewModels
+        MWVM[MainWindowViewModel<br/>UI state + ICommands]
+        EXISTING_VMS[Existing ViewModels<br/>DiagramBuilder, Canvas, etc.]
+    end
+
+    subgraph Services
+        IFS[IFileOperationsService]
+        ISS[ISearchService]
+        IMUS[IMermaidUpdateService]
+        IES[IExportService]
+        EXISTING_SVC[Existing Services<br/>Rendering, AI, Logging, etc.]
+    end
+
+    subgraph Infrastructure
+        DI[DI Container<br/>App.xaml.cs]
+    end
+
+    DI --> MW_CS
+    MW_CS --> MWVM
+    MWVM --> IFS
+    MWVM --> ISS
+    MWVM --> IMUS
+    MWVM --> IES
+    MWVM --> EXISTING_SVC
+    MW_CS --> MW_WV
+    MW_CS --> MW_UI
+    MW_CS --> MW_BLD
+    MW_CS --> MW_SRCH
+    MW_CS --> MW_SCROLL
 ```
 
 ## Components and Interfaces
 
-### 1. MainWindow.xaml.cs (Core)
+### 1. DI Container Setup (App.xaml.cs)
 
-**Purpose:** Contains the core structure, constructor, and primary initialization.
+The App class will configure a `ServiceCollection` and build a `ServiceProvider`. MainWindow receives its dependencies through a parameterized constructor.
 
-**Contents:**
-- Class declaration and inheritance
-- All private fields (logger, services, state variables)
-- Public properties (BuilderViewModel)
-- Constructor with basic initialization
-- MainWindow_Loaded event handler (orchestrates initialization)
-- MainWindow_Closed event handler
-
-**Responsibilities:**
-- Initialize all services and components
-- Set up event handlers
-- Coordinate initialization of partial class modules
-
-### 2. MainWindow.WebView.cs
-
-**Purpose:** Manages all WebView2-related functionality.
-
-**Contents:**
-- `InitializeWebViewAsync()` - WebView2 setup and configuration
-- `PreviewBrowser_NavigationCompleted()` - Navigation event handling
-- `UpdatePreview()` - Content rendering orchestration
-- `ExecuteRenderingScript()` - JavaScript execution for rendering
-- `OnRenderingStateChanged()` - Rendering state event handler
-- `UpdateRenderModeIndicator()` - Status bar updates
-- `SetupCtrlWheelZoom()` - Zoom gesture setup
-- `ApplyPreviewZoom()` - Zoom level application
-- Zoom control event handlers (ZoomIn, ZoomOut, ZoomReset)
-- Drag mode toggle handlers
-
-**Key Methods:**
 ```csharp
-private async Task InitializeWebViewAsync();
-private async Task UpdatePreview();
-private async Task ExecuteRenderingScript(string content, ContentType contentType, RenderingContext context);
-private void OnRenderingStateChanged(object? sender, RenderingStateChangedEventArgs e);
-private void UpdateRenderModeIndicator(ContentType contentType);
+// App.xaml.cs
+public partial class App : Application
+{
+    public static IServiceProvider Services { get; private set; } = null!;
+
+    public App()
+    {
+        InitializeComponent();
+        InitializeLogging();
+        Services = ConfigureServices();
+    }
+
+    private static IServiceProvider ConfigureServices()
+    {
+        var services = new ServiceCollection();
+
+        // Logging
+        services.AddSingleton<ILogger>(LoggingService.Instance.GetLogger<App>());
+
+        // Rendering
+        services.AddSingleton<IContentTypeDetector, ContentTypeDetector>();
+        services.AddSingleton<ContentRendererFactory>();
+        services.AddSingleton<RenderingOrchestrator>();
+
+        // File & State
+        services.AddSingleton<DiagramFileService>();
+        services.AddSingleton<RecentFilesService>();
+        services.AddSingleton<MarkdownStyleSettingsService>();
+        services.AddSingleton<ShortcutPreferencesService>();
+        services.AddSingleton<WindowStateManager>();
+
+        // Syntax
+        services.AddTransient<MermaidSyntaxAnalyzer>();
+        services.AddTransient<MermaidSyntaxFixer>();
+        services.AddTransient<MermaidTextOptimizer>();
+        services.AddSingleton<MermaidLinter>();
+
+        // AI
+        services.AddSingleton<AiConfigStorageService>();
+        services.AddSingleton<AiServiceFactory>();
+
+        // New services
+        services.AddSingleton<IFileOperationsService, FileOperationsService>();
+        services.AddSingleton<ISearchService, SearchService>();
+        services.AddSingleton<IMermaidUpdateService, MermaidUpdateService>();
+        services.AddSingleton<IExportService, ExportService>();
+
+        // ViewModel
+        services.AddTransient<MainWindowViewModel>();
+
+        return services.BuildServiceProvider();
+    }
+
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        _window = new MainWindow(Services.GetRequiredService<MainWindowViewModel>());
+        _window.Activate();
+    }
+}
 ```
 
-### 3. MainWindow.FileOperations.cs
+**NuGet Package**: `Microsoft.Extensions.DependencyInjection` (latest stable for .NET 8).
 
-**Purpose:** Handles all file I/O operations and window state management.
+### 2. MainWindowViewModel
 
-**Contents:**
-- File open/save/close operations
-- File watching and auto-reload
-- Window state persistence (position, size)
-- Recent files management
-- File path validation
+Holds all UI state and exposes ICommand properties. Receives services via constructor injection.
 
-**Key Methods:**
 ```csharp
-private async Task OpenFileAsync(string filePath);
-private async Task SaveFileAsync(string filePath);
-private void CloseFile();
-private void SetupFileWatcher(string filePath);
-private async Task RestoreWindowStateAsync();
-private async Task SaveWindowStateAsync();
+public class MainWindowViewModel : INotifyPropertyChanged
+{
+    private readonly IFileOperationsService _fileOps;
+    private readonly ISearchService _search;
+    private readonly IMermaidUpdateService _updateService;
+    private readonly IExportService _exportService;
+    private readonly RenderingOrchestrator _renderingOrchestrator;
+    private readonly IContentTypeDetector _contentTypeDetector;
+    private readonly MarkdownStyleSettingsService _styleSettingsService;
+    private readonly ILogger _logger;
+
+    // UI State
+    public string CurrentFilePath { get; set; }
+    public ContentType CurrentContentType { get; set; }
+    public bool IsFullScreen { get; set; }
+    public bool IsPresentationMode { get; set; }
+    public bool IsPanModeEnabled { get; set; }
+    public bool IsBuilderVisible { get; set; }
+    public string CurrentSearchText { get; set; }
+    public string LastPreviewedCode { get; set; }
+    public bool IsWebViewReady { get; set; }
+
+    // Commands
+    public ICommand NewClassDiagramCommand { get; }
+    public ICommand NewSequenceDiagramCommand { get; }
+    public ICommand OpenFileCommand { get; }
+    public ICommand SaveFileCommand { get; }
+    public ICommand CloseFileCommand { get; }
+    public ICommand ExportSvgCommand { get; }
+    public ICommand ExportPngCommand { get; }
+    public ICommand ToggleFullScreenCommand { get; }
+    public ICommand TogglePresentationModeCommand { get; }
+    public ICommand ToggleBuilderCommand { get; }
+    public ICommand FindCommand { get; }
+    public ICommand CheckSyntaxCommand { get; }
+    public ICommand ExitCommand { get; }
+    // ... additional diagram type commands
+}
 ```
 
-### 4. MainWindow.UI.cs
+**Key design decisions**:
+- The ViewModel does NOT hold a reference to WebView2 or any XAML controls. WebView2 interop stays in the code-behind partial classes.
+- Commands that need UI interaction (file pickers, dialogs) use callback delegates or events that the code-behind subscribes to.
+- The ViewModel exposes an `Action<string>?` callback pattern for operations requiring UI (e.g., `RequestFilePicker`, `RequestDialog`).
 
-**Purpose:** Contains all UI event handlers and dialog management.
+### 3. IFileOperationsService
 
-**Contents:**
-- Menu item click handlers (New, Open, Save, Export, etc.)
-- Dialog creation and management
-- Full screen mode toggle
-- Presentation mode toggle
-- Keyboard shortcut registration and handling
-- Status bar updates
-- InfoBar management
+Encapsulates file open/save/close logic, recent files, and file type detection.
 
-**Key Methods:**
 ```csharp
-private void RegisterKeyboardShortcuts();
-private void ToggleFullScreen_Click(object sender, RoutedEventArgs e);
-private void PresentationMode_Click(object sender, RoutedEventArgs e);
-private async void CheckSyntax_Click(object sender, RoutedEventArgs e);
-private void ShowKeyboardShortcutTip();
-private void DismissKeyboardTip_Click(object sender, RoutedEventArgs e);
+public interface IFileOperationsService
+{
+    string CurrentFilePath { get; }
+    Task<string?> ReadFileAsync(string filePath);
+    Task SaveFileAsync(string filePath, string content);
+    Task<DiagramBuilderFile?> LoadDiagramAsync(string filePath);
+    Task<bool> SaveDiagramAsync(string filePath, DiagramCanvasViewModel viewModel);
+    string OptimizeMermaidContent(string content);
+    bool NeedsMermaidOptimization(string content);
+    void AddRecentFile(string filePath);
+    IReadOnlyList<RecentFileEntry> GetRecentFiles();
+    void RemoveRecentFile(string filePath);
+    void ClearRecentFiles();
+    string GetWindowTitle(string? filePath);
+}
 ```
 
-### 5. MainWindow.AI.cs
+### 4. ISearchService
 
-**Purpose:** Manages AI-related features and integrations.
+Encapsulates search state and navigation logic (decoupled from TextControlBox).
 
-**Contents:**
-- AI service initialization
-- AI configuration management
-- Floating AI prompt setup
-- AI diagram generation
-- AI settings dialog
-- Pop-out window management
-- Code import to canvas
-
-**Key Methods:**
 ```csharp
-private void InitializeAiServices();
-private async Task OpenAiSettingsAndRefreshVmAsync();
-private void PopOutFloatingPrompt();
-private async Task ImportCodeToCanvasAsync(string code);
-private void AiSettings_Click(object sender, RoutedEventArgs e);
+public interface ISearchService
+{
+    string CurrentSearchText { get; }
+    void SetSearchText(string text);
+    SearchResult FindNext(string text, string editorContent);
+    SearchResult FindPrevious(string text, string editorContent);
+    void Reset();
+}
 ```
 
-### 6. MainWindow.Builder.cs
+### 5. IMermaidUpdateService
 
-**Purpose:** Handles visual diagram builder functionality.
+Encapsulates Mermaid.js version checking, downloading, and installation.
 
-**Contents:**
-- Builder initialization
-- Canvas setup and configuration
-- Shape toolbox integration
-- Properties panel wiring
-- Builder visibility management
-- Code generation from canvas
-- Canvas import/export
-
-**Key Methods:**
 ```csharp
-private void UpdateBuilderVisibility();
-private void DiagramBuilderViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e);
-private void BuilderTool_Click(object sender, RoutedEventArgs e);
-private async Task ImportCodeToCanvasAsync(string code);
+public interface IMermaidUpdateService
+{
+    Task<MermaidVersionInfo> CheckForUpdatesAsync();
+    Task<bool> DownloadAndInstallUpdateAsync(string version);
+    string GetCurrentVersion();
+}
+
+public record MermaidVersionInfo(
+    string CurrentVersion,
+    string LatestVersion,
+    bool UpdateAvailable);
 ```
 
-### 7. MainWindow.Updates.cs
+### 6. IExportService
 
-**Purpose:** Manages Mermaid.js version checking and updates.
+Encapsulates SVG/PNG export logic (the image data extraction and file writing, not the UI dialogs).
 
-**Contents:**
-- Update checking logic
-- Version comparison
-- Download and installation
-- Update notifications
-- InfoBar management for updates
-
-**Key Methods:**
 ```csharp
-private async Task CheckForMermaidUpdatesAsync();
-private async Task CheckForNewerVersionAsync(string currentVersionStr);
-private async void UpdateMermaid_Click(object sender, RoutedEventArgs e);
+public interface IExportService
+{
+    string AddBackgroundToSvg(string svgContent);
+    Task<byte[]> ScaleImageAsync(byte[] pngData, float scale);
+    Task SaveSvgAsync(string filePath, string svgContent);
+    Task SavePngAsync(string filePath, byte[] pngData);
+}
 ```
+
+### 7. Partial Class Organization
+
+After ViewModel and service extraction, the remaining code-behind is organized:
+
+| File | Responsibility | Approx Lines |
+|---|---|---|
+| `MainWindow.xaml.cs` | Constructor, field declarations, DI wiring, initialization orchestration | ~250 |
+| `MainWindow.WebView.cs` | WebView2 init, message handling, ExecuteRenderingScript, UpdatePreview | ~460 |
+| `MainWindow.UI.cs` | New diagram templates, fullscreen/presentation mode, keyboard wiring | ~440 |
+| `MainWindow.FileOps.cs` | File open/save/close, recent files, dialog utilities | ~490 |
+| `MainWindow.Export.cs` | SVG/PNG export, Mermaid.js update management, about/log handlers | ~430 |
+| `MainWindow.RenderMode.cs` | Render mode overrides, zoom/pan controls, content type indicators | ~230 |
+| `MainWindow.Builder.cs` | Builder panel visibility, canvas wiring, toolbox/properties panel setup | ~120 |
+| `MainWindow.Search.cs` | Search panel visibility, TextBox events, CodeEditor search integration | ~140 |
+| `MainWindow.ScrollSync.cs` | Synchronized scrolling init, CodeEditor click handler, SyncPreviewToLine | ~200 |
+| `MainWindow.MarkdownToWord.cs` | Existing — Word export dialogs and progress (already extracted) | ~415 |
+
 
 ## Data Models
 
-No new data models are required for this refactoring. All existing models remain unchanged.
+### New Data Models
+
+```csharp
+/// <summary>
+/// Result of a search operation within the code editor.
+/// </summary>
+public record SearchResult(
+    bool Found,
+    int MatchIndex,
+    int MatchLength,
+    string StatusMessage);
+
+/// <summary>
+/// Information about Mermaid.js version status.
+/// </summary>
+public record MermaidVersionInfo(
+    string CurrentVersion,
+    string LatestVersion,
+    bool UpdateAvailable);
+```
+
+### Existing Models (Unchanged)
+
+All existing models in `Models/` remain unchanged:
+- `ContentType`, `RenderingContext`, `RenderingResult`
+- `MarkdownStyleSettings`, `SyntaxIssue`
+- `DiagramBuilderFile`, `CanvasNode`, `CanvasConnector`
+- `KeyboardEventMessage`
+
+No data model migrations are required. The refactoring is purely structural.
+
 
 ## Correctness Properties
 
-*A property is a characteristic or behavior that should hold true across all valid executions of a system-essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
+*A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
-### Property Reflection
+This refactoring is primarily structural (code organization, not new features), so the testable properties focus on the DI wiring, ViewModel contract, and constructor injection correctness.
 
-The refactoring focuses on code organization rather than functional changes. The key properties to verify are:
+### Property 1: DI container resolves all registered services
 
-1. **Behavioral Equivalence**: All functionality works identically before and after refactoring
-2. **Code Coverage**: All original code is preserved in the refactored files
-3. **No Duplication**: No code is duplicated across partial class files
-4. **Compilation**: The refactored code compiles without errors
+*For any* service type registered in the DI container, resolving that type from the built `IServiceProvider` should return a non-null instance without throwing an exception.
 
-### Correctness Properties
+**Validates: Requirements 1.1, 1.2, 3.5**
 
-Property 1: Behavioral equivalence preservation
-*For any* user interaction or system operation, the behavior after refactoring should be identical to the behavior before refactoring
-**Validates: Requirements 3.1, 3.3, 3.4, 3.5**
+### Property 2: ViewModel exposes non-null commands
 
-Property 2: Code completeness
-*For any* method in the original MainWindow.xaml.cs, that method should exist in exactly one of the refactored partial class files
-**Validates: Requirements 1.1, 2.1, 6.6**
+*For any* expected command name in the MainWindowViewModel (NewClassDiagram, OpenFile, SaveFile, CloseFile, ExportSvg, ExportPng, ToggleFullScreen, TogglePresentationMode, ToggleBuilder, Find, CheckSyntax, Exit), the corresponding ICommand property should be non-null after construction.
 
-Property 3: File size constraints
-*For any* partial class file, the file should contain no more than 500 lines of code
-**Validates: Requirements 4.1, 4.2**
+**Validates: Requirements 2.2**
 
-Property 4: Functional cohesion
-*For any* method in a partial class file, the method should be related to the primary purpose of that file
-**Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7**
+### Property 3: ViewModel fires PropertyChanged for all bindable properties
 
-Property 5: Build success
-*For any* build configuration, the refactored code should compile without errors
-**Validates: Requirements 3.2**
+*For any* bindable property on MainWindowViewModel (CurrentFilePath, CurrentContentType, IsFullScreen, IsPresentationMode, IsPanModeEnabled, IsBuilderVisible, CurrentSearchText, IsWebViewReady), setting the property to a different value should fire the PropertyChanged event with the correct property name.
 
-Property 6: Test compatibility
-*For any* existing test, the test should pass after refactoring
-**Validates: Requirements 3.3**
+**Validates: Requirements 2.3**
+
+### Property 4: All injectable types accept mocked dependencies
+
+*For any* newly created injectable type (MainWindowViewModel, FileOperationsService, SearchService, MermaidUpdateService, ExportService), constructing the type with mocked interface dependencies should succeed and produce a non-null instance.
+
+**Validates: Requirements 6.1, 6.2**
 
 ## Error Handling
 
-The refactoring should not change any error handling behavior. All existing try-catch blocks, error logging, and error dialogs should be preserved in their respective partial class files.
+The refactoring preserves all existing error handling behavior. No new error paths are introduced.
 
-**Error Handling Strategy:**
-- Preserve all existing error handling logic
-- Maintain error logging in the same locations
-- Keep error dialogs in the UI partial class
-- Ensure exception propagation remains unchanged
+**DI Container Errors**:
+- If a required service is missing from the container, `GetRequiredService<T>()` throws `InvalidOperationException` at startup — this is the desired fail-fast behavior (Requirement 1.5).
+- All service registrations are validated at app startup by the container build step.
+
+**Existing Error Handling Preserved**:
+- All try-catch blocks in event handlers are preserved in their respective partial class files or ViewModel commands.
+- Error logging via `ILogger` continues unchanged.
+- ContentDialog error presentations remain in the code-behind (UI layer).
+- WebView2 initialization error handling stays in `MainWindow.WebView.cs`.
+
+**New Service Error Handling**:
+- New services (FileOperationsService, MermaidUpdateService, etc.) propagate exceptions to callers. The ViewModel or code-behind catches and presents errors to the user via dialogs, maintaining the existing UX.
 
 ## Testing Strategy
 
-### Verification Testing
+### Dual Testing Approach
 
-**Manual Testing:**
-1. Launch the application and verify it starts correctly
-2. Test each major feature area:
-   - Open/Save/Close files
-   - WebView rendering
-   - AI features
-   - Visual builder
-   - Export functionality
-   - Keyboard shortcuts
-   - Full screen mode
-3. Verify all menu items work
-4. Verify all dialogs display correctly
+**Unit Tests** (specific examples and edge cases):
+- Verify DI container resolves specific critical services (e.g., MainWindowViewModel, RenderingOrchestrator)
+- Verify MainWindowViewModel construction with null dependencies throws ArgumentNullException
+- Verify MermaidUpdateService handles HTTP failures gracefully
+- Verify FileOperationsService returns correct window titles for various file paths
+- Verify ExportService.AddBackgroundToSvg handles malformed SVG input
+- Verify SearchService.Reset clears state correctly
 
-**Automated Testing:**
-1. Run all existing unit tests
-2. Run all existing integration tests
-3. Verify test coverage remains the same
-4. Add smoke tests for critical paths
+**Property-Based Tests** (universal properties across all inputs, using FsCheck.Xunit):
+- Property 1: DI container service resolution (parameterized over all registered types)
+- Property 2: ViewModel command non-nullity (parameterized over all command names)
+- Property 3: ViewModel PropertyChanged notification (parameterized over all bindable properties with generated values)
+- Property 4: Constructor injection with mocks (parameterized over all injectable types)
 
-### Regression Testing
+**Property-Based Testing Configuration**:
+- Library: FsCheck.Xunit 3.3 (already in test project)
+- Minimum iterations: 100 per property test
+- Each test tagged with: **Feature: mainwindow-refactoring, Property {number}: {property_text}**
+- Each correctness property implemented as a single property-based test
 
-**Test Cases:**
-1. File operations (open, save, close)
-2. Mermaid diagram rendering
-3. Markdown rendering
-4. AI diagram generation
-5. Export to SVG/PNG/Word
-6. Keyboard shortcuts
-7. Full screen and presentation modes
-8. Visual builder operations
-9. Mermaid.js updates
+### Existing Test Preservation
 
-### Code Review Checklist
+All existing tests in `MermaidDiagramApp.Tests/` must continue to pass after refactoring:
+- `Services/Export/*Tests.cs`
+- `Services/KeyboardShortcutManagerTests.cs`
+- `Services/MermaidTextOptimizerTests.cs`
+- `Services/ShortcutPreferencesServiceTests.cs`
+- `Services/TipDisplayLogicTests.cs`
+- `ViewModels/MarkdownToWordViewModelTests.cs`
+- `ViewModels/MarkdownToWordViewModelPropertyTests.cs`
+- `ViewModels/MainWindowPropertyTests.cs`
+- `Models/KeyboardEventMessageTests.cs`
 
-- [ ] All methods moved to appropriate partial class files
-- [ ] No duplicate code across files
-- [ ] All using statements included in each file
-- [ ] All files use correct namespace
-- [ ] All files declare partial class correctly
-- [ ] No methods orphaned or lost
-- [ ] File sizes within limits
-- [ ] Clear comments and documentation
-- [ ] Build succeeds without errors
-- [ ] All tests pass
-
-## Migration Guide
-
-### For Future Development
-
-**Adding New WebView Functionality:**
-- Add to `MainWindow.WebView.cs`
-- Examples: New rendering modes, WebView settings, JavaScript interop
-
-**Adding New File Operations:**
-- Add to `MainWindow.FileOperations.cs`
-- Examples: Import/export formats, file validation, recent files
-
-**Adding New UI Elements:**
-- Add to `MainWindow.UI.cs`
-- Examples: Menu items, dialogs, keyboard shortcuts, status bar items
-
-**Adding New AI Features:**
-- Add to `MainWindow.AI.cs`
-- Examples: New AI providers, prompt templates, AI settings
-
-**Adding New Builder Features:**
-- Add to `MainWindow.Builder.cs`
-- Examples: New shapes, canvas operations, builder modes
-
-**Adding New Export Formats:**
-- Create new partial class file (e.g., `MainWindow.PdfExport.cs`)
-- Follow the pattern established by `MainWindow.MarkdownToWord.cs`
-
-### Refactoring Process
-
-1. **Preparation:**
-   - Create backup of MainWindow.xaml.cs
-   - Ensure all tests pass before starting
-   - Create new partial class files with headers
-
-2. **Method Migration:**
-   - Identify methods for each partial class
-   - Copy methods to appropriate files
-   - Remove methods from original file
-   - Verify compilation after each batch
-
-3. **Field and Property Management:**
-   - Keep all fields in MainWindow.xaml.cs (core)
-   - Ensure all partial classes can access needed fields
-   - Update field accessibility if needed
-
-4. **Testing:**
-   - Build after each file is created
-   - Run tests after each major migration
-   - Perform manual testing of affected features
-
-5. **Cleanup:**
-   - Remove empty sections from original file
-   - Organize using statements
-   - Add file headers and documentation
-   - Final build and test verification
-
-## Performance Considerations
-
-The refactoring should have no performance impact since:
-- Partial classes are compiled into a single class
-- No runtime overhead from file organization
-- All method calls remain the same
-- No additional abstractions or indirection
-
-## Security Considerations
-
-No security implications from this refactoring. All security-related code (file access, WebView security settings, etc.) will be preserved in their respective partial class files.
-
-## Conclusion
-
-This refactoring will significantly improve the maintainability of the MainWindow code by organizing it into logical, cohesive modules. Each partial class file will have a clear purpose and contain related functionality, making it easier for developers to find, understand, and modify code. The refactoring preserves all existing functionality while improving code organization and developer productivity.
+Build verification: `dotnet build MermaidDiagramApp/MermaidDiagramApp.sln` must succeed.
+Test verification: `dotnet test MermaidDiagramApp.Tests/MermaidDiagramApp.Tests.csproj` must pass all tests.

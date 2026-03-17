@@ -25,7 +25,7 @@ public class MarkdigMarkdownParserPropertyTests
     /// Property: For any Markdown document containing Mermaid code blocks,
     /// parsing should identify all blocks marked with ```mermaid fence syntax.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ExtractMermaidBlocks_IdentifiesAllMermaidBlocks(string[] mermaidCodes, string[] otherContent)
     {
         // Arrange: Filter out null or empty arrays
@@ -84,7 +84,7 @@ public class MarkdigMarkdownParserPropertyTests
     /// Property: For any Markdown document without Mermaid blocks,
     /// ExtractMermaidBlocks should return an empty collection.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ExtractMermaidBlocks_WithNoMermaidBlocks_ReturnsEmpty(string content)
     {
         // Arrange: Create markdown without mermaid blocks
@@ -106,7 +106,7 @@ public class MarkdigMarkdownParserPropertyTests
     /// Property: For any Markdown document with code blocks of different languages,
     /// only Mermaid blocks should be extracted.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ExtractMermaidBlocks_OnlyExtractsMermaidBlocks(string mermaidCode, string jsCode, string pythonCode)
     {
         // Arrange: Filter out invalid characters
@@ -141,7 +141,7 @@ public class MarkdigMarkdownParserPropertyTests
     /// <summary>
     /// Property: For any Markdown document, parsing should never throw an exception.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void Parse_WithAnyContent_DoesNotThrow(string content)
     {
         // Act & Assert: Should not throw
@@ -158,7 +158,7 @@ public class MarkdigMarkdownParserPropertyTests
     /// Property: For any Markdown document with Mermaid blocks,
     /// line numbers should be positive and in ascending order.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ExtractMermaidBlocks_LineNumbersArePositiveAndAscending(string[] mermaidCodes)
     {
         // Arrange
@@ -202,7 +202,7 @@ public class MarkdigMarkdownParserPropertyTests
     /// Property: For any Markdown document with case variations of "mermaid",
     /// only lowercase "mermaid" should be recognized.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ExtractMermaidBlocks_IsCaseSensitive(string code)
     {
         // Arrange

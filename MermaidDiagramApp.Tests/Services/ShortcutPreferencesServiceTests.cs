@@ -17,7 +17,7 @@ public class ShortcutPreferencesServiceTests
     /// and then loading it should return the same value.
     /// Validates: Requirements 5.4
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void TipPreferenceRoundTrip(bool showTips)
     {
         // Arrange

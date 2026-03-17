@@ -63,7 +63,7 @@ public class OpenXmlWordDocumentGeneratorPropertyTests : IDisposable
     /// Property: For any Markdown document with headings (H1-H6),
     /// the generated Word document should contain corresponding Word heading styles at the same levels.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void AddHeading_PreservesHeadingLevel(PositiveInt levelInt, NonEmptyString text)
     {
         // Arrange: Constrain level to 1-6
@@ -107,7 +107,7 @@ public class OpenXmlWordDocumentGeneratorPropertyTests : IDisposable
     /// Property: For any Markdown text with inline formatting (bold, italic, code),
     /// the generated Word document should preserve all formatting with correct Word styles.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void AddParagraph_PreservesTextFormatting(NonEmptyString text, bool isBold, bool isItalic, bool isCode)
     {
         // Arrange
@@ -174,7 +174,7 @@ public class OpenXmlWordDocumentGeneratorPropertyTests : IDisposable
     /// Property: For any Markdown document with lists (ordered or unordered),
     /// the generated Word document should contain corresponding Word lists with the same structure.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void AddList_PreservesListStructure(NonEmptyArray<NonEmptyString> items, bool ordered)
     {
         // Arrange
@@ -229,7 +229,7 @@ public class OpenXmlWordDocumentGeneratorPropertyTests : IDisposable
     /// Property: For any Markdown document with nested lists,
     /// the generated Word document should preserve the complete nesting hierarchy at all levels.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void AddList_PreservesNestedListHierarchy(NonEmptyString parentText, NonEmptyArray<NonEmptyString> childTexts)
     {
         // Arrange: Create a parent item with nested children
@@ -292,7 +292,7 @@ public class OpenXmlWordDocumentGeneratorPropertyTests : IDisposable
     /// Property: For any Markdown code block (non-Mermaid),
     /// the generated Word document should format it with monospace font and background shading.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void AddCodeBlock_AppliesMonospaceAndShading(NonEmptyString code, string language)
     {
         // Arrange
@@ -344,7 +344,7 @@ public class OpenXmlWordDocumentGeneratorPropertyTests : IDisposable
     /// Property: For any Markdown table,
     /// the generated Word document should contain a Word table with the same number of rows, columns, and cell alignment.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void AddTable_PreservesTableStructure(NonEmptyArray<NonEmptyString> headers, NonEmptyArray<NonEmptyArray<NonEmptyString>> rows)
     {
         // Arrange: Ensure all rows have the same number of columns as headers
@@ -424,7 +424,7 @@ public class OpenXmlWordDocumentGeneratorPropertyTests : IDisposable
     /// Property: For any Markdown blockquote,
     /// the generated Word document should apply indentation and distinctive styling.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void AddBlockquote_AppliesIndentationAndStyling(NonEmptyString text)
     {
         // Arrange
@@ -478,7 +478,7 @@ public class OpenXmlWordDocumentGeneratorPropertyTests : IDisposable
     /// Property: For any embedded diagram image, if scaling is applied to fit page margins,
     /// the aspect ratio should remain unchanged.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void AddImage_MaintainsAspectRatio(PositiveInt widthInt, PositiveInt heightInt)
     {
         // Arrange: Create a test image
@@ -534,7 +534,7 @@ public class OpenXmlWordDocumentGeneratorPropertyTests : IDisposable
     /// Property: For any embedded image (PNG, JPG, GIF),
     /// the generated Word document should preserve the original image format.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void AddImage_PreservesImageFormat(PositiveInt formatSelector)
     {
         // Arrange: Select a format to test

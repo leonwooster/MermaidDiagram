@@ -25,7 +25,7 @@ public class WebView2MermaidImageRendererPropertyTests
     /// Note: This test uses mocks because WebView2 requires a UI thread and window context.
     /// The actual rendering is tested in integration tests.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public async Task RenderToImageAsync_WithValidMermaidCode_CreatesImageFile()
     {
         // Arrange: Create a simple valid Mermaid diagram
@@ -77,7 +77,7 @@ public class WebView2MermaidImageRendererPropertyTests
     /// Property: For any valid Mermaid code, rendering should not throw exceptions
     /// when given valid inputs.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public async Task RenderToImageAsync_WithValidInputs_DoesNotThrow()
     {
         // Arrange

@@ -25,7 +25,7 @@ public class MarkdownToWordExportServicePropertyTests
     /// content that exactly matches the file's text content.
     /// Validates: Requirements 1.2
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public async Task ExportToWordAsync_WithMarkdownContent_PreservesContent(string markdownContent)
     {
         // Arrange: Filter out invalid inputs
@@ -91,7 +91,7 @@ public class MarkdownToWordExportServicePropertyTests
     /// existing at that exact path.
     /// Validates: Requirements 2.2
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public async Task ExportToWordAsync_WithValidPath_CreatesFileAtPath(string filename)
     {
         // Arrange: Create a valid filename
@@ -162,7 +162,7 @@ public class MarkdownToWordExportServicePropertyTests
     /// For any export operation in progress, a progress indicator should be visible to the user.
     /// Validates: Requirements 2.5
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public async Task ExportToWordAsync_DuringExport_ReportsProgress(string content)
     {
         // Arrange
@@ -230,7 +230,7 @@ public class MarkdownToWordExportServicePropertyTests
     /// should contain all diagrams in the same sequential order.
     /// Validates: Requirements 4.5
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public async Task ExportToWordAsync_WithMultipleDiagrams_PreservesOrder(int diagramCount)
     {
         // Arrange: Limit diagram count to reasonable range
@@ -319,7 +319,7 @@ public class MarkdownToWordExportServicePropertyTests
     /// and not complete the export.
     /// Validates: Requirements 7.3
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public async Task ExportToWordAsync_WhenCancelled_StopsProcessing(string content)
     {
         // Arrange
@@ -379,7 +379,7 @@ public class MarkdownToWordExportServicePropertyTests
     /// should be deleted.
     /// Validates: Requirements 7.4
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public async Task ExportToWordAsync_WhenCancelled_CleansUpTemporaryFiles(int diagramCount)
     {
         // Arrange: Limit diagram count

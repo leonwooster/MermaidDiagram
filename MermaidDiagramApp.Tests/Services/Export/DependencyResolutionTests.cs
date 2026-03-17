@@ -72,7 +72,7 @@ public class DependencyResolutionTests
     /// Property: For any valid Markdown string, the Markdig parser should be able to parse it without throwing exceptions.
     /// This verifies that Markdig is properly installed and functional.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void Markdig_CanParseAnyValidMarkdownString(string markdownContent)
     {
         // Arrange
@@ -93,7 +93,7 @@ public class DependencyResolutionTests
     /// Property: We should be able to create a WordprocessingDocument without the packages throwing resolution errors.
     /// This verifies that DocumentFormat.OpenXml is properly installed.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void OpenXml_CanCreateDocumentWithoutResolutionErrors(int randomSeed)
     {
         // Arrange

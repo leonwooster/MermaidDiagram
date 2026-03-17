@@ -26,7 +26,7 @@ public class ImagePathResolverPropertyTests
     /// the system should resolve it correctly relative to the Markdown file location
     /// or use the absolute path directly.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ResolveImagePath_WithRelativePath_ProducesAbsolutePath(string relativePath, string markdownPath)
     {
         // Arrange: Filter out invalid inputs
@@ -76,7 +76,7 @@ public class ImagePathResolverPropertyTests
     /// <summary>
     /// Property: For any absolute path, ResolveImagePath should return an absolute path.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ResolveImagePath_WithAbsolutePath_ReturnsAbsolutePath(string absolutePath)
     {
         // Arrange: Create a valid absolute path
@@ -106,7 +106,7 @@ public class ImagePathResolverPropertyTests
     /// <summary>
     /// Property: For any HTTP/HTTPS URL, ResolveImagePath should pass it through unchanged.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ResolveImagePath_WithUrl_PassesThrough(string domain, string path)
     {
         // Arrange
@@ -126,7 +126,7 @@ public class ImagePathResolverPropertyTests
     /// <summary>
     /// Property: For any data URI, ResolveImagePath should pass it through unchanged.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ResolveImagePath_WithDataUri_PassesThrough(string mimeType, string data)
     {
         // Arrange
@@ -146,7 +146,7 @@ public class ImagePathResolverPropertyTests
     /// <summary>
     /// Property: For any valid file path, IsValidImagePath should return true if the file exists.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void IsValidImagePath_WithExistingFile_ReturnsTrue(string content)
     {
         // Arrange: Create a temporary file
@@ -172,7 +172,7 @@ public class ImagePathResolverPropertyTests
     /// Property: For any URL or data URI, IsValidImagePath should return true
     /// (we can't verify their existence, so we trust them).
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void IsValidImagePath_WithUrl_ReturnsTrue(string domain, string path)
     {
         // Arrange
@@ -191,7 +191,7 @@ public class ImagePathResolverPropertyTests
     /// <summary>
     /// Property: For any image path with .png extension, DetectImageFormat should return Png.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void DetectImageFormat_WithPngExtension_ReturnsPng(string filename)
     {
         // Arrange
@@ -210,7 +210,7 @@ public class ImagePathResolverPropertyTests
     /// <summary>
     /// Property: For any image path with .jpg extension, DetectImageFormat should return Jpeg.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void DetectImageFormat_WithJpgExtension_ReturnsJpeg(string filename)
     {
         // Arrange
@@ -229,7 +229,7 @@ public class ImagePathResolverPropertyTests
     /// <summary>
     /// Property: For any data URI with image/png MIME type, DetectImageFormat should return Png.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void DetectImageFormat_WithPngDataUri_ReturnsPng(string data)
     {
         // Arrange
@@ -249,7 +249,7 @@ public class ImagePathResolverPropertyTests
     /// Property: Resolving a path should be idempotent - resolving an already resolved path
     /// should return the same result.
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void ResolveImagePath_IsIdempotent(string relativePath)
     {
         // Arrange

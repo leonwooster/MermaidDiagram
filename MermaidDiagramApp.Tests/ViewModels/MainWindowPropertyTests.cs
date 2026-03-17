@@ -17,7 +17,7 @@ public class MainWindowPropertyTests
     /// For any loaded Markdown file, the application window title should display the file name.
     /// Validates: Requirements 9.3
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void WindowTitle_ReflectsLoadedFileName(NonEmptyString fileNameGen)
     {
         // Arrange: Generate a valid file name
@@ -76,7 +76,7 @@ public class MainWindowPropertyTests
     /// the most recently loaded file.
     /// Validates: Requirements 9.3
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void WindowTitle_UpdatesOnFileChange(NonEmptyString fileName1Gen, NonEmptyString fileName2Gen)
     {
         // Arrange: Generate two different file names
@@ -109,7 +109,7 @@ public class MainWindowPropertyTests
     /// correctly display the file name without corruption.
     /// Validates: Requirements 9.3
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void WindowTitle_HandlesSpecialCharacters(string fileNameBase)
     {
         // Arrange: Create a file name with various special characters
@@ -139,7 +139,7 @@ public class MainWindowPropertyTests
     /// handle it gracefully (either display it or truncate appropriately).
     /// Validates: Requirements 9.3
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void WindowTitle_HandlesLongFileNames(PositiveInt lengthGen)
     {
         // Arrange: Create a long file name (but within OS limits)

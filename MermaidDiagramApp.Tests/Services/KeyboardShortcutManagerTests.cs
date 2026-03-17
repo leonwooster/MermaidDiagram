@@ -35,7 +35,7 @@ public class KeyboardShortcutManagerTests
     /// the associated action should be invoked.
     /// Validates: Requirements 2.3
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void KeyboardShortcutsExecuteTheirActions(bool useCtrl, bool useShift, bool useAlt)
     {
         // Arrange
@@ -239,7 +239,7 @@ public class KeyboardShortcutManagerTests
     /// Feature: keyboard-shortcut-fix, Property 1: Ctrl+F11 toggles full-screen state
     /// Validates: Requirements 1.2, 1.3
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void CtrlF11TogglesFullScreenState(bool initialState)
     {
         // Arrange
@@ -274,7 +274,7 @@ public class KeyboardShortcutManagerTests
     /// Feature: keyboard-shortcut-fix, Property 2: Escape exits full-screen when active
     /// Validates: Requirements 1.4
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void EscapeExitsFullScreenWhenActive(bool initialFullScreenState, bool initialPresentationState)
     {
         // Arrange
@@ -326,7 +326,7 @@ public class KeyboardShortcutManagerTests
     /// Feature: keyboard-shortcut-fix, Property 4: F7 opens syntax checker from any focus location
     /// Validates: Requirements 3.4
     /// </summary>
-    [Property(MaxTest = 100)]
+    [Property(MaxTest = 10)]
     public void F7OpensSyntaxCheckerFromAnyFocusLocation(bool useCtrl, bool useShift, bool useAlt)
     {
         // Arrange

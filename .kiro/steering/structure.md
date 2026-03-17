@@ -13,9 +13,18 @@ docs/                           # Documentation
 
 ### Core Application Files
 
-- **App.xaml / App.xaml.cs** - Application entry point, logging initialization
-- **MainWindow.xaml / MainWindow.xaml.cs** - Primary UI and application logic
-- **MainWindow.MarkdownToWord.cs** - Partial class for Word export functionality
+- **App.xaml / App.xaml.cs** - Application entry point, DI container configuration, logging initialization
+- **MainWindow.xaml** - Primary UI layout (MenuBar, CodeEditor, WebView2, GridSplitter)
+- **MainWindow.xaml.cs** - Core partial class: constructor, field declarations, DI wiring, initialization orchestration (~250 lines)
+- **MainWindow.WebView.cs** - Partial class: WebView2 init, message handling, rendering, zoom (~460 lines)
+- **MainWindow.UI.cs** - Partial class: new diagram templates, fullscreen/presentation mode, keyboard wiring (~440 lines)
+- **MainWindow.FileOps.cs** - Partial class: file open/save/close, recent files, dialog utilities (~490 lines)
+- **MainWindow.Export.cs** - Partial class: SVG/PNG export, Mermaid.js update management (~430 lines)
+- **MainWindow.RenderMode.cs** - Partial class: render mode overrides, zoom/pan controls, content type indicators (~230 lines)
+- **MainWindow.Builder.cs** - Partial class: visual builder panel visibility and canvas wiring (~120 lines)
+- **MainWindow.Search.cs** - Partial class: search panel UI wiring and CodeEditor search integration (~140 lines)
+- **MainWindow.ScrollSync.cs** - Partial class: synchronized scrolling and scroll-to-line (~200 lines)
+- **MainWindow.MarkdownToWord.cs** - Partial class: Markdown-to-Word export dialogs and progress (~415 lines)
 - **Package.appxmanifest** - MSIX packaging configuration
 
 ### Services Layer (`Services/`)
@@ -51,6 +60,12 @@ Organized by functional domain:
 - **RollingFileLogSink.cs** - File-based log sink with rotation
 - **LogEntry.cs**, **LogLevel.cs** - Supporting types
 
+#### Extracted Services (DI-registered, interface-based)
+- **IFileOperationsService.cs / FileOperationsService.cs** - File open/save, recent files, text optimization (wraps DiagramFileService, RecentFilesService, MermaidTextOptimizer)
+- **ISearchService.cs / SearchService.cs** - Search state management (find next/previous, reset)
+- **IMermaidUpdateService.cs / MermaidUpdateService.cs** - Mermaid.js version checking and update
+- **IExportService.cs / ExportService.cs** - SVG background insertion, PNG scaling, file export
+
 #### Other Services
 - **MermaidSyntaxAnalyzer.cs** - Analyzes Mermaid syntax
 - **MermaidSyntaxFixer.cs** - Auto-fixes common syntax errors
@@ -63,11 +78,13 @@ Organized by functional domain:
 ### ViewModels (`ViewModels/`)
 
 MVVM pattern implementation:
+- **MainWindowViewModel.cs** - Main window UI state (9 bindable properties) + 19 ICommand properties, delegates to services via DI
 - **DiagramBuilderViewModel.cs** - Visual diagram builder logic
 - **DiagramCanvasViewModel.cs** - Canvas interaction logic
 - **AiDiagramGeneratorViewModel.cs** - AI generation UI logic
 - **MarkdownToWordViewModel.cs** - Export UI logic
 - **PropertiesPanelViewModel.cs** - Properties panel logic
+- **ShapeToolboxViewModel.cs** - Shape toolbox logic
 - **SyntaxIssuesViewModel.cs** - Syntax error display
 
 ### Views (`Views/`)
@@ -97,6 +114,8 @@ Data structures organized by domain:
 - **RenderingContext.cs** - Rendering metadata
 - **RenderingResult.cs** - Rendering output
 - **MarkdownStyleSettings.cs** - Style configuration
+- **SearchResult.cs** - Search operation result (Found, MatchIndex, MatchLength, StatusMessage)
+- **MermaidVersionInfo.cs** - Mermaid version info (CurrentVersion, LatestVersion, UpdateAvailable)
 - **SyntaxIssue.cs** - Syntax error representation
 - **KeyboardEventMessage.cs** - Keyboard event data
 
@@ -130,14 +149,20 @@ Mirrors main project structure:
 
 ```
 Services/
-  Export/                       # Export functionality tests
+  DiContainerPropertyTests.cs   # DI container resolution tests
+  FileOperationsServiceTests.cs  # FileOperationsService unit tests
+  SearchServiceTests.cs          # SearchService unit tests
+  MermaidUpdateServiceTests.cs   # MermaidUpdateService unit tests
+  ExportServiceTests.cs          # ExportService unit tests
+  Export/                        # Export functionality tests
     MarkdownToWordExportServiceTests.cs
     ImagePathResolverTests.cs
-    *PropertyTests.cs           # Property-based tests
+    *PropertyTests.cs            # Property-based tests
     EndToEndIntegrationTests.cs
   KeyboardShortcutManagerTests.cs
   MermaidTextOptimizerTests.cs
 ViewModels/
+  MainWindowViewModelPropertyTests.cs  # ViewModel commands, PropertyChanged, DI tests
   MarkdownToWordViewModelTests.cs
   *PropertyTests.cs
 Models/
@@ -169,21 +194,24 @@ Models/
 ## Key Architectural Patterns
 
 ### Layered Architecture
-```
-Presentation (XAML/ViewModels)
-    ↓
-Application (MainWindow logic)
-    ↓
-Service (Business logic)
-    ↓
-Infrastructure (WebView2, File I/O)
+```mermaid
+graph TD
+    A["Presentation (XAML / ViewModels)"] --> B["Application (MainWindowViewModel / DI)"]
+    B --> C["Service (Business logic)"]
+    C --> D["Infrastructure (WebView2, File I/O)"]
 ```
 
+### Dependency Injection
+- DI container configured in `App.xaml.cs` using `Microsoft.Extensions.DependencyInjection`
+- Services registered as singletons or transients based on statefulness
+- MainWindow and MainWindowViewModel resolved from the container
+- Static classes (WindowStateManager, AiConfigStorageService, AiServiceFactory, FontManager) used directly (not DI-registered)
+
 ### SOLID Principles
-- Services use interface-based design (IContentRenderer, ILogger, etc.)
+- Services use interface-based design (IContentRenderer, ILogger, IFileOperationsService, ISearchService, etc.)
 - Factory pattern for object creation
 - Strategy pattern for rendering
-- Single responsibility per service class
+- Single responsibility per service class and per partial class file
 
 ### File Naming
 - Interfaces: `I[Name].cs`
