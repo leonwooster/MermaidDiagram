@@ -418,6 +418,151 @@
             }
         }
 
+        // Pre-process Mermaid code to quote node labels containing special characters.
+        // Mermaid treats [], (), {}, |, <> as syntax delimiters.  When a label such as
+        // Fix2[Remove 'as const' from navigation items, use UserRole[] type]
+        // contains inner brackets the parser breaks.  Wrapping the label in double-quotes
+        // tells Mermaid to treat the content as literal text.
+        //
+        // Strategy – try to render first; if it fails, auto-quote and retry.
+        // This avoids false-positive quoting on valid diagrams.
+        window.preprocessMermaidCode = function(code) {
+            if (!code) return code;
+
+            // Only touch flowchart / graph diagrams
+            const firstLine = code.trim().split('\n')[0].trim().toLowerCase();
+            if (!firstLine.startsWith('flowchart') && !firstLine.startsWith('graph')) {
+                return code;
+            }
+
+            const lines = code.split('\n');
+            const out = [];
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+
+                // Lines that must never be rewritten
+                if (/^(style |class |click |subgraph |linkStyle |classDef |end$|%%|flowchart|graph )/i.test(trimmed)) {
+                    out.push(line);
+                    continue;
+                }
+
+                out.push(autoQuoteLine(line));
+            }
+
+            const processed = out.join('\n');
+            if (processed !== code) {
+                log('Pre-processed Mermaid code: auto-quoted labels with special characters');
+            }
+            return processed;
+        };
+
+        // ---- helpers for preprocessMermaidCode ----
+
+        // Characters that are problematic inside an unquoted label
+        const SPECIAL_RE = /[\[\]{}()|<>]/;
+
+        // Walk a single line and quote every node-label that contains specials.
+        // Handles  Id[...], Id([...]), Id[[...]], Id{...}, Id(...)  shapes.
+        function autoQuoteLine(line) {
+            // We work character-by-character so we can correctly pair the
+            // *outermost* open/close brackets even when the label itself
+            // contains the same bracket characters.
+            let result = '';
+            let i = 0;
+
+            while (i < line.length) {
+                // Look for a node-label opener: a word char followed by one of [ ( {
+                // We also handle the double-bracket shapes [[ , [( , ([
+                const opener = findNodeOpener(line, i);
+                if (!opener) {
+                    result += line.substring(i);
+                    break;
+                }
+
+                // Copy everything before the opener verbatim
+                result += line.substring(i, opener.labelStart);
+
+                // Find the matching closer
+                const closeIdx = findMatchingClose(line, opener.labelStart, opener.close);
+                if (closeIdx < 0) {
+                    // No matching close – copy rest as-is
+                    result += line.substring(opener.labelStart);
+                    break;
+                }
+
+                const label = line.substring(opener.labelStart, closeIdx);
+
+                // Quote only when the label contains problematic characters
+                // and is not already quoted
+                if (SPECIAL_RE.test(label) && !(label.startsWith('"') && label.endsWith('"'))) {
+                    result += '"' + label.replace(/"/g, '#quot;') + '"';
+                } else {
+                    result += label;
+                }
+
+                result += opener.close;
+                i = closeIdx + opener.close.length;
+            }
+
+            return result;
+        }
+
+        // Locate the next node-label opening bracket starting from `pos`.
+        // Returns { labelStart, close } or null.
+        //   labelStart – index right after the opening bracket(s)
+        //   close      – the string we need to find to close the label
+        function findNodeOpener(line, pos) {
+            // Scan for [ ( { preceded by a word character
+            for (let j = pos; j < line.length; j++) {
+                const ch = line[j];
+                if ((ch === '[' || ch === '(' || ch === '{') && j > 0 && /\w/.test(line[j - 1])) {
+                    // Determine shape variant
+                    const next = j + 1 < line.length ? line[j + 1] : '';
+
+                    if (ch === '[' && next === '[') return { labelStart: j + 2, close: ']]' };
+                    if (ch === '[' && next === '(') return { labelStart: j + 2, close: ')]' };
+                    if (ch === '(' && next === '[') return { labelStart: j + 2, close: '])' };
+                    if (ch === '(' && next === '(') return { labelStart: j + 2, close: '))' };
+
+                    if (ch === '[') return { labelStart: j + 1, close: ']' };
+                    if (ch === '(') return { labelStart: j + 1, close: ')' };
+                    if (ch === '{') return { labelStart: j + 1, close: '}' };
+                }
+            }
+            return null;
+        }
+
+        // Find the position of `closeStr` that actually closes the label.
+        // For single-char closers like ']' we want the *last* occurrence
+        // before the next arrow (-->, --->, -.->)  or end-of-line, because
+        // the label may contain the same bracket character internally.
+        function findMatchingClose(line, labelStart, closeStr) {
+            // Determine the boundary: the next arrow or end-of-line
+            const arrowMatch = line.substring(labelStart).match(/\s+(-->|---->|-.->|-\.->|==>|~~~|---)\s*/);
+            const boundary = arrowMatch
+                ? labelStart + arrowMatch.index
+                : line.length;
+
+            if (closeStr.length === 1) {
+                // Single-char closer: take the last occurrence before boundary
+                const idx = line.lastIndexOf(closeStr, boundary - 1);
+                return idx >= labelStart ? idx : -1;
+            }
+
+            // Multi-char closer (]], ]), )], )) ): search forward for the
+            // last occurrence before boundary
+            let last = -1;
+            let search = labelStart;
+            while (true) {
+                const idx = line.indexOf(closeStr, search);
+                if (idx < 0 || idx >= boundary) break;
+                last = idx;
+                search = idx + 1;
+            }
+            return last;
+        }
+
         // Render Mermaid diagram
         window.renderMermaid = async function(content, theme = 'dark') {
             const container = document.getElementById('content-container');
@@ -431,6 +576,7 @@
             log('Rendering Mermaid diagram...');
             container.innerHTML = '<div>Rendering diagram...</div>';
             
+            const renderId = 'mermaid-diagram-' + Date.now();
             try {
                 // Re-initialize with better configuration
                 mermaid.initialize({
@@ -457,7 +603,9 @@
                 
                 log('Mermaid re-initialized for render');
                 
-                const { svg } = await mermaid.render('mermaid-diagram-' + Date.now(), content);
+                // Pre-process to escape special characters in node labels
+                const processedContent = window.preprocessMermaidCode(content);
+                const { svg } = await mermaid.render(renderId, processedContent);
                 
                 // Check if SVG contains foreignObject
                 if (svg.includes('<foreignObject')) {
@@ -481,6 +629,12 @@
             } catch (error) {
                 const errorMsg = `Mermaid rendering failed: ${error.message || error}`;
                 log(errorMsg);
+                
+                // Clean up Mermaid's error SVGs injected into the DOM on failure
+                const errorSvg = document.getElementById('d' + renderId);
+                if (errorSvg) errorSvg.remove();
+                document.querySelectorAll('svg[id^="dmermaid-diagram-"]').forEach(el => el.remove());
+                
                 container.innerHTML = `<div class="error">${errorMsg}</div>`;
                 
                 if (window.chrome && window.chrome.webview) {
@@ -614,9 +768,12 @@
                         for (let i = 0; i < mermaidBlocks.length; i++) {
                             const block = mermaidBlocks[i];
                             const code = block.textContent;
+                            const renderId = `mermaid-${i}-${Date.now()}`;
                             
                             try {
-                                const { svg } = await mermaid.render(`mermaid-${i}-${Date.now()}`, code);
+                                // Pre-process to escape special characters in node labels
+                                const processedCode = window.preprocessMermaidCode(code);
+                                const { svg } = await mermaid.render(renderId, processedCode);
                                 
                                 // Fix z-order to ensure text labels appear above lines
                                 const fixedSvg = window.fixSvgZOrder(svg, theme);
@@ -632,6 +789,15 @@
                                 block.parentElement.replaceWith(div);
                             } catch (error) {
                                 log(`Failed to render Mermaid block ${i}:`, error.message);
+                                
+                                // Clean up Mermaid's error SVGs that it injects into the DOM on failure
+                                const errorSvg = document.getElementById('d' + renderId);
+                                if (errorSvg) errorSvg.remove();
+                                // Also remove any orphaned error SVGs by Mermaid
+                                document.querySelectorAll(`svg[id="${renderId}"]`).forEach(el => el.remove());
+                                document.querySelectorAll(`div[id="${renderId}"]`).forEach(el => el.remove());
+                                
+                                // Show a compact inline error instead of Mermaid's large error graphic
                                 const errorDiv = document.createElement('div');
                                 errorDiv.className = 'error';
                                 errorDiv.textContent = `Mermaid diagram error: ${error.message}`;
@@ -880,7 +1046,8 @@
                 }
                 
                 // Render the diagram
-                const { svg } = await mermaid.render('export-diagram-' + Date.now(), content);
+                const processedContent = window.preprocessMermaidCode(content);
+                const { svg } = await mermaid.render('export-diagram-' + Date.now(), processedContent);
                 
                 // Fix z-order to ensure text labels appear above lines
                 const fixedSvg = window.fixSvgZOrder(svg, theme);
