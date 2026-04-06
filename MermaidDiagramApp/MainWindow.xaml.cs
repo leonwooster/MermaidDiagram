@@ -15,6 +15,7 @@
 //   MainWindow.MarkdownToWord.cs — Markdown-to-Word export dialogs and progress
 
 using System;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -60,6 +61,8 @@ namespace MermaidDiagramApp
         private readonly ISearchService _searchService;
         private readonly IMermaidUpdateService _mermaidUpdateService;
         private readonly IExportService _exportService;
+        private FileSystemWatcher? _fileWatcher;
+        private DateTime _lastFileChangeTime = DateTime.MinValue;
 
         /// <summary>
         /// Gets the MainWindowViewModel for data binding and command routing.
@@ -156,7 +159,10 @@ namespace MermaidDiagramApp
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
             _timer?.Stop();
-            
+
+            // Stop file watcher
+            StopFileWatcher();
+
             // Save window state before closing
             var appWindow = GetAppWindowForCurrentWindow();
             WindowStateManager.SaveWindowState(appWindow);

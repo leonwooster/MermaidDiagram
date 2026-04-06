@@ -1,2 +1,5 @@
 {
+    "dotnet.defaultSolution": "MermaidDiagramApp/MermaidDiagramApp.sln",
+    "omnisharp.projectLoadTimeout": 120,
+    "dotnet.server.additionalBuildArguments": "/p:Platform=x64"
 }
