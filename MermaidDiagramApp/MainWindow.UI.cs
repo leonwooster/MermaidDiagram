@@ -414,7 +414,13 @@ namespace MermaidDiagramApp
 
         private void MainWindow_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            // Handle preview key down events
+            // Close zoom panel on Escape when it's open
+            if (e.Key == Windows.System.VirtualKey.Escape && _zoomPanelService.IsOpen)
+            {
+                _zoomPanelService.Close();
+                e.Handled = true;
+                return;
+            }
         }
 
         private void AiSettings_Click(object sender, RoutedEventArgs e)

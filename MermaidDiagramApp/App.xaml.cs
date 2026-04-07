@@ -71,7 +71,9 @@ namespace MermaidDiagramApp
                 Services.GetRequiredService<IFileOperationsService>(),
                 Services.GetRequiredService<ISearchService>(),
                 Services.GetRequiredService<IMermaidUpdateService>(),
-                Services.GetRequiredService<IExportService>()
+                Services.GetRequiredService<IExportService>(),
+                Services.GetRequiredService<IZoomPanelService>(),
+                Services.GetRequiredService<IDiagramExportService>()
             );
             _window.Activate();
             _logger.Log(LogLevel.Information, "Main window activated");
@@ -118,6 +120,11 @@ namespace MermaidDiagramApp
 
             // Export
             services.AddSingleton<IExportService, ExportService>();
+
+            // Diagram zoom & export
+            services.AddSingleton<IZoomPanelService, ZoomPanelService>();
+            services.AddSingleton<IDiagramExportService, DiagramExportService>();
+            services.AddTransient<ViewModels.ZoomPanelViewModel>();
 
             // ViewModel
             services.AddTransient<ViewModels.MainWindowViewModel>();

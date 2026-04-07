@@ -174,6 +174,77 @@
             display: none;
             z-index: 9999;
         }
+
+        /* Diagram hover toolbar styles */
+        .diagram-wrapper {
+            position: relative;
+            display: block;
+            width: 100%;
+        }
+
+        /* In mermaid-mode the wrapper is the only flex child — let it fill the container */
+        #content-container.mermaid-mode .diagram-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Preserve original SVG sizing inside the wrapper */
+        .diagram-wrapper > svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .diagram-hover-toolbar {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .diagram-wrapper:hover .diagram-hover-toolbar {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .diagram-hover-toolbar button {
+            background: rgba(30, 30, 30, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .diagram-hover-toolbar button:hover {
+            background: rgba(60, 60, 60, 0.95);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Light theme toolbar variants */
+        body.light-theme .diagram-hover-toolbar button {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            color: #24292f;
+        }
+
+        body.light-theme .diagram-hover-toolbar button:hover {
+            background: rgba(240, 240, 240, 0.95);
+            border-color: rgba(0, 0, 0, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -563,6 +634,55 @@
             return last;
         }
 
+        // Wrap a rendered SVG element with a hover toolbar for zoom and download actions
+        window.wrapDiagramWithToolbar = function(svgElement) {
+            if (!svgElement || svgElement.tagName !== 'svg') return;
+
+            // Idempotent: skip if already wrapped
+            if (svgElement.parentElement && svgElement.parentElement.classList.contains('diagram-wrapper')) return;
+
+            var wrapper = document.createElement('div');
+            wrapper.className = 'diagram-wrapper';
+
+            var toolbar = document.createElement('div');
+            toolbar.className = 'diagram-hover-toolbar';
+
+            var zoomBtn = document.createElement('button');
+            zoomBtn.textContent = '\uD83D\uDD0D'; // 🔍
+            zoomBtn.title = 'Zoom';
+            zoomBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'diagramAction',
+                        action: 'zoom',
+                        svgContent: svgElement.outerHTML
+                    }));
+                }
+            });
+
+            var downloadBtn = document.createElement('button');
+            downloadBtn.textContent = '\uD83D\uDCE5'; // 📥
+            downloadBtn.title = 'Download PNG';
+            downloadBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'diagramAction',
+                        action: 'downloadPng',
+                        svgContent: svgElement.outerHTML
+                    }));
+                }
+            });
+
+            toolbar.appendChild(zoomBtn);
+            toolbar.appendChild(downloadBtn);
+
+            svgElement.parentNode.insertBefore(wrapper, svgElement);
+            wrapper.appendChild(svgElement);
+            wrapper.appendChild(toolbar);
+        };
+
         // Render Mermaid diagram
         window.renderMermaid = async function(content, theme = 'dark') {
             const container = document.getElementById('content-container');
@@ -616,6 +736,12 @@
                 }
                 
                 container.innerHTML = svg;
+                
+                // Wrap the rendered SVG with hover toolbar
+                var svgEl = container.querySelector('svg');
+                if (svgEl) {
+                    window.wrapDiagramWithToolbar(svgEl);
+                }
                 
                 log('Mermaid diagram rendered successfully');
                 
@@ -787,6 +913,12 @@
                                 fixSubgraphTitleOverflow(div);
                                 
                                 block.parentElement.replaceWith(div);
+                                
+                                // Wrap the rendered SVG with hover toolbar
+                                var embeddedSvg = div.querySelector('svg');
+                                if (embeddedSvg) {
+                                    window.wrapDiagramWithToolbar(embeddedSvg);
+                                }
                             } catch (error) {
                                 log(`Failed to render Mermaid block ${i}:`, error.message);
                                 

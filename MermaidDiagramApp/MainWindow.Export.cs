@@ -136,6 +136,35 @@ namespace MermaidDiagramApp
             return _exportService.AddBackgroundToSvg(svgContent);
         }
 
+        private async Task ExportDiagramAsPngAsync(string svgContent)
+        {
+            try
+            {
+                var savePicker = new FileSavePicker();
+                WinRT_InterOp.InitializeWithWindow(savePicker, this);
+
+                savePicker.SuggestedStartLocation = PickerLocationId.PicturesLibrary;
+                savePicker.FileTypeChoices.Add("PNG Image", new List<string>() { ".png" });
+                savePicker.SuggestedFileName = "Diagram";
+
+                var file = await savePicker.PickSaveFileAsync();
+                if (file == null) return;
+
+                var pngBytes = await _diagramExportService.RasterizeSvgToPngAsync(svgContent);
+                if (pngBytes.Length == 0)
+                {
+                    _logger.LogWarning("Diagram PNG export produced empty output — SVG may be invalid.");
+                    return;
+                }
+
+                await _exportService.SavePngAsync(file.Path, pngBytes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to export diagram as PNG: {ex.Message}", ex);
+            }
+        }
+
         #endregion
 
         #region Mermaid Update

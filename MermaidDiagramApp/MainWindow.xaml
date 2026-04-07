@@ -175,6 +175,8 @@
                 <ColumnDefinition x:Name="PreviewColumn" Width="*"/>
                 <ColumnDefinition x:Name="PropertiesSplitterColumn" Width="Auto"/>
                 <ColumnDefinition x:Name="PropertiesColumn" Width="Auto" MinWidth="0" MaxWidth="400"/>
+                <ColumnDefinition x:Name="ZoomSplitterColumn" Width="Auto"/>
+                <ColumnDefinition x:Name="ZoomPanelColumn" Width="0"/>
             </Grid.ColumnDefinitions>
 
             <!-- Removed old left AI panel; floating prompt is used instead -->
@@ -515,6 +517,21 @@
             <Border x:Name="PropertiesPanel" Grid.Column="8" Visibility="Collapsed">
                 <views:PropertiesPanel x:Name="PropertiesPanelControl"/>
             </Border>
+
+            <!-- Zoom Panel Splitter -->
+            <ctk:GridSplitter x:Name="ZoomSplitter"
+                              Grid.Column="9"
+                              Width="12"
+                              Visibility="Collapsed"
+                              ResizeBehavior="BasedOnAlignment"
+                              ResizeDirection="Auto"
+                              Background="Transparent"/>
+
+            <!-- Zoom Panel -->
+            <Border x:Name="ZoomPanelBorder" Grid.Column="10" Visibility="Collapsed">
+                <views:ZoomPanel x:Name="ZoomPanelControl"/>
+            </Border>
+
             <!-- Overlay for floating panels (topmost within editor area) -->
             <Canvas x:Name="OverlayCanvas"
                     Grid.Column="4"

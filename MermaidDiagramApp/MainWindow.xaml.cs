@@ -61,6 +61,8 @@ namespace MermaidDiagramApp
         private readonly ISearchService _searchService;
         private readonly IMermaidUpdateService _mermaidUpdateService;
         private readonly IExportService _exportService;
+        private readonly IZoomPanelService _zoomPanelService;
+        private readonly IDiagramExportService _diagramExportService;
         private FileSystemWatcher? _fileWatcher;
         private DateTime _lastFileChangeTime = DateTime.MinValue;
 
@@ -85,7 +87,9 @@ namespace MermaidDiagramApp
             IFileOperationsService fileOperationsService,
             ISearchService searchService,
             IMermaidUpdateService mermaidUpdateService,
-            IExportService exportService)
+            IExportService exportService,
+            IZoomPanelService zoomPanelService,
+            IDiagramExportService diagramExportService)
         {
             this.InitializeComponent();
 
@@ -105,6 +109,8 @@ namespace MermaidDiagramApp
             _searchService = searchService ?? throw new ArgumentNullException(nameof(searchService));
             _mermaidUpdateService = mermaidUpdateService ?? throw new ArgumentNullException(nameof(mermaidUpdateService));
             _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
+            _zoomPanelService = zoomPanelService ?? throw new ArgumentNullException(nameof(zoomPanelService));
+            _diagramExportService = diagramExportService ?? throw new ArgumentNullException(nameof(diagramExportService));
 
             // Wire ViewModel callback delegates to MainWindow UI methods
             ViewModel.RequestNewDiagram = diagramType => NewDiagram(diagramType);
@@ -143,6 +149,9 @@ namespace MermaidDiagramApp
             
             // Initialize synchronized scrolling
             InitializeSynchronizedScrolling();
+            
+            // Initialize zoom panel wiring
+            InitializeZoomPanel();
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)

@@ -124,6 +124,26 @@ namespace MermaidDiagramApp
                                     _logger.LogDebug($"[WebView Log] {msgElement.GetString()}");
                                 }
                             }
+                            else if (messageType == "diagramAction")
+                            {
+                                var action = root.GetProperty("action").GetString();
+                                var svgContent = root.GetProperty("svgContent").GetString();
+
+                                if (!string.IsNullOrEmpty(action) && !string.IsNullOrEmpty(svgContent))
+                                {
+                                    DispatcherQueue.TryEnqueue(() =>
+                                    {
+                                        if (action == "zoom")
+                                        {
+                                            _zoomPanelService.Open(svgContent);
+                                        }
+                                        else if (action == "downloadPng")
+                                        {
+                                            _ = ExportDiagramAsPngAsync(svgContent);
+                                        }
+                                    });
+                                }
+                            }
                         }
                     }
                     catch (JsonException)

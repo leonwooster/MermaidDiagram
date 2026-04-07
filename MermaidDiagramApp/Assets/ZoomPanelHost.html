@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body {
+        margin: 0;
+        background: var(--bg, #222);
+        overflow: hidden;
+        width: 100vw;
+        height: 100vh;
+        cursor: grab;
+        user-select: none;
+    }
+    body.light-theme { --bg: #fff; }
+    body.dragging { cursor: grabbing; }
+    #viewport {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-origin: 0 0;
+    }
+    #diagram {
+        padding: 20px;
+    }
+</style>
+</head>
+<body>
+    <div id="viewport">
+        <div id="diagram"></div>
+    </div>
+    <script>
+        var panX = 0, panY = 0, currentZoom = 1;
+        var isDragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
+
+        function applyTransform() {
+            var vp = document.getElementById('viewport');
+            vp.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + currentZoom + ')';
+        }
+
+        window.setDiagram = function(svgHtml) {
+            document.getElementById('diagram').innerHTML = svgHtml;
+            // Center the diagram in the viewport
+            panX = 0;
+            panY = 0;
+            applyTransform();
+            // After render, center it
+            requestAnimationFrame(function() {
+                var diag = document.getElementById('diagram');
+                var w = diag.offsetWidth * currentZoom;
+                var h = diag.offsetHeight * currentZoom;
+                panX = Math.max(0, (window.innerWidth - w) / 2);
+                panY = Math.max(0, (window.innerHeight - h) / 2);
+                applyTransform();
+            });
+        };
+
+        window.setZoom = function(level) {
+            // Zoom toward center of viewport
+            var cx = window.innerWidth / 2;
+            var cy = window.innerHeight / 2;
+            var ratio = level / currentZoom;
+            panX = cx - ratio * (cx - panX);
+            panY = cy - ratio * (cy - panY);
+            currentZoom = level;
+            applyTransform();
+        };
+
+        window.setTheme = function(theme) {
+            document.body.className = theme === 'light' ? 'light-theme' : '';
+        };
+
+        // Drag to pan
+        document.addEventListener('mousedown', function(e) {
+            if (e.button !== 0) return;
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            panStartX = panX;
+            panStartY = panY;
+            document.body.classList.add('dragging');
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            panX = panStartX + (e.clientX - dragStartX);
+            panY = panStartY + (e.clientY - dragStartY);
+            applyTransform();
+        });
+
+        document.addEventListener('mouseup', function() {
+            isDragging = false;
+            document.body.classList.remove('dragging');
+        });
+
+        // Forward mouse wheel to C# for zoom control
+        document.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage(JSON.stringify({
+                    type: 'zoomWheel', deltaY: e.deltaY
+                }));
+            }
+        }, { passive: false });
+
+        // Forward Escape key to C#
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && window.chrome && window.chrome.webview) {
+                e.preventDefault();
+                window.chrome.webview.postMessage(JSON.stringify({
+                    type: 'keypress', key: 'Escape'
+                }));
+            }
+        });
+    </script>
+</body>
+</html>
