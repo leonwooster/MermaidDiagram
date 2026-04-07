@@ -358,7 +358,13 @@ namespace MermaidDiagramApp
                 _logger.LogInformation($"Detected content type: {_currentContentType}");
 
                 // Execute appropriate JavaScript rendering based on content type
-                await ExecuteRenderingScript(code, renderResult.DetectedContentType, context);
+                var rendered = await ExecuteRenderingScript(code, renderResult.DetectedContentType, context);
+
+                // Only mark as previewed if the render actually executed
+                if (!rendered)
+                {
+                    return;
+                }
 
                 // Update export ViewModel with current content so export menu is enabled
                 if (_markdownToWordViewModel != null)
@@ -385,13 +391,13 @@ namespace MermaidDiagramApp
             }
         }
 
-        private async Task ExecuteRenderingScript(string content, ContentType contentType, RenderingContext context)
+        private async Task<bool> ExecuteRenderingScript(string content, ContentType contentType, RenderingContext context)
         {
             // Check if WebView is ready
             if (!_isWebViewReady)
             {
                 _logger.LogDebug("WebView not ready yet, skipping render");
-                return;
+                return false;
             }
 
             var escapedContent = JsonSerializer.Serialize(content);
@@ -434,10 +440,13 @@ namespace MermaidDiagramApp
                 {
                     await SetupScrollSynchronization();
                 }
+
+                return true;
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error executing render script: {ex.Message}", ex);
+                return false;
             }
         }
 

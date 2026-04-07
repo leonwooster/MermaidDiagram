@@ -580,9 +580,8 @@ public class OpenXmlWordDocumentGenerator : IWordDocumentGenerator
         numberingProperties.AppendChild(new NumberingId { Val = numId });
         paragraphProperties.AppendChild(numberingProperties);
 
-        // Add indentation based on level
-        var indentation = new Indentation { Left = (item.Level * 720).ToString() }; // 720 = 0.5 inch
-        paragraphProperties.AppendChild(indentation);
+        // Indentation is handled by the numbering definition's PreviousParagraphProperties,
+        // so we don't set explicit indentation here to avoid conflicts.
 
         paragraph.AppendChild(paragraphProperties);
 
@@ -615,6 +614,11 @@ public class OpenXmlWordDocumentGenerator : IWordDocumentGenerator
         // Create abstract numbering definition
         var abstractNum = new AbstractNum { AbstractNumberId = abstractNumId };
 
+        // Unique Nsid prevents Word from merging separate list definitions
+        var nsidValue = string.Format("{0:X8}", 10000 + abstractNumId);
+        abstractNum.AppendChild(new Nsid { Val = nsidValue });
+        abstractNum.AppendChild(new MultiLevelType { Val = MultiLevelValues.HybridMultilevel });
+
         for (int i = 0; i < 9; i++)
         {
             var level = new Level { LevelIndex = i };
@@ -628,7 +632,11 @@ public class OpenXmlWordDocumentGenerator : IWordDocumentGenerator
             else
             {
                 level.AppendChild(new NumberingFormat { Val = NumberFormatValues.Bullet });
-                level.AppendChild(new LevelText { Val = "●" });
+                level.AppendChild(new LevelText { Val = "\uF0B7" });
+                // Use Symbol font which maps F0B7 to the standard bullet character
+                var numberingSymbolRunProperties = new NumberingSymbolRunProperties();
+                numberingSymbolRunProperties.AppendChild(new RunFonts { Ascii = "Symbol", HighAnsi = "Symbol", Hint = FontTypeHintValues.Default });
+                level.AppendChild(numberingSymbolRunProperties);
             }
 
             level.AppendChild(new LevelJustification { Val = LevelJustificationValues.Left });
@@ -636,7 +644,7 @@ public class OpenXmlWordDocumentGenerator : IWordDocumentGenerator
             var previousParagraphProperties = new PreviousParagraphProperties();
             previousParagraphProperties.AppendChild(new Indentation
             {
-                Left = (i * 720).ToString(),
+                Left = ((i + 1) * 720).ToString(),
                 Hanging = "360"
             });
             level.AppendChild(previousParagraphProperties);
@@ -644,11 +652,32 @@ public class OpenXmlWordDocumentGenerator : IWordDocumentGenerator
             abstractNum.AppendChild(level);
         }
 
-        numbering.AppendChild(abstractNum);
+        // Insert AbstractNum before any NumberingInstance elements (OpenXML schema requirement)
+        var firstNumberingInstance = numbering.Elements<NumberingInstance>().FirstOrDefault();
+        if (firstNumberingInstance != null)
+        {
+            numbering.InsertBefore(abstractNum, firstNumberingInstance);
+        }
+        else
+        {
+            numbering.AppendChild(abstractNum);
+        }
 
         // Create numbering instance
         var numberingInstance = new NumberingInstance { NumberID = numId };
         numberingInstance.AppendChild(new AbstractNumId { Val = abstractNumId });
+
+        // Only add LevelOverride for ordered lists to force restart at 1
+        if (ordered)
+        {
+            for (int i = 0; i < 9; i++)
+            {
+                var levelOverride = new LevelOverride { LevelIndex = i };
+                levelOverride.AppendChild(new StartOverrideNumberingValue { Val = 1 });
+                numberingInstance.AppendChild(levelOverride);
+            }
+        }
+
         numbering.AppendChild(numberingInstance);
     }
 }

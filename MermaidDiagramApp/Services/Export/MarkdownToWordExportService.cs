@@ -623,6 +623,10 @@ public class MarkdownToWordExportService
             {
                 texts.Add(literal.Content.ToString());
             }
+            else if (child is Markdig.Syntax.Inlines.CodeInline codeInline)
+            {
+                texts.Add(codeInline.Content);
+            }
             else if (child is Markdig.Syntax.Inlines.ContainerInline container)
             {
                 texts.Add(ExtractInlineText(container));
