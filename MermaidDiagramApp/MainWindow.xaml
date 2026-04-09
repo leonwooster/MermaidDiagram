@@ -166,15 +166,15 @@
 
         <Grid Grid.Row="3" Padding="12" x:Name="MainGrid">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="ToolboxColumn" Width="Auto" MinWidth="0" MaxWidth="400"/>
+                <ColumnDefinition x:Name="ToolboxColumn" Width="0" MinWidth="0"/>
                 <ColumnDefinition x:Name="ToolboxSplitterColumn" Width="Auto"/>
-                <ColumnDefinition x:Name="BuilderColumn" Width="Auto" MinWidth="0"/>
+                <ColumnDefinition x:Name="BuilderColumn" Width="0" MinWidth="0"/>
                 <ColumnDefinition x:Name="BuilderSplitterColumn" Width="Auto"/>
                 <ColumnDefinition x:Name="EditorColumn" Width="*"/>
                 <ColumnDefinition x:Name="EditorPreviewSplitterColumn" Width="Auto"/>
                 <ColumnDefinition x:Name="PreviewColumn" Width="*"/>
                 <ColumnDefinition x:Name="PropertiesSplitterColumn" Width="Auto"/>
-                <ColumnDefinition x:Name="PropertiesColumn" Width="Auto" MinWidth="0" MaxWidth="400"/>
+                <ColumnDefinition x:Name="PropertiesColumn" Width="0" MinWidth="0"/>
                 <ColumnDefinition x:Name="ZoomSplitterColumn" Width="Auto"/>
                 <ColumnDefinition x:Name="ZoomPanelColumn" Width="0"/>
             </Grid.ColumnDefinitions>
@@ -520,7 +520,7 @@
 
             <!-- Zoom Panel Splitter -->
             <ctk:GridSplitter x:Name="ZoomSplitter"
-                              Grid.Column="9"
+                              Grid.Column="7"
                               Width="12"
                               Visibility="Collapsed"
                               ResizeBehavior="BasedOnAlignment"
@@ -528,7 +528,7 @@
                               Background="Transparent"/>
 
             <!-- Zoom Panel -->
-            <Border x:Name="ZoomPanelBorder" Grid.Column="10" Visibility="Collapsed">
+            <Border x:Name="ZoomPanelBorder" Grid.Column="8" Visibility="Collapsed">
                 <views:ZoomPanel x:Name="ZoomPanelControl"/>
             </Border>
 

@@ -39,22 +39,20 @@ namespace MermaidDiagramApp
             _savedEditorWidth = EditorColumn.Width;
             _savedPreviewWidth = PreviewColumn.Width;
 
-            // Give the zoom panel 50% of the preview column's current width
-            var previewActualWidth = PreviewColumn.ActualWidth;
-            if (previewActualWidth > 0)
+            // Pin the editor at its current pixel width so it doesn't participate
+            // in the star-sizing with the preview and zoom columns.
+            var editorActualWidth = EditorColumn.ActualWidth;
+            if (editorActualWidth > 0)
             {
-                var halfWidth = previewActualWidth / 2.0;
-                PreviewColumn.Width = new GridLength(halfWidth, GridUnitType.Pixel);
-                ZoomPanelColumn.Width = new GridLength(halfWidth, GridUnitType.Pixel);
-            }
-            else
-            {
-                // Fallback: equal star sizing
-                ZoomPanelColumn.Width = new GridLength(1, GridUnitType.Star);
+                EditorColumn.Width = new GridLength(editorActualWidth, GridUnitType.Pixel);
             }
 
-            // Ensure the zoom panel has a minimum width so it's always visible
-            ZoomPanelColumn.MinWidth = 200;
+            // Give preview and zoom panel equal star widths so the
+            // ZoomSplitter can resize them (same pattern as Editor ↔ Preview).
+            // ZoomSplitter is in col 7, ZoomPanelBorder is in col 8 (PropertiesColumn).
+            PreviewColumn.Width = new GridLength(1, GridUnitType.Star);
+            PropertiesColumn.Width = new GridLength(1, GridUnitType.Star);
+            PropertiesColumn.MinWidth = 200;
 
             // Show the splitter and border
             ZoomSplitter.Visibility = Visibility.Visible;
@@ -70,9 +68,9 @@ namespace MermaidDiagramApp
         /// </summary>
         private void HideZoomPanel()
         {
-            // Collapse the zoom panel column
-            ZoomPanelColumn.Width = new GridLength(0);
-            ZoomPanelColumn.MinWidth = 0;
+            // Collapse the zoom panel column (PropertiesColumn, col 8)
+            PropertiesColumn.Width = new GridLength(0);
+            PropertiesColumn.MinWidth = 0;
 
             // Hide the splitter and border
             ZoomSplitter.Visibility = Visibility.Collapsed;

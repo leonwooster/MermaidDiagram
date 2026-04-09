@@ -15,7 +15,7 @@ namespace MermaidDiagramApp.Tests.Services;
 public class ZoomPanelServicePropertyTests
 {
     private const double MinZoom = 0.25;
-    private const double MaxZoom = 5.0;
+    private const double MaxZoom = 10.0;
     private const double ZoomIncrement = 0.25;
 
     // ---------------------------------------------------------------
