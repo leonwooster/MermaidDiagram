@@ -180,7 +180,7 @@ namespace MermaidDiagramApp
             else
             {
                 MainMenuBar.Visibility = Visibility.Visible;
-                EditorColumn.Width = new GridLength(1, GridUnitType.Star);
+                EditorColumn.Width = new GridLength(3, GridUnitType.Star);
                 EditorPreviewSplitter.Visibility = Visibility.Visible;
                 UpdateBuilderVisibility();
             }
@@ -194,7 +194,7 @@ namespace MermaidDiagramApp
             {
                 appWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
                 MainMenuBar.Visibility = Visibility.Visible;
-                EditorColumn.Width = new GridLength(1, GridUnitType.Star);
+                EditorColumn.Width = new GridLength(3, GridUnitType.Star);
                 EditorPreviewSplitter.Visibility = Visibility.Visible;
                 UpdateBuilderVisibility();
             }

@@ -118,14 +118,44 @@ namespace MermaidDiagramApp
             _tabService.RemoveTab(tabId);
             SyncTabBarFromService();
 
-            // If no tabs remain, clear the editor and preview
             if (_tabService.Tabs.Count == 0)
             {
+                // No tabs remain — clear the editor and preview
                 CodeEditor.Text = string.Empty;
                 _currentFilePath = string.Empty;
                 _currentContentType = ContentType.Unknown;
                 _lastPreviewedCode = null;
-                await UpdatePreview();
+
+                // Explicitly clear the WebView2 content since UpdatePreview
+                // cannot render empty content through the normal pipeline
+                if (_isWebViewReady && PreviewBrowser?.CoreWebView2 != null)
+                {
+                    try
+                    {
+                        await PreviewBrowser.ExecuteScriptAsync(
+                            "document.getElementById('content-container').innerHTML = '';");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning($"Failed to clear preview: {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                // Load the newly active tab's content into editor and preview.
+                // SyncTabBarFromService sets _isSyncingTabs which blocks
+                // SelectionChanged, so we must do this explicitly.
+                var newActive = _tabService.ActiveTab;
+                if (newActive != null)
+                {
+                    CodeEditor.Text = newActive.EditorContent;
+                    _currentContentType = newActive.ContentType;
+                    _currentFilePath = newActive.FilePath;
+                    _lastPreviewedCode = null;
+                    await UpdatePreview();
+                    await RestoreTabScrollPosition();
+                }
             }
         }
 

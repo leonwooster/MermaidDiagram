@@ -117,11 +117,11 @@ namespace MermaidDiagramApp
                 PropertiesPanel.Visibility = Visibility.Collapsed;
                 PropertiesSplitter.Visibility = Visibility.Collapsed;
 
-                // Show code editor and preview
-                EditorColumn.Width = new GridLength(1, GridUnitType.Star);
+                // Show code editor and preview (restore 30/70 default ratio)
+                EditorColumn.Width = new GridLength(3, GridUnitType.Star);
                 CodeEditor.Visibility = Visibility.Visible;
                 EditorPreviewSplitter.Visibility = Visibility.Visible;
-                PreviewColumn.Width = new GridLength(1, GridUnitType.Star);
+                PreviewColumn.Width = new GridLength(7, GridUnitType.Star);
 
                 DispatcherQueue.TryEnqueue(() =>
                 {

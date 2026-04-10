@@ -330,6 +330,16 @@ namespace MermaidDiagramApp
                     }
 
                     await UpdatePreview();
+                    // Explicitly clear the WebView2 since UpdatePreview can't render empty content
+                    if (_isWebViewReady && PreviewBrowser?.CoreWebView2 != null)
+                    {
+                        try
+                        {
+                            await PreviewBrowser.ExecuteScriptAsync(
+                                "document.getElementById('content-container').innerHTML = '';");
+                        }
+                        catch { }
+                    }
                     UpdateWindowTitle();
                     _logger.LogInformation("Last tab closed, document cleared");
                 }
@@ -364,6 +374,16 @@ namespace MermaidDiagramApp
                 }
 
                 await UpdatePreview();
+                // Explicitly clear the WebView2 since UpdatePreview can't render empty content
+                if (_isWebViewReady && PreviewBrowser?.CoreWebView2 != null)
+                {
+                    try
+                    {
+                        await PreviewBrowser.ExecuteScriptAsync(
+                            "document.getElementById('content-container').innerHTML = '';");
+                    }
+                    catch { }
+                }
                 UpdateWindowTitle();
                 _logger.LogInformation("Document closed");
             }
