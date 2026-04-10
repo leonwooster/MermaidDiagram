@@ -21,6 +21,16 @@ namespace MermaidDiagramApp
         private ContentDialog? _activeExportDialog;
 
         /// <summary>
+        /// Lazily ensures the Markdown to Word export services are initialized.
+        /// Only creates export services on first use, not at startup.
+        /// </summary>
+        private void EnsureMarkdownToWordInitialized()
+        {
+            if (_markdownToWordViewModel != null) return;
+            InitializeMarkdownToWordExport();
+        }
+
+        /// <summary>
         /// Initializes the Markdown to Word export functionality.
         /// </summary>
         private void InitializeMarkdownToWordExport()
@@ -115,6 +125,8 @@ namespace MermaidDiagramApp
         /// </summary>
         private async void OpenMarkdownFile_Click(object sender, RoutedEventArgs e)
         {
+            EnsureMarkdownToWordInitialized();
+
             try
             {
                 // Create file picker
@@ -226,6 +238,8 @@ namespace MermaidDiagramApp
         /// </summary>
         private async void ExportToWord_Click(object sender, RoutedEventArgs e)
         {
+            EnsureMarkdownToWordInitialized();
+
             if (_markdownToWordViewModel == null || !_markdownToWordViewModel.CanExport)
             {
                 return;

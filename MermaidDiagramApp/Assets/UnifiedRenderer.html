@@ -354,16 +354,11 @@
         // Load libraries
         async function loadLibraries() {
             log('Loading rendering libraries...');
-            
-            // Load Mermaid
-            await loadScript('mermaid.min.js', 'https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js');
-            
-            // Load markdown-it
-            await loadScript('markdown-it.min.js', 'https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js');
-            
-            // Load highlight.js for code syntax highlighting
-            await loadScript('highlight.min.js', 'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/highlight.min.js');
-            
+            await Promise.all([
+                loadScript('mermaid.min.js', 'https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js'),
+                loadScript('markdown-it.min.js', 'https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js'),
+                loadScript('highlight.min.js', 'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/highlight.min.js')
+            ]);
             log('All libraries loaded successfully');
         }
 

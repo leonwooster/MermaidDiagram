@@ -156,13 +156,12 @@ namespace MermaidDiagramApp
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            await InitializeWebViewAsync();
-            
-            // Populate recent files menu
+            // Populate recent files menu and wire builder before WebView2 init
+            // so the UI shell is interactive immediately
             PopulateRecentFilesMenu();
-            
-            // Wire up visual builder components (defined in MainWindow.Builder.cs)
             InitializeBuilderWiring();
+
+            await InitializeWebViewAsync();
         }
 
         private void MainWindow_Closed(object sender, WindowEventArgs args)

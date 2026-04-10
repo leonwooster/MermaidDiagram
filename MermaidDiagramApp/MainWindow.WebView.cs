@@ -23,6 +23,28 @@ namespace MermaidDiagramApp
     /// </summary>
     public sealed partial class MainWindow : Window
     {
+        private DispatcherTimer? _checkTimer;
+
+        private void OnWebViewReady()
+        {
+            if (_isWebViewReady) return;
+            _isWebViewReady = true;
+            _checkTimer?.Stop();
+            _logger.LogInformation("WebView2 ready (consolidated handler)");
+            DispatcherQueue.TryEnqueue(async () =>
+            {
+                try
+                {
+                    _lastPreviewedCode = null;
+                    await UpdatePreview();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error updating preview after ready: {ex.Message}", ex);
+                }
+            });
+        }
+
         private async Task InitializeWebViewAsync()
         {
             try
@@ -62,9 +84,6 @@ namespace MermaidDiagramApp
 
                 _logger.LogInformation($"Virtual host 'https://{virtualHost}/' mapped to {assetsPath}");
 
-                // Prepare timer reference for use inside handlers
-                DispatcherTimer? checkTimer = null;
-
                 // Set up console/message handling
                 coreWebView2.WebMessageReceived += (s, e) =>
                 {
@@ -84,24 +103,7 @@ namespace MermaidDiagramApp
                             if (messageType == "ready")
                             {
                                 _logger.LogInformation("Received ready message from UnifiedRenderer");
-                                _isWebViewReady = true;
-                                checkTimer?.Stop();
-                                
-                                // Initialize Markdown to Word export now that WebView2 is ready
-                                InitializeMarkdownToWordExport();
-                                
-                                DispatcherQueue.TryEnqueue(async () =>
-                                {
-                                    try
-                                    {
-                                        _lastPreviewedCode = null;
-                                        await UpdatePreview();
-                                    }
-                                    catch (Exception updateEx)
-                                    {
-                                        _logger.LogError($"Error updating preview after ready: {updateEx.Message}", updateEx);
-                                    }
-                                });
+                                OnWebViewReady();
                             }
                             else if (messageType == "renderComplete")
                             {
@@ -152,24 +154,7 @@ namespace MermaidDiagramApp
                         if (string.Equals(message, "MermaidReady", StringComparison.Ordinal))
                         {
                             _logger.LogInformation("Received legacy MermaidReady message");
-                            _isWebViewReady = true;
-                            checkTimer?.Stop();
-                            
-                            // Initialize Markdown to Word export now that WebView2 is ready
-                            InitializeMarkdownToWordExport();
-                            
-                            DispatcherQueue.TryEnqueue(async () =>
-                            {
-                                try
-                                {
-                                    _lastPreviewedCode = null;
-                                    await UpdatePreview();
-                                }
-                                catch (Exception updateEx)
-                                {
-                                    _logger.LogError($"Error updating preview: {updateEx.Message}", updateEx);
-                                }
-                            });
+                            OnWebViewReady();
                         }
                     }
                 };
@@ -217,15 +202,15 @@ namespace MermaidDiagramApp
                 coreWebView2.Navigate(hostPageUri.ToString());
                 _logger.LogInformation($"Navigating WebView to {hostPageUri}");
 
-                // Set up a timer to check if renderers are loaded
-                checkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
+                // Set up a timer to check if renderers are loaded (250ms interval, 60 iterations = ~15s timeout)
+                _checkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
                 int checkCount = 0;
-                checkTimer.Tick += async (s, e) =>
+                _checkTimer.Tick += async (s, e) =>
                 {
                     checkCount++;
-                    if (checkCount > 15) // 15 second timeout
+                    if (checkCount > 60) // ~15 second timeout at 250ms intervals
                     {
-                        checkTimer.Stop();
+                        _checkTimer.Stop();
                         _logger.LogWarning("Renderer initialization timed out");
                         return;
                     }
@@ -237,14 +222,7 @@ namespace MermaidDiagramApp
                             "window.mermaid !== undefined && window.md !== undefined");
                         if (isReady == "true")
                         {
-                            checkTimer.Stop();
-                            _logger.LogInformation("Renderers are ready!");
-                            _isWebViewReady = true;
-                            
-                            // Initialize Markdown to Word export now that WebView2 is ready
-                            InitializeMarkdownToWordExport();
-                            
-                            await UpdatePreview(); // Initial render
+                            OnWebViewReady();
                         }
                         else
                         {
@@ -257,7 +235,7 @@ namespace MermaidDiagramApp
                     }
                 };
 
-                checkTimer.Start();
+                _checkTimer.Start();
             }
             catch (Exception ex)
             {
@@ -284,8 +262,7 @@ namespace MermaidDiagramApp
                     }
                 });
 
-                _isWebViewReady = true;
-                _ = UpdatePreview(); // Initial render
+                OnWebViewReady();
 
                 // Start timer only after the page is loaded
                 _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };

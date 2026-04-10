@@ -171,6 +171,8 @@ namespace MermaidDiagramApp
 
         private async Task CheckForMermaidUpdatesAsync()
         {
+            await Task.Delay(TimeSpan.FromSeconds(5));
+
             try
             {
                 var versionInfo = await _mermaidUpdateService.CheckForUpdatesAsync();

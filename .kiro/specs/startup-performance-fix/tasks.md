@@ -1,0 +1,121 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** — Startup Blocks UI on WebView2 Init, Sequential JS Loading, Redundant Ready Paths, Eager Export Init, Immediate Update Check
+  - **CRITICAL**: This test MUST FAIL on unfixed code — failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior — it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the five startup performance defects
+  - **Scoped PBT Approach**: Scope properties to the concrete startup sequence to ensure reproducibility
+  - Create test file `MermaidDiagramApp.Tests/Services/StartupBugConditionPropertyTests.cs`
+  - Use FsCheck.Xunit with `[Property]` attributes
+  - Test 1a — UI Shell Ordering: Assert that `PopulateRecentFilesMenu()` and `InitializeBuilderWiring()` execute before `InitializeWebViewAsync()` completes. Mock `MainWindow_Loaded` flow and verify call order. On unfixed code, menus are populated AFTER WebView2 init → FAIL expected
+  - Test 1b — JS Library Loading: Assert that `loadLibraries()` in `UnifiedRenderer.html` uses `Promise.all` for concurrent loading. Parse the HTML/JS source and verify the `Promise.all` pattern is present. On unfixed code, sequential `await loadScript(...)` calls → FAIL expected
+  - Test 1c — Idempotent Ready Detection: Generate random sequences of ready signals (JSON "ready", legacy "MermaidReady", polling timer, NavigationCompleted) using FsCheck generators. Assert that `_isWebViewReady` is set exactly once and `UpdatePreview()` is called exactly once regardless of signal count/order. On unfixed code, each path independently sets ready and calls init → FAIL expected (multiple calls)
+  - Test 1d — Lazy Export Init: Assert that `_markdownToWordViewModel` remains null after WebView2 ready if no export action is triggered. On unfixed code, `InitializeMarkdownToWordExport()` is called eagerly from ready paths → FAIL expected
+  - Test 1e — Delayed Update Check: Assert that `CheckForMermaidUpdatesAsync()` delays at least 5 seconds before making a network request. On unfixed code, fires immediately in constructor → FAIL expected
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests FAIL (this is correct — it proves the bugs exist)
+  - Document counterexamples found to understand root causes
+  - Mark task complete when tests are written, run, and failures are documented
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** — Preview Rendering, Export Functionality, Recent Files, Keyboard Shortcuts, Error Handling
+  - **IMPORTANT**: Follow observation-first methodology
+  - Create test file `MermaidDiagramApp.Tests/Services/StartupPreservationPropertyTests.cs`
+  - Use FsCheck.Xunit with `[Property]` attributes
+  - Observe on UNFIXED code first, then write properties asserting observed behavior:
+  - Test 2a — Preview Rendering Preservation: For arbitrary editor content strings (Mermaid, Markdown, mixed), observe that `UpdatePreview()` produces the correct rendering result via `ExecuteRenderingScript`. Write property: for all non-empty content strings, `UpdatePreview()` produces the same `_lastPreviewedCode` and `_currentContentType` as the original code
+  - Test 2b — Export Service Preservation: Observe that `InitializeMarkdownToWordExport()` creates a valid `_markdownToWordViewModel` when WebView2 is ready. Write property: for all valid WebView2 states, calling `EnsureMarkdownToWordInitialized()` (lazy) produces the same `_markdownToWordViewModel` state as calling `InitializeMarkdownToWordExport()` (eager)
+  - Test 2c — Recent Files Preservation: Observe that `PopulateRecentFilesMenu()` correctly populates the menu from `_fileOperationsService.GetRecentFiles()`. Write property: for all lists of recent files (0 to 20 entries), `PopulateRecentFilesMenu()` produces the same menu items regardless of when it is called relative to WebView2 init
+  - Test 2d — Keyboard Shortcut Preservation: Observe that F11 and Escape WebView2 messages dispatch to `ToggleFullScreen_Click` and presentation mode handlers. Write property: for all keyboard event messages (F11_PRESSED, ESCAPE_PRESSED), the dispatch behavior is unchanged
+  - Test 2e — Navigation Error Preservation: Observe that `NavigationCompleted` with `IsSuccess=false` logs a warning. Write property: for all navigation failure statuses, the error handling behavior is unchanged
+  - Verify all tests PASS on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
+
+- [x] 3. Fix for startup performance — blocking UI, sequential JS, redundant ready paths, eager export init, immediate update check
+
+  - [x] 3.1 Reorder MainWindow_Loaded to show UI shell immediately
+    - In `MermaidDiagramApp/MainWindow.xaml.cs`, move `PopulateRecentFilesMenu()` and `InitializeBuilderWiring()` before `await InitializeWebViewAsync()` in `MainWindow_Loaded`
+    - This ensures the editor, menus, and recent files are interactive while WebView2 initializes in the background
+    - _Bug_Condition: isBugCondition(input) where input.phase == ApplicationStartup AND mainWindowLoaded_awaitsWebViewBeforeUISetup(input)_
+    - _Expected_Behavior: UI shell (editor, menus, recent files, builder wiring) is interactive immediately; WebView2 initializes in background_
+    - _Preservation: Recent files menu loads correctly; builder wiring completes; all post-startup interactions unchanged_
+    - _Requirements: 2.1_
+
+  - [x] 3.2 Parallelize JS library loading in UnifiedRenderer.html
+    - In `MermaidDiagramApp/Assets/UnifiedRenderer.html`, replace the three sequential `await loadScript(...)` calls in `loadLibraries()` with a single `Promise.all([loadScript(...), loadScript(...), loadScript(...)])` call
+    - Keep the same local-path and CDN-fallback URLs for mermaid.min.js, markdown-it.min.js, and highlight.min.js
+    - _Bug_Condition: isBugCondition(input) where jsLibrariesLoadedSequentially(input)_
+    - _Expected_Behavior: Total load time equals slowest single library rather than sum of all three_
+    - _Preservation: All three libraries load successfully; rendering works correctly after load_
+    - _Requirements: 2.2_
+
+  - [x] 3.3 Create consolidated OnWebViewReady() method and replace all 4 ready-detection paths
+    - In `MermaidDiagramApp/MainWindow.WebView.cs`:
+    - Promote the local `checkTimer` variable to a class field `_checkTimer` so `OnWebViewReady()` can stop it
+    - Create a new `private void OnWebViewReady()` method with guard `if (_isWebViewReady) return;` that sets `_isWebViewReady = true`, stops `_checkTimer`, logs readiness, and enqueues `UpdatePreview()` via `DispatcherQueue`
+    - Do NOT call `InitializeMarkdownToWordExport()` from `OnWebViewReady()` (deferred to lazy init per task 3.4)
+    - Replace inline ready logic in all 4 paths with a single call to `OnWebViewReady()`:
+      - JSON `"ready"` message handler
+      - Legacy `"MermaidReady"` string handler
+      - Polling timer tick (when `isReady == "true"`)
+      - `PreviewBrowser_NavigationCompleted` (when `args.IsSuccess`)
+    - Reduce polling timer interval from 1000ms to 250ms; adjust timeout iteration count to 60 (maintains ~15s total timeout)
+    - _Bug_Condition: isBugCondition(input) where multipleReadyPathsExecuteIndependently(input)_
+    - _Expected_Behavior: OnWebViewReady() executes initialization exactly once; subsequent calls are no-ops_
+    - _Preservation: WebView2 ready detection still works via any of the 4 signal paths; UpdatePreview() called once; keyboard shortcuts and navigation error handling unchanged_
+    - _Requirements: 2.3_
+
+  - [x] 3.4 Add EnsureMarkdownToWordInitialized() lazy wrapper and remove eager calls
+    - In `MermaidDiagramApp/MainWindow.MarkdownToWord.cs`:
+    - Add new method `private void EnsureMarkdownToWordInitialized()` with guard `if (_markdownToWordViewModel != null) return;` that calls `InitializeMarkdownToWordExport()`
+    - Add `EnsureMarkdownToWordInitialized()` call at the top of `ExportToWord_Click` (before the null/CanExport check)
+    - Add `EnsureMarkdownToWordInitialized()` call at the top of `OpenMarkdownFile_Click` (before the file picker)
+    - Remove all `InitializeMarkdownToWordExport()` calls from ready-detection paths in `MainWindow.WebView.cs` (already handled by task 3.3 which omits the call from `OnWebViewReady()`)
+    - _Bug_Condition: isBugCondition(input) where exportServicesCreatedEagerly(input)_
+    - _Expected_Behavior: Export services only created on first export request; no creation at startup if user never exports_
+    - _Preservation: Export produces correct .docx files when triggered; MarkdownToWordViewModel state identical to eager init_
+    - _Requirements: 2.4_
+
+  - [x] 3.5 Add 5-second delay to CheckForMermaidUpdatesAsync()
+    - In `MermaidDiagramApp/MainWindow.Export.cs`, add `await Task.Delay(TimeSpan.FromSeconds(5));` as the first line inside `CheckForMermaidUpdatesAsync()` before the existing try/catch block
+    - This delays the network request so it does not compete with WebView2 initialization for CPU/network during the critical startup window
+    - _Bug_Condition: isBugCondition(input) where mermaidUpdateCheckRunsImmediately(input)_
+    - _Expected_Behavior: Network request delayed by at least 5 seconds after constructor execution_
+    - _Preservation: Update detection and notification still works correctly after the delay_
+    - _Requirements: 2.5_
+
+  - [x] 3.6 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** — Startup Performance Fixes Validated
+    - **IMPORTANT**: Re-run the SAME test from task 1 — do NOT write a new test
+    - The test from task 1 encodes the expected behavior for all 5 fixes
+    - When this test passes, it confirms:
+      - UI shell is available before WebView2 init (Property 1 from design)
+      - JS libraries load in parallel (Property 2 from design)
+      - Ready detection is idempotent (Property 3 from design)
+      - Export services are lazy-initialized (Property 4 from design)
+      - Update check is delayed 5 seconds (Property 5 from design)
+    - Run bug condition exploration test from task 1
+    - **EXPECTED OUTCOME**: Test PASSES (confirms all bugs are fixed)
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
+
+  - [x] 3.7 Verify preservation tests still pass
+    - **Property 2: Preservation** — No Regressions in Existing Behavior
+    - **IMPORTANT**: Re-run the SAME tests from task 2 — do NOT write new tests
+    - Run preservation property tests from task 2
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Confirm all preservation tests still pass after fix:
+      - Preview rendering produces same output (Property 6 from design)
+      - Export functionality works identically (Property 7 from design)
+      - Recent files, keyboard shortcuts, error handling unchanged (Property 8 from design)
+
+- [x] 4. Checkpoint — Ensure all tests pass
+  - Run full test suite: `dotnet test MermaidDiagramApp.Tests/MermaidDiagramApp.Tests.csproj`
+  - Ensure all bug condition exploration tests pass (task 1 tests now green)
+  - Ensure all preservation property tests pass (task 2 tests still green)
+  - Ensure all existing tests in the test project still pass (no regressions)
+  - Ask the user if questions arise
