@@ -18,6 +18,7 @@ namespace MermaidDiagramApp
         /// <summary>
         /// Subscribes to IZoomPanelService.StateChanged and wires the
         /// ZoomPanelViewModel.RequestClose callback. Called from the constructor.
+        /// Also subscribes to ActiveTabChanged to update the zoom panel on tab switches.
         /// </summary>
         private void InitializeZoomPanel()
         {
@@ -27,6 +28,34 @@ namespace MermaidDiagramApp
             {
                 HideZoomPanel();
             };
+
+            // When the active tab changes while the zoom panel is open,
+            // close the zoom panel since the displayed SVG belongs to the previous tab.
+            // For Mermaid tabs the user can click a diagram to re-open the zoom panel
+            // after the new tab's preview has rendered.
+            _tabService.ActiveTabChanged += OnActiveTabChangedForZoomPanel;
+        }
+
+        /// <summary>
+        /// Handles tab switches while the zoom panel is open.
+        /// Closes the zoom panel because the current SVG content belongs to the
+        /// previous tab and is no longer valid. If the new tab has no diagram
+        /// content (non-Mermaid), the panel is also closed.
+        /// </summary>
+        private void OnActiveTabChangedForZoomPanel(object? sender, TabChangedEventArgs e)
+        {
+            if (!_zoomPanelService.IsOpen) return;
+
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!_zoomPanelService.IsOpen) return;
+
+                // Close the zoom panel — the SVG from the previous tab is stale.
+                // For non-Mermaid tabs there is no diagram to display.
+                // For Mermaid tabs the preview will re-render and the user can
+                // click a diagram element to re-open the zoom panel.
+                _zoomPanelService.Close();
+            });
         }
 
         /// <summary>

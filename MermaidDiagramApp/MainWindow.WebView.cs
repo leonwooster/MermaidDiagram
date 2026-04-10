@@ -279,6 +279,15 @@ namespace MermaidDiagramApp
             var currentCode = CodeEditor.Text;
             if (currentCode != _lastPreviewedCode)
             {
+                // Sync content change with the active tab
+                var activeTab = _tabService.ActiveTab;
+                if (activeTab != null)
+                {
+                    _tabService.UpdateTabContent(activeTab.Id, currentCode);
+                    _tabService.MarkDirty(activeTab.Id, true);
+                    UpdateTabDirtyIndicator(activeTab.Id);
+                }
+
                 CheckForSyntaxIssues(currentCode);
 
                 // BuilderViewModel.ParseMermaidCode(currentCode); // Commented out to disable buggy visual builder logic

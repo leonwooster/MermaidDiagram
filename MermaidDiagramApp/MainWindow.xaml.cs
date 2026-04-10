@@ -63,6 +63,7 @@ namespace MermaidDiagramApp
         private readonly IExportService _exportService;
         private readonly IZoomPanelService _zoomPanelService;
         private readonly IDiagramExportService _diagramExportService;
+        private readonly ITabService _tabService;
         private FileSystemWatcher? _fileWatcher;
         private DateTime _lastFileChangeTime = DateTime.MinValue;
 
@@ -89,7 +90,8 @@ namespace MermaidDiagramApp
             IMermaidUpdateService mermaidUpdateService,
             IExportService exportService,
             IZoomPanelService zoomPanelService,
-            IDiagramExportService diagramExportService)
+            IDiagramExportService diagramExportService,
+            ITabService tabService)
         {
             this.InitializeComponent();
 
@@ -111,6 +113,7 @@ namespace MermaidDiagramApp
             _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
             _zoomPanelService = zoomPanelService ?? throw new ArgumentNullException(nameof(zoomPanelService));
             _diagramExportService = diagramExportService ?? throw new ArgumentNullException(nameof(diagramExportService));
+            _tabService = tabService ?? throw new ArgumentNullException(nameof(tabService));
 
             // Wire ViewModel callback delegates to MainWindow UI methods
             ViewModel.RequestNewDiagram = diagramType => NewDiagram(diagramType);

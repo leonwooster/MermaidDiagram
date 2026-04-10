@@ -115,8 +115,25 @@ namespace MermaidDiagramApp
                             _logger.LogInformation("Diagram text was automatically optimized to prevent overflow");
                         }
                     }
-                    
+
+                    // Tab dedup: if file is already open, switch to existing tab
+                    var existingTab = _tabService.FindTabByFilePath(file.Path);
+                    if (existingTab != null)
+                    {
+                        _tabService.SetActiveTab(existingTab.Id);
+                    }
+                    else
+                    {
+                        // Detect content type from file extension
+                        var contentType = _contentTypeDetector.DetectContentType(fileContent, file.FileType);
+                        var newTab = _tabService.AddTab(file.Path, fileContent, contentType);
+                        _tabService.SetActiveTab(newTab.Id);
+                    }
+                    SyncTabBarFromService();
+
+                    // Set editor state from the active tab
                     CodeEditor.Text = fileContent;
+                    _currentFilePath = file.Path;
                     await UpdatePreview();
                     UpdateWindowTitle();
                     _fileOperationsService.AddRecentFile(file.Path);
@@ -202,6 +219,14 @@ namespace MermaidDiagramApp
                         _logger.LogInformation($"File saved: {file.Path}");
                         UpdateWindowTitle();
                         SetupFileWatcher(file.Path);
+
+                        // Clear dirty flag on the active tab after successful save
+                        var activeTab = _tabService.ActiveTab;
+                        if (activeTab != null)
+                        {
+                            _tabService.MarkDirty(activeTab.Id, false);
+                            UpdateTabDirtyIndicator(activeTab.Id);
+                        }
                     }
                 }
                 finally
@@ -237,47 +262,111 @@ namespace MermaidDiagramApp
                 // Secondary = Discard, continue with close
             }
 
-            // Stop file watcher
-            StopFileWatcher();
-
-            // Clear the current file path
-            _currentFilePath = string.Empty;
-
-            // Clear the code editor
-            CodeEditor.Text = string.Empty;
-
-            // Clear the diagram builder canvas if visible
-            if (_isBuilderVisible && DiagramCanvasControl != null)
+            // If there's an active tab, delegate to the tab close flow
+            var activeTab = _tabService.ActiveTab;
+            if (activeTab != null)
             {
-                DiagramCanvasControl.ClearVisuals();
-                DiagramCanvasControl.ViewModel.ClearCanvas();
-                DiagramCanvasControl.ViewModel.MarkAsSaved();
-            }
-
-            // Hide the builder panels if visible
-            if (_isBuilderVisible)
-            {
-                _isBuilderVisible = false;
-                if (BuilderTool != null)
+                if (activeTab.IsDirty)
                 {
-                    BuilderTool.IsChecked = false;
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Unsaved Changes",
+                        Content = $"'{activeTab.FileName}' has unsaved changes. Do you want to save before closing?",
+                        PrimaryButtonText = "Save",
+                        SecondaryButtonText = "Discard",
+                        CloseButtonText = "Cancel",
+                        DefaultButton = ContentDialogButton.Primary,
+                        XamlRoot = this.Content.XamlRoot
+                    };
+
+                    var result = await dialog.ShowAsync();
+                    if (result == ContentDialogResult.None) // Cancel
+                    {
+                        return;
+                    }
+                    if (result == ContentDialogResult.Primary) // Save
+                    {
+                        Save_Click(this, new RoutedEventArgs());
+                        await Task.Delay(200);
+                    }
+                    // Discard falls through to removal
                 }
-                UpdateBuilderVisibility();
-            }
 
-            // Clear export state
-            if (_markdownToWordViewModel != null)
+                _tabService.RemoveTab(activeTab.Id);
+                SyncTabBarFromService();
+
+                // If no tabs remain, clear the editor and preview
+                if (_tabService.Tabs.Count == 0)
+                {
+                    StopFileWatcher();
+                    _currentFilePath = string.Empty;
+                    CodeEditor.Text = string.Empty;
+                    _currentContentType = ContentType.Unknown;
+                    _lastPreviewedCode = null;
+
+                    // Clear the diagram builder canvas if visible
+                    if (_isBuilderVisible && DiagramCanvasControl != null)
+                    {
+                        DiagramCanvasControl.ClearVisuals();
+                        DiagramCanvasControl.ViewModel.ClearCanvas();
+                        DiagramCanvasControl.ViewModel.MarkAsSaved();
+                    }
+
+                    // Hide the builder panels if visible
+                    if (_isBuilderVisible)
+                    {
+                        _isBuilderVisible = false;
+                        if (BuilderTool != null)
+                        {
+                            BuilderTool.IsChecked = false;
+                        }
+                        UpdateBuilderVisibility();
+                    }
+
+                    // Clear export state
+                    if (_markdownToWordViewModel != null)
+                    {
+                        _markdownToWordViewModel.MarkdownFilePath = null;
+                    }
+
+                    await UpdatePreview();
+                    UpdateWindowTitle();
+                    _logger.LogInformation("Last tab closed, document cleared");
+                }
+            }
+            else
             {
-                _markdownToWordViewModel.MarkdownFilePath = null;
+                // No active tab — fall back to legacy close behavior
+                StopFileWatcher();
+                _currentFilePath = string.Empty;
+                CodeEditor.Text = string.Empty;
+
+                if (_isBuilderVisible && DiagramCanvasControl != null)
+                {
+                    DiagramCanvasControl.ClearVisuals();
+                    DiagramCanvasControl.ViewModel.ClearCanvas();
+                    DiagramCanvasControl.ViewModel.MarkAsSaved();
+                }
+
+                if (_isBuilderVisible)
+                {
+                    _isBuilderVisible = false;
+                    if (BuilderTool != null)
+                    {
+                        BuilderTool.IsChecked = false;
+                    }
+                    UpdateBuilderVisibility();
+                }
+
+                if (_markdownToWordViewModel != null)
+                {
+                    _markdownToWordViewModel.MarkdownFilePath = null;
+                }
+
+                await UpdatePreview();
+                UpdateWindowTitle();
+                _logger.LogInformation("Document closed");
             }
-
-            // Clear the preview
-            await UpdatePreview();
-
-            // Update window title
-            UpdateWindowTitle();
-
-            _logger.LogInformation("Document closed");
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e)
@@ -375,29 +464,7 @@ namespace MermaidDiagramApp
                     return;
                 }
 
-                if (!string.IsNullOrEmpty(CodeEditor.Text))
-                {
-                    var dialog = new ContentDialog
-                    {
-                        Title = "Unsaved Changes",
-                        Content = "You have unsaved changes. Do you want to save before opening another file?",
-                        PrimaryButtonText = "Save",
-                        SecondaryButtonText = "Discard",
-                        CloseButtonText = "Cancel",
-                        XamlRoot = this.Content.XamlRoot
-                    };
-
-                    var result = await dialog.ShowAsync();
-                    if (result == ContentDialogResult.Primary)
-                    {
-                        Save_Click(this, new RoutedEventArgs());
-                        await Task.Delay(100);
-                    }
-                    else if (result == ContentDialogResult.None)
-                    {
-                        return;
-                    }
-                }
+                // Each tab tracks its own dirty state, so no global unsaved-changes dialog needed
 
                 var file = await StorageFile.GetFileFromPathAsync(filePath);
                 _currentFilePath = file.Path;
@@ -446,7 +513,22 @@ namespace MermaidDiagramApp
                         }
                     }
 
+                    // Tab dedup: if file is already open, switch to existing tab
+                    var existingTab = _tabService.FindTabByFilePath(file.Path);
+                    if (existingTab != null)
+                    {
+                        _tabService.SetActiveTab(existingTab.Id);
+                    }
+                    else
+                    {
+                        var contentType = _contentTypeDetector.DetectContentType(fileContent, file.FileType);
+                        var newTab = _tabService.AddTab(file.Path, fileContent, contentType);
+                        _tabService.SetActiveTab(newTab.Id);
+                    }
+                    SyncTabBarFromService();
+
                     CodeEditor.Text = fileContent;
+                    _currentFilePath = file.Path;
                     await UpdatePreview();
 
                     if (file.FileType.ToLower() == ".md" ||
