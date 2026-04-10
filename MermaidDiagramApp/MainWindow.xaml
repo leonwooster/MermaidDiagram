@@ -342,6 +342,25 @@
 
             <Grid Grid.Column="6">
                 <WebView2 x:Name="PreviewBrowser"/>
+
+                <!-- Loading indicator overlay -->
+                <Grid x:Name="PreviewLoadingOverlay"
+                      Background="#DD222222"
+                      Visibility="Visible">
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Spacing="12">
+                        <ProgressRing IsActive="True"
+                                      Width="40"
+                                      Height="40"
+                                      Foreground="#888888"/>
+                        <TextBlock Text="Ready to render content"
+                                   x:Name="PreviewLoadingText"
+                                   Foreground="#888888"
+                                   FontSize="14"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
                 
                 <!-- Refresh Button (always visible) -->
                 <Button x:Name="FloatingRefreshButton"

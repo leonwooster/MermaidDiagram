@@ -35,6 +35,9 @@ namespace MermaidDiagramApp
             {
                 try
                 {
+                    // Hide loading overlay now that WebView is ready
+                    PreviewLoadingOverlay.Visibility = Visibility.Collapsed;
+
                     _lastPreviewedCode = null;
                     await UpdatePreview();
                 }
@@ -429,6 +432,9 @@ namespace MermaidDiagramApp
             {
                 var result = await PreviewBrowser.ExecuteScriptAsync(script);
                 _logger.LogDebug($"Render script executed: {result}");
+
+                // Hide loading overlay now that content is rendered
+                PreviewLoadingOverlay.Visibility = Visibility.Collapsed;
                 
                 // Setup scroll synchronization after rendering (for Mermaid and Markdown with Mermaid)
                 if (contentType == ContentType.Mermaid || 
