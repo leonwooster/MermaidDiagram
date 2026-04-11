@@ -362,4 +362,29 @@ public class KeyboardShortcutManagerTests
             Assert.True(syntaxCheckerOpened, "F7 without modifiers should open syntax checker");
         }
     }
+
+    /// <summary>
+    /// Feature: copy-diagram-to-clipboard, Property 1: Keyboard shortcut dispatch invokes registered action
+    /// For any registered shortcut, HandleWebViewKeyEvent executes the action and returns true.
+    /// Validates: Requirements 2.1, 2.2
+    /// </summary>
+    [Fact]
+    public void CtrlShiftC_DispatchesCopyAsImageAction()
+    {
+        // Arrange
+        var logger = new TestLogger();
+        var preferencesService = new ShortcutPreferencesService();
+        var manager = new KeyboardShortcutManager(logger, preferencesService);
+
+        bool copyAsImageInvoked = false;
+        manager.RegisterShortcut(VirtualKey.C, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift,
+            () => { copyAsImageInvoked = true; });
+
+        // Act
+        var handled = manager.HandleWebViewKeyEvent("C", ctrlKey: true, shiftKey: true, altKey: false);
+
+        // Assert
+        Assert.True(copyAsImageInvoked, "Ctrl+Shift+C should invoke the copy-as-image action");
+        Assert.True(handled, "HandleWebViewKeyEvent should return true for registered Ctrl+Shift+C");
+    }
 }

@@ -349,6 +349,21 @@
                 }
                 return false;
             }
+
+            // Handle Ctrl+Shift+C (Copy as Image)
+            if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                e.preventDefault();
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'keypress',
+                        key: 'C',
+                        ctrlKey: true,
+                        shiftKey: true,
+                        altKey: e.altKey
+                    });
+                }
+                return false;
+            }
         }, true); // Use capture phase to intercept before browser handles them
 
         // Load libraries
@@ -630,7 +645,7 @@
         }
 
         // Wrap a rendered SVG element with a hover toolbar for zoom and download actions
-        window.wrapDiagramWithToolbar = function(svgElement) {
+        window.wrapDiagramWithToolbar = function(svgElement, mermaidSource) {
             if (!svgElement || svgElement.tagName !== 'svg') return;
 
             // Idempotent: skip if already wrapped
@@ -638,6 +653,9 @@
 
             var wrapper = document.createElement('div');
             wrapper.className = 'diagram-wrapper';
+            if (mermaidSource) {
+                wrapper.dataset.mermaidSource = mermaidSource;
+            }
 
             var toolbar = document.createElement('div');
             toolbar.className = 'diagram-hover-toolbar';
@@ -670,8 +688,61 @@
                 }
             });
 
+            var copyBtn = document.createElement('button');
+            copyBtn.textContent = '\uD83D\uDCCB'; // 📋
+            copyBtn.title = 'Copy as Image';
+            copyBtn.addEventListener('click', async function(e) {
+                e.stopPropagation();
+                var svgForClipboard = svgElement.outerHTML;
+
+                // Re-render with light theme if we have the source code
+                var source = wrapper.dataset.mermaidSource;
+                if (source && window.mermaid) {
+                    try {
+                        var savedInit = mermaid.mermaidAPI ? mermaid.mermaidAPI.getConfig() : null;
+                        mermaid.initialize({
+                            startOnLoad: false,
+                            securityLevel: 'loose',
+                            theme: 'default',
+                            logLevel: 1,
+                            markdownAutoWrap: false,
+                            flowchart: { htmlLabels: false },
+                            sequence: { htmlLabels: false },
+                            gantt: { htmlLabels: false },
+                            class: { htmlLabels: false },
+                            state: { htmlLabels: false }
+                        });
+                        var result = await mermaid.render('copy-export-' + Date.now(), source);
+                        svgForClipboard = result.svg;
+                        // Restore dark theme
+                        mermaid.initialize({
+                            startOnLoad: false,
+                            securityLevel: 'loose',
+                            theme: 'dark',
+                            logLevel: 3,
+                            markdownAutoWrap: false,
+                            flowchart: { htmlLabels: true, useMaxWidth: true, nodeSpacing: 80, rankSpacing: 80, padding: 20 },
+                            sequence: { htmlLabels: false },
+                            class: { htmlLabels: false },
+                            state: { htmlLabels: false }
+                        });
+                    } catch (err) {
+                        log('Light theme re-render failed, using current SVG:', err.message);
+                    }
+                }
+
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'diagramAction',
+                        action: 'copyAsImage',
+                        svgContent: svgForClipboard
+                    }));
+                }
+            });
+
             toolbar.appendChild(zoomBtn);
             toolbar.appendChild(downloadBtn);
+            toolbar.appendChild(copyBtn);
 
             svgElement.parentNode.insertBefore(wrapper, svgElement);
             wrapper.appendChild(svgElement);
@@ -735,7 +806,7 @@
                 // Wrap the rendered SVG with hover toolbar
                 var svgEl = container.querySelector('svg');
                 if (svgEl) {
-                    window.wrapDiagramWithToolbar(svgEl);
+                    window.wrapDiagramWithToolbar(svgEl, processedContent);
                 }
                 
                 log('Mermaid diagram rendered successfully');
@@ -912,7 +983,7 @@
                                 // Wrap the rendered SVG with hover toolbar
                                 var embeddedSvg = div.querySelector('svg');
                                 if (embeddedSvg) {
-                                    window.wrapDiagramWithToolbar(embeddedSvg);
+                                    window.wrapDiagramWithToolbar(embeddedSvg, processedCode);
                                 }
                             } catch (error) {
                                 log(`Failed to render Mermaid block ${i}:`, error.message);

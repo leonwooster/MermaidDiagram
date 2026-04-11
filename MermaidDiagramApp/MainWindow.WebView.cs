@@ -146,6 +146,24 @@ namespace MermaidDiagramApp
                                         {
                                             _ = ExportDiagramAsPngAsync(svgContent);
                                         }
+                                        else if (action == "copyAsImage")
+                                        {
+                                            _ = CopyDiagramSvgAsImageAsync(svgContent);
+                                        }
+                                    });
+                                }
+                            }
+                            else if (messageType == "keypress")
+                            {
+                                var key = root.TryGetProperty("key", out var keyEl) ? keyEl.GetString() : null;
+                                var ctrlKey = root.TryGetProperty("ctrlKey", out var ctrlEl) && ctrlEl.GetBoolean();
+                                var shiftKey = root.TryGetProperty("shiftKey", out var shiftEl) && shiftEl.GetBoolean();
+
+                                if (key == "C" && ctrlKey && shiftKey)
+                                {
+                                    DispatcherQueue.TryEnqueue(() =>
+                                    {
+                                        CopyAsImage_Click(this, new RoutedEventArgs());
                                     });
                                 }
                             }

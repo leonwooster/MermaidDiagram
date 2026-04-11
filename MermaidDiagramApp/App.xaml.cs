@@ -74,7 +74,8 @@ namespace MermaidDiagramApp
                 Services.GetRequiredService<IExportService>(),
                 Services.GetRequiredService<IZoomPanelService>(),
                 Services.GetRequiredService<IDiagramExportService>(),
-                Services.GetRequiredService<ITabService>()
+                Services.GetRequiredService<ITabService>(),
+                Services.GetRequiredService<IClipboardService>()
             );
             _window.Activate();
             _logger.Log(LogLevel.Information, "Main window activated");
@@ -121,6 +122,9 @@ namespace MermaidDiagramApp
 
             // Export
             services.AddSingleton<IExportService, ExportService>();
+
+            // Clipboard
+            services.AddSingleton<IClipboardService, ClipboardService>();
 
             // Tab management
             services.AddSingleton<ITabService, TabService>();

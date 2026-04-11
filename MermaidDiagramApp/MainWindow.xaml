@@ -124,6 +124,11 @@
                         <KeyboardAccelerator Key="F" Modifiers="Control"/>
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Copy as Image" Click="CopyAsImage_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="C" Modifiers="Control,Shift"/>
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Check &amp; Fix Mermaid Syntax" Click="CheckSyntax_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
