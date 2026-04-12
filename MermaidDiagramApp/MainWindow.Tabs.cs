@@ -58,6 +58,9 @@ namespace MermaidDiagramApp
                     _currentContentType = incomingTab.ContentType;
                     _currentFilePath = incomingTab.FilePath;
 
+                    // Update window title to reflect the new tab
+                    UpdateWindowTitle();
+
                     // Trigger re-render by resetting the last previewed code
                     _lastPreviewedCode = null;
                     await UpdatePreview();
@@ -155,6 +158,7 @@ namespace MermaidDiagramApp
                     _currentContentType = newActive.ContentType;
                     _currentFilePath = newActive.FilePath;
                     _lastPreviewedCode = null;
+                    UpdateWindowTitle();
                     await UpdatePreview();
                     await RestoreTabScrollPosition();
                 }

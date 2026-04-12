@@ -240,6 +240,24 @@ namespace MermaidDiagramApp
         {
             EnsureMarkdownToWordInitialized();
 
+            // If the ViewModel was just initialized, seed it with current editor content
+            if (_markdownToWordViewModel != null && !_markdownToWordViewModel.CanExport)
+            {
+                var code = CodeEditor.Text;
+                if (!string.IsNullOrWhiteSpace(code))
+                {
+                    if (_currentContentType == Models.ContentType.Mermaid)
+                    {
+                        var wrappedContent = $"# Mermaid Diagram\n\n```mermaid\n{code}\n```";
+                        _markdownToWordViewModel.UpdateMarkdownContent(wrappedContent);
+                    }
+                    else
+                    {
+                        _markdownToWordViewModel.UpdateMarkdownContent(code);
+                    }
+                }
+            }
+
             if (_markdownToWordViewModel == null || !_markdownToWordViewModel.CanExport)
             {
                 return;

@@ -113,7 +113,7 @@
                 <MenuFlyoutSubItem Text="Export">
                     <MenuFlyoutItem Text="as SVG" Click="ExportSvg_Click"/>
                     <MenuFlyoutItem Text="as PNG" Click="ExportPng_Click"/>
-                    <MenuFlyoutItem x:Name="ExportToWordMenuItem" Text="to Word" Click="ExportToWord_Click" IsEnabled="False"/>
+                    <MenuFlyoutItem x:Name="ExportToWordMenuItem" Text="to Word" Click="ExportToWord_Click"/>
                 </MenuFlyoutSubItem>
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Exit" Click="Exit_Click"/>
