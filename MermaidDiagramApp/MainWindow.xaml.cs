@@ -158,6 +158,14 @@ namespace MermaidDiagramApp
             
             // Initialize zoom panel wiring
             InitializeZoomPanel();
+
+            // Create an initial Untitled tab if none exist
+            if (_tabService.Tabs.Count == 0)
+            {
+                var untitledTab = _tabService.AddTab(string.Empty, string.Empty, ContentType.Unknown);
+                _tabService.SetActiveTab(untitledTab.Id);
+                SyncTabBarFromService();
+            }
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)

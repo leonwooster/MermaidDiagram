@@ -352,6 +352,22 @@ namespace MermaidDiagramApp
                     return; // Skip if the code hasn't changed
                 }
 
+                // If the editor is empty, clear the preview directly
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    try
+                    {
+                        await PreviewBrowser.ExecuteScriptAsync(
+                            "document.getElementById('content-container').innerHTML = '';");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning($"Failed to clear preview: {ex.Message}");
+                    }
+                    _lastPreviewedCode = code;
+                    return;
+                }
+
                 _logger.LogDebug($"Updating preview with code length: {code.Length}");
 
                 // Clear detection cache to ensure fresh content type detection
@@ -394,6 +410,7 @@ namespace MermaidDiagramApp
                 }
 
                 // Update export ViewModel with current content so export menu is enabled
+                EnsureMarkdownToWordInitialized();
                 if (_markdownToWordViewModel != null)
                 {
                     if (_currentContentType == ContentType.Markdown || _currentContentType == ContentType.MarkdownWithMermaid)

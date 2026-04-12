@@ -120,14 +120,16 @@ namespace MermaidDiagramApp
 
             if (_tabService.Tabs.Count == 0)
             {
-                // No tabs remain — clear the editor and preview
+                // No tabs remain — create a fresh Untitled tab
+                var untitledTab = _tabService.AddTab(string.Empty, string.Empty, ContentType.Unknown);
+                _tabService.SetActiveTab(untitledTab.Id);
+                SyncTabBarFromService();
+
                 CodeEditor.Text = string.Empty;
                 _currentFilePath = string.Empty;
                 _currentContentType = ContentType.Unknown;
                 _lastPreviewedCode = null;
 
-                // Explicitly clear the WebView2 content since UpdatePreview
-                // cannot render empty content through the normal pipeline
                 if (_isWebViewReady && PreviewBrowser?.CoreWebView2 != null)
                 {
                     try

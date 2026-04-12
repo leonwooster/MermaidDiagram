@@ -120,8 +120,8 @@ public sealed partial class ZoomPanel : UserControl
     }
 
     /// <summary>
-    /// Navigates the WebView to about:blank and marks it as needing re-initialization.
-    /// Called when the zoom panel is hidden to release SVG memory.
+    /// Clears the diagram content when the zoom panel is hidden.
+    /// Keeps the WebView initialized so re-opening is fast and avoids race conditions.
     /// </summary>
     public void NavigateToBlank()
     {
@@ -129,11 +129,10 @@ public sealed partial class ZoomPanel : UserControl
         {
             try
             {
-                ZoomBrowser.CoreWebView2.Navigate("about:blank");
+                _ = ZoomBrowser.ExecuteScriptAsync("document.getElementById('diagram').innerHTML = ''");
             }
-            catch { /* ignore navigation errors during cleanup */ }
+            catch { /* ignore errors during cleanup */ }
         }
-        _isWebViewInitialized = false;
     }
 
     /// <summary>

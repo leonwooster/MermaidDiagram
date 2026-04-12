@@ -295,10 +295,15 @@ namespace MermaidDiagramApp
                 _tabService.RemoveTab(activeTab.Id);
                 SyncTabBarFromService();
 
-                // If no tabs remain, clear the editor and preview
+                // If no tabs remain, create a fresh Untitled tab
                 if (_tabService.Tabs.Count == 0)
                 {
                     StopFileWatcher();
+
+                    var untitledTab = _tabService.AddTab(string.Empty, string.Empty, ContentType.Unknown);
+                    _tabService.SetActiveTab(untitledTab.Id);
+                    SyncTabBarFromService();
+
                     _currentFilePath = string.Empty;
                     CodeEditor.Text = string.Empty;
                     _currentContentType = ContentType.Unknown;
