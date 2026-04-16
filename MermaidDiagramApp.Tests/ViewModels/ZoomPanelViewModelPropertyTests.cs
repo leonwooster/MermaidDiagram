@@ -17,7 +17,7 @@ namespace MermaidDiagramApp.Tests.ViewModels;
 public class ZoomPanelViewModelPropertyTests
 {
     private const double MinZoom = 0.25;
-    private const double MaxZoom = 10.0;
+    private const double MaxZoom = 20.0;
 
     /// <summary>
     /// Creates a ZoomPanelViewModel with a real ZoomPanelService.
@@ -289,7 +289,7 @@ public class ZoomPanelViewModelPropertyTests
     [InlineData(1.0, "100%")]
     [InlineData(1.25, "125%")]
     [InlineData(0.25, "25%")]
-    [InlineData(10.0, "1000%")]
+    [InlineData(20.0, "2000%")]
     [InlineData(0.5, "50%")]
     [InlineData(2.0, "200%")]
     public void FormatZoomLevel_ProducesExpectedOutput(double level, string expected)

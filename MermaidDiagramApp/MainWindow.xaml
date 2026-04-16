@@ -519,6 +519,48 @@
                         <Border Height="2" 
                                 Background="#44FFFFFF" 
                                 Margin="8,4"/>
+
+                        <!-- Quick Zoom Presets -->
+                        <Button Content="50%"
+                                Width="48" Height="32"
+                                Background="#CC000000" Foreground="White"
+                                FontSize="11" CornerRadius="16" BorderThickness="0" Padding="0"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                ToolTipService.ToolTip="Zoom to 50%"
+                                Click="ZoomPreset_Click" Tag="0.5"/>
+                        <Button Content="100%"
+                                Width="48" Height="32"
+                                Background="#CC000000" Foreground="White"
+                                FontSize="11" CornerRadius="16" BorderThickness="0" Padding="0"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                ToolTipService.ToolTip="Zoom to 100%"
+                                Click="ZoomPreset_Click" Tag="1.0"/>
+                        <Button Content="200%"
+                                Width="48" Height="32"
+                                Background="#CC000000" Foreground="White"
+                                FontSize="11" CornerRadius="16" BorderThickness="0" Padding="0"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                ToolTipService.ToolTip="Zoom to 200%"
+                                Click="ZoomPreset_Click" Tag="2.0"/>
+                        <Button Content="500%"
+                                Width="48" Height="32"
+                                Background="#CC000000" Foreground="White"
+                                FontSize="11" CornerRadius="16" BorderThickness="0" Padding="0"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                ToolTipService.ToolTip="Zoom to 500%"
+                                Click="ZoomPreset_Click" Tag="5.0"/>
+                        <Button Content="1000%"
+                                Width="48" Height="32"
+                                Background="#CC000000" Foreground="White"
+                                FontSize="10" CornerRadius="16" BorderThickness="0" Padding="0"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                ToolTipService.ToolTip="Zoom to 1000%"
+                                Click="ZoomPreset_Click" Tag="10.0"/>
+
+                        <!-- Separator -->
+                        <Border Height="2" 
+                                Background="#44FFFFFF" 
+                                Margin="8,4"/>
                         
                         <!-- Drag/Select Mode Toggle -->
                         <ToggleButton x:Name="DragModeToggle"

@@ -20,6 +20,12 @@ public sealed partial class ZoomPanel : UserControl
     private TaskCompletionSource<bool>? _navigationTcs;
     private readonly IZoomPanelService _zoomPanelService;
 
+    /// <summary>
+    /// Set to true when a zoom change originated from JS (mouse wheel).
+    /// MainWindow reads and resets this to avoid pushing the zoom back to JS.
+    /// </summary>
+    public bool IsJsZoomSync { get; set; }
+
     public ZoomPanelViewModel ViewModel { get; }
 
     public ZoomPanel()
@@ -158,13 +164,26 @@ public sealed partial class ZoomPanel : UserControl
 
             if (messageType == "zoomWheel")
             {
-                // Sub-task 5.5: route wheel delta to service
+                // Legacy: route wheel delta to service (no longer used by default)
                 if (root.TryGetProperty("deltaY", out var deltaYElement))
                 {
                     var deltaY = deltaYElement.GetDouble();
                     DispatcherQueue.TryEnqueue(() =>
                     {
                         _zoomPanelService.ApplyWheelDelta(deltaY);
+                    });
+                }
+            }
+            else if (messageType == "zoomChanged")
+            {
+                // JS applied zoom locally toward cursor; sync the service level for display
+                if (root.TryGetProperty("level", out var levelElement))
+                {
+                    var level = levelElement.GetDouble();
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        IsJsZoomSync = true;
+                        _zoomPanelService.SetZoomLevel(level);
                     });
                 }
             }
@@ -199,5 +218,15 @@ public sealed partial class ZoomPanel : UserControl
 
         ZoomBrowser.Close();
         _isWebViewInitialized = false;
+    }
+
+    private void ZoomPreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is string tagStr
+            && double.TryParse(tagStr, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var level))
+        {
+            _zoomPanelService.SetZoomLevel(level);
+        }
     }
 }

@@ -165,6 +165,16 @@ namespace MermaidDiagramApp
             // Handle zoom reset
         }
 
+        private void ZoomPreset_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string tagStr
+                && double.TryParse(tagStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var level))
+            {
+                _zoomPanelService.SetZoomLevel(level);
+            }
+        }
+
         private async void UpdatePanMode()
         {
             if (!_isWebViewReady || PreviewBrowser?.CoreWebView2 == null) return;

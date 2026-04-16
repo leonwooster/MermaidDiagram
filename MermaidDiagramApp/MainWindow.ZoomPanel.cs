@@ -124,13 +124,16 @@ namespace MermaidDiagramApp
                 if (e.IsOpen && e.SvgContent != null)
                 {
                     if (!_zoomPanelService.IsOpen)
-                        return; // State may have changed between dispatch
+                        return;
 
-                    // If the panel is already visible, replace the diagram content
                     if (ZoomPanelBorder.Visibility == Visibility.Visible)
                     {
-                        _ = ZoomPanelControl.LoadDiagramAsync(e.SvgContent);
-                        _ = ZoomPanelControl.SetZoomLevel(e.ZoomLevel);
+                        // Only push zoom to JS if it wasn't initiated by JS (mouse wheel)
+                        if (!ZoomPanelControl.IsJsZoomSync)
+                        {
+                            _ = ZoomPanelControl.SetZoomLevel(e.ZoomLevel);
+                        }
+                        ZoomPanelControl.IsJsZoomSync = false;
                     }
                     else
                     {

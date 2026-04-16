@@ -65,6 +65,15 @@
             applyTransform();
         };
 
+        // Zoom toward a specific point (used by mouse wheel)
+        window.setZoomAtPoint = function(level, px, py) {
+            var ratio = level / currentZoom;
+            panX = px - ratio * (px - panX);
+            panY = py - ratio * (py - panY);
+            currentZoom = level;
+            applyTransform();
+        };
+
         window.setTheme = function(theme) {
             document.body.className = theme === 'light' ? 'light-theme' : '';
         };
@@ -93,12 +102,19 @@
             document.body.classList.remove('dragging');
         });
 
-        // Forward mouse wheel to C# for zoom control
+        // Mouse wheel zoom — apply locally toward cursor, then notify C#
         document.addEventListener('wheel', function(e) {
             e.preventDefault();
+            var delta = e.deltaY > 0 ? -0.25 : 0.25;
+            var newZoom = Math.max(0.25, Math.min(20.0, currentZoom + delta));
+            if (newZoom === currentZoom) return;
+
+            window.setZoomAtPoint(newZoom, e.clientX, e.clientY);
+
+            // Notify C# so the toolbar display updates
             if (window.chrome && window.chrome.webview) {
                 window.chrome.webview.postMessage(JSON.stringify({
-                    type: 'zoomWheel', deltaY: e.deltaY
+                    type: 'zoomChanged', level: currentZoom
                 }));
             }
         }, { passive: false });

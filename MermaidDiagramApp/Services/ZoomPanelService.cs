@@ -10,7 +10,7 @@ public class ZoomPanelService : IZoomPanelService
 {
     private const double ZoomIncrement = 0.25;
     private const double MinZoom = 0.25;
-    private const double MaxZoom = 10.0;
+    private const double MaxZoom = 20.0;
     private const double DefaultZoom = 1.0;
 
     public bool IsOpen { get; private set; }
