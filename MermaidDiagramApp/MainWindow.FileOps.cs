@@ -135,6 +135,14 @@ namespace MermaidDiagramApp
                     CodeEditor.Text = fileContent;
                     _currentFilePath = file.Path;
                     await UpdatePreview();
+
+                    // Scroll preview to top for newly opened file
+                    if (_isWebViewReady && PreviewBrowser?.CoreWebView2 != null)
+                    {
+                        try { await PreviewBrowser.ExecuteScriptAsync("window.scrollTo(0, 0)"); }
+                        catch { }
+                    }
+
                     UpdateWindowTitle();
                     _fileOperationsService.AddRecentFile(file.Path);
                     PopulateRecentFilesMenu();
@@ -555,6 +563,13 @@ namespace MermaidDiagramApp
                     CodeEditor.Text = fileContent;
                     _currentFilePath = file.Path;
                     await UpdatePreview();
+
+                    // Scroll preview to top for newly opened file
+                    if (_isWebViewReady && PreviewBrowser?.CoreWebView2 != null)
+                    {
+                        try { await PreviewBrowser.ExecuteScriptAsync("window.scrollTo(0, 0)"); }
+                        catch { }
+                    }
 
                     if (file.FileType.ToLower() == ".md" ||
                         file.FileType.ToLower() == ".markdown" ||
